@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'core/theme/bmo_theme.dart';
+import 'core/widgets/bmo_frame.dart';
+import 'features/chat/chat_screen.dart';
 
 class BmoApp extends ConsumerWidget {
   const BmoApp({super.key});
@@ -9,8 +12,11 @@ class BmoApp extends ConsumerWidget {
     return MaterialApp(
       title: 'BMO',
       debugShowCheckedModeBanner: false,
+      theme: BmoTheme.themeData,
       home: const Scaffold(
-        body: Center(child: Text('BMO — em construção')),
+        body: BmoFrame(
+          child: ChatScreen(),
+        ),
       ),
     );
   }
