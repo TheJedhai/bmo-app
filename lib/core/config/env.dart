@@ -7,7 +7,7 @@ class Env {
 
   static const bmoServerUrl = String.fromEnvironment(
     'BMO_SERVER_URL',
-    defaultValue: 'http://localhost:8089',
+    defaultValue: 'http://100.113.90.23:8089',
   );
 
   static const agentId = String.fromEnvironment(
