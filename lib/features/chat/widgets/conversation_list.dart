@@ -8,7 +8,7 @@ import 'rename_conversation_dialog.dart';
 
 const _kMobileBreakpoint = 600.0;
 
-class ConversationList extends ConsumerWidget {
+class ConversationList extends ConsumerStatefulWidget {
   /// Callback chamado depois que uma conversa é selecionada (ou criada).
   /// Útil pro mobile fechar o drawer.
   final VoidCallback? onItemTap;
@@ -16,7 +16,29 @@ class ConversationList extends ConsumerWidget {
   const ConversationList({super.key, this.onItemTap});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ConversationList> createState() => _ConversationListState();
+}
+
+class _ConversationListState extends ConsumerState<ConversationList> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<Conversation> _filter(List<Conversation> all) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    return all
+        .where((c) => c.name.toLowerCase().contains(q))
+        .toList(growable: false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final conversationsAsync = ref.watch(conversationsProvider);
     final selectedId = ref.watch(selectedConversationIdProvider);
@@ -50,7 +72,7 @@ class ConversationList extends ConsumerWidget {
                         .createNew();
                     ref.read(selectedConversationIdProvider.notifier).state =
                         conv.uuid;
-                    onItemTap?.call();
+                    widget.onItemTap?.call();
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -59,6 +81,73 @@ class ConversationList extends ConsumerWidget {
                     }
                   }
                 },
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: TextField(
+              controller: _searchController,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: BmoColors.textPrimary,
+              ),
+              onChanged: (v) => setState(() => _query = v),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'buscar...',
+                hintStyle: theme.textTheme.bodySmall?.copyWith(
+                  color: BmoColors.textMuted,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 16,
+                  color: BmoColors.textMuted,
+                ),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 32,
+                  minHeight: 32,
+                ),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        iconSize: 16,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 28,
+                        ),
+                        tooltip: 'limpar',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                        icon: Icon(
+                          Icons.close,
+                          color: BmoColors.textMuted,
+                        ),
+                      ),
+                filled: true,
+                fillColor: BmoColors.screenBgElevated,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: BmoColors.textMuted.withValues(alpha: 0.3),
+                    width: 1,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(
+                    color: BmoColors.accentGreen,
+                    width: 1.5,
+                  ),
+                ),
               ),
             ),
           ),
@@ -77,11 +166,15 @@ class ConversationList extends ConsumerWidget {
                 if (convs.isEmpty) {
                   return _EmptyListState(theme: theme);
                 }
+                final filtered = _filter(convs);
+                if (filtered.isEmpty) {
+                  return _NoMatchesState(theme: theme);
+                }
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: convs.length,
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
-                    final c = convs[index];
+                    final c = filtered[index];
                     return _ConversationItem(
                       conversation: c,
                       selected: c.uuid == selectedId,
@@ -89,7 +182,7 @@ class ConversationList extends ConsumerWidget {
                         ref
                             .read(selectedConversationIdProvider.notifier)
                             .state = c.uuid;
-                        onItemTap?.call();
+                        widget.onItemTap?.call();
                       },
                       onRename: () => showRenameDialog(context, ref, c),
                       onDelete: () => _confirmAndDelete(context, ref, c),
@@ -271,6 +364,27 @@ class _EmptyListState extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoMatchesState extends StatelessWidget {
+  final ThemeData theme;
+  const _NoMatchesState({required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Center(
+        child: Text(
+          'Nenhuma conversa encontrada',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: BmoColors.textMuted,
+          ),
         ),
       ),
     );
