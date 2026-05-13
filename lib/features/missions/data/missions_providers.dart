@@ -110,6 +110,7 @@ class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
     TaskStatus? status,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
   }) async {
     final repo = ref.read(missionsRepositoryProvider);
     final task = await repo.createTask(
@@ -124,6 +125,7 @@ class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
       status: status,
       priority: priority,
       sortOrder: sortOrder,
+      reminderMinutesBefore: reminderMinutesBefore,
     );
     // If the new task matches this filter, add it to the list.
     if (_matchesFilter(task)) {
@@ -138,14 +140,19 @@ class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
     String? title,
     String? notes,
     DateTime? dueDate,
+    bool clearDueDate = false,
     String? dueTime,
+    bool clearDueTime = false,
     RecurrenceType? recurrenceType,
+    bool clearRecurrence = false,
     List<int>? recurrenceDays,
     int? folderId,
     int? parentId,
     TaskStatus? taskStatus,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
+    bool clearReminder = false,
   }) async {
     final repo = ref.read(missionsRepositoryProvider);
     final updatedTask = await repo.updateTask(
@@ -153,14 +160,19 @@ class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
       title: title,
       notes: notes,
       dueDate: dueDate,
+      clearDueDate: clearDueDate,
       dueTime: dueTime,
+      clearDueTime: clearDueTime,
       recurrenceType: recurrenceType,
+      clearRecurrence: clearRecurrence,
       recurrenceDays: recurrenceDays,
       folderId: folderId,
       parentId: parentId,
       status: taskStatus,
       priority: priority,
       sortOrder: sortOrder,
+      reminderMinutesBefore: reminderMinutesBefore,
+      clearReminder: clearReminder,
     );
     final current = state.valueOrNull ?? const <Task>[];
     // Replace if present; if it no longer matches the filter, remove it.

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../data/missions_client.dart';
 import '../../data/missions_providers.dart';
+import '../../data/models/folder.dart';
 import '../../data/models/task.dart';
 import '../selected_view_provider.dart';
+import 'task_form_modal.dart';
 
 enum _DueGroup { overdue, today, tomorrow, upcoming, noDue }
 
@@ -17,6 +20,15 @@ class TasksList extends ConsumerStatefulWidget {
 
 class _TasksListState extends ConsumerState<TasksList> {
   bool _showCompleted = false;
+  final Map<int, bool> _expandedSubtasks = {};
+
+  int? get _folderIdFromView {
+    final currentView = ref.read(currentViewProvider);
+    return switch (currentView) {
+      FolderView(:final folderId) => folderId,
+      _ => null,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,6 +118,13 @@ class _TasksListState extends ConsumerState<TasksList> {
                   return _GroupedTaskList(
                     groups: visibleGroups,
                     theme: theme,
+                    expandedSubtasks: _expandedSubtasks,
+                    onTaskTap: _openEditModal,
+                    onTaskComplete: _completeTask,
+                    onTaskEdit: _openEditModal,
+                    onTaskMove: _moveTask,
+                    onTaskDelete: _deleteTask,
+                    onToggleSubtasks: _toggleSubtasks,
                   );
                 },
               ),
@@ -117,14 +136,175 @@ class _TasksListState extends ConsumerState<TasksList> {
           bottom: 20,
           child: _NewMissionFab(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('em breve')),
-              );
+              showDialog(
+                context: context,
+                builder: (_) => TaskFormModal(
+                  initialFolderId: _folderIdFromView,
+                ),
+              ).then((_) {
+                ref.read(tasksProvider(
+                  (
+                    status: _showCompleted ? null : 'pending',
+                    folderId: _folderIdFromView,
+                    parentId: 0,
+                    includeSubtasks: true,
+                  ),
+                ).notifier).refresh();
+              });
             },
           ),
         ),
       ],
     );
+  }
+
+  // ==========================================================
+  // Task actions
+  // ==========================================================
+
+  void _openEditModal(Task task) {
+    showDialog(
+      context: context,
+      builder: (_) => TaskFormModal(task: task),
+    ).then((_) {
+      ref.read(tasksProvider(
+        (
+          status: _showCompleted ? null : 'pending',
+          folderId: _folderIdFromView,
+          parentId: 0,
+          includeSubtasks: true,
+        ),
+      ).notifier).refresh();
+    });
+  }
+
+  Future<void> _completeTask(Task task) async {
+    final filter = (
+      status: _showCompleted ? null : 'pending',
+      folderId: _folderIdFromView,
+      parentId: 0,
+      includeSubtasks: true,
+    );
+    final notifier = ref.read(tasksProvider(filter).notifier);
+    try {
+      await notifier.complete(task.id);
+    } on MissionsApiException catch (e) {
+      if (!mounted) return;
+      if (e.errorCode == 'parent_blocked_by_pending_subtasks') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Conclua as subtarefas primeiro')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _moveTask(Task task) async {
+    final foldersAsync = ref.read(foldersProvider);
+    final folders = foldersAsync.valueOrNull ?? <Folder>[];
+
+    if (!mounted) return;
+
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: BmoColors.screenBgElevated,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Mover para…',
+              style: TextStyle(
+                fontFamily: 'PressStart2P',
+                fontSize: 11,
+                color: BmoColors.textPrimary,
+              ),
+            ),
+          ),
+          ...folders.map((f) => ListTile(
+                title: Text(f.name,
+                    style: const TextStyle(color: BmoColors.textPrimary)),
+                onTap: () => Navigator.of(ctx).pop(f.id),
+              )),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+
+    if (selected != null && mounted) {
+      final filter = (
+        status: _showCompleted ? null : 'pending',
+        folderId: _folderIdFromView,
+        parentId: 0,
+        includeSubtasks: true,
+      );
+      final notifier = ref.read(tasksProvider(filter).notifier);
+      try {
+        await notifier.edit(task.id, folderId: selected);
+      } on MissionsApiException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteTask(Task task) async {
+    final subtaskCount = task.subtasks?.length ?? 0;
+    final message = subtaskCount > 0
+        ? "Deletar '${task.title}'? $subtaskCount subtarefas serão deletadas também."
+        : "Deletar '${task.title}'?";
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text('Deletar missão?',
+            style: TextStyle(color: BmoColors.textPrimary, fontSize: 14)),
+        content: Text(message,
+            style: const TextStyle(color: BmoColors.textSecondary, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Deletar',
+                style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      final filter = (
+        status: _showCompleted ? null : 'pending',
+        folderId: _folderIdFromView,
+        parentId: 0,
+        includeSubtasks: true,
+      );
+      final notifier = ref.read(tasksProvider(filter).notifier);
+      try {
+        await notifier.delete(task.id);
+      } on MissionsApiException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    }
+  }
+
+  void _toggleSubtasks(int taskId) {
+    setState(() {
+      _expandedSubtasks[taskId] = !(_expandedSubtasks[taskId] ?? false);
+    });
   }
 }
 
@@ -174,11 +354,31 @@ class _ToggleRow extends StatelessWidget {
 // Grouped list
 // ============================================================
 
+typedef _TaskAction = void Function(Task task);
+typedef _TaskToggleExpand = void Function(int taskId);
+
 class _GroupedTaskList extends StatelessWidget {
   final Map<_DueGroup, List<Task>> groups;
   final ThemeData theme;
+  final Map<int, bool> expandedSubtasks;
+  final _TaskAction onTaskTap;
+  final _TaskAction onTaskComplete;
+  final _TaskAction onTaskEdit;
+  final _TaskAction onTaskMove;
+  final _TaskAction onTaskDelete;
+  final _TaskToggleExpand onToggleSubtasks;
 
-  const _GroupedTaskList({required this.groups, required this.theme});
+  const _GroupedTaskList({
+    required this.groups,
+    required this.theme,
+    required this.expandedSubtasks,
+    required this.onTaskTap,
+    required this.onTaskComplete,
+    required this.onTaskEdit,
+    required this.onTaskMove,
+    required this.onTaskDelete,
+    required this.onToggleSubtasks,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -193,15 +393,44 @@ class _GroupedTaskList extends StatelessWidget {
         var cursor = 0;
         for (final entry in entries) {
           if (index == cursor) {
-            return _GroupHeader(
-              group: entry.key,
-              theme: theme,
-            );
+            return _GroupHeader(group: entry.key, theme: theme);
           }
           cursor++;
           final taskIndex = index - cursor;
           if (taskIndex < entry.value.length) {
-            return _TaskItem(task: entry.value[taskIndex], theme: theme);
+            final task = entry.value[taskIndex];
+            final isExpanded = expandedSubtasks[task.id] ?? false;
+            final hasSubtasks =
+                task.subtasks != null && task.subtasks!.isNotEmpty;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TaskItem(
+                  task: task,
+                  theme: theme,
+                  onTap: () => onTaskTap(task),
+                  onComplete: () => onTaskComplete(task),
+                  onEdit: () => onTaskEdit(task),
+                  onMove: () => onTaskMove(task),
+                  onDelete: () => onTaskDelete(task),
+                  hasSubtasks: hasSubtasks,
+                  isExpanded: isExpanded,
+                  onToggleExpand: () => onToggleSubtasks(task.id),
+                ),
+                if (hasSubtasks && isExpanded)
+                  ...task.subtasks!.map((sub) => _TaskItem(
+                        task: sub,
+                        theme: theme,
+                        isSubtask: true,
+                        onTap: () => onTaskTap(sub),
+                        onComplete: () => onTaskComplete(sub),
+                        onEdit: () => onTaskEdit(sub),
+                        onDelete: () => onTaskDelete(sub),
+                        hasSubtasks: false,
+                        isExpanded: false,
+                      )),
+              ],
+            );
           }
           cursor += entry.value.length;
         }
@@ -247,8 +476,29 @@ String _groupLabel(_DueGroup group) => switch (group) {
 class _TaskItem extends StatelessWidget {
   final Task task;
   final ThemeData theme;
+  final bool isSubtask;
+  final bool hasSubtasks;
+  final bool isExpanded;
+  final VoidCallback? onToggleExpand;
+  final VoidCallback? onTap;
+  final VoidCallback? onComplete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onMove;
+  final VoidCallback? onDelete;
 
-  const _TaskItem({required this.task, required this.theme});
+  const _TaskItem({
+    required this.task,
+    required this.theme,
+    this.isSubtask = false,
+    this.hasSubtasks = false,
+    this.isExpanded = false,
+    this.onToggleExpand,
+    this.onTap,
+    this.onComplete,
+    this.onEdit,
+    this.onMove,
+    this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -256,15 +506,21 @@ class _TaskItem extends StatelessWidget {
     final dueColor = _dueColor(task.dueDate);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: EdgeInsets.only(
+        left: isSubtask ? 36 : 12,
+        right: 4,
+        top: 2,
+        bottom: 2,
+      ),
       child: Row(
         children: [
+          // Checkbox
           SizedBox(
-            width: 36,
-            height: 36,
+            width: 30,
+            height: 30,
             child: Checkbox(
-              value: false,
-              onChanged: null,
+              value: task.status == TaskStatus.done,
+              onChanged: (_) => onComplete?.call(),
               fillColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
                   return BmoColors.accentGreen;
@@ -278,62 +534,115 @@ class _TaskItem extends StatelessWidget {
               ),
             ),
           ),
+          // Task body (tap target)
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  task.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: BmoColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
+            child: GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (task.dueDate != null) ...[
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 12,
-                        color: dueColor,
+                    Text(
+                      task.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: BmoColors.textPrimary,
+                        decoration: task.status == TaskStatus.done
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        dueText,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: dueColor,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    if (task.recurrenceType != null) ...[
-                      Icon(
-                        Icons.repeat,
-                        size: 12,
-                        color: BmoColors.accentYellow,
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    if (task.priority != 0)
-                      Icon(
-                        Icons.flag,
-                        size: 12,
-                        color: _priorityColor(task.priority),
-                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (task.dueDate != null) ...[
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 12,
+                            color: dueColor,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            dueText,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: dueColor,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        if (task.recurrenceType != null) ...[
+                          Icon(
+                            Icons.repeat,
+                            size: 12,
+                            color: BmoColors.accentYellow,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        if (task.reminderMinutesBefore != null) ...[
+                          Icon(
+                            Icons.notifications_outlined,
+                            size: 12,
+                            color: BmoColors.textMuted,
+                          ),
+                          const SizedBox(width: 10),
+                        ],
+                        if (task.priority > 0)
+                          Icon(
+                            Icons.flag,
+                            size: 12,
+                            color: _priorityColor(task.priority),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-          if (task.subtasks != null && task.subtasks!.isNotEmpty)
-            Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: BmoColors.textMuted,
+          // Chevron / 3-dot menu
+          if (hasSubtasks)
+            GestureDetector(
+              onTap: onToggleExpand,
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                  isExpanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 20,
+                  color: BmoColors.textMuted,
+                ),
+              ),
             ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert,
+                size: 18, color: BmoColors.textMuted),
+            color: BmoColors.screenBgElevated,
+            onSelected: (v) {
+              switch (v) {
+                case 'edit':
+                  onEdit?.call();
+                case 'move':
+                  onMove?.call();
+                case 'delete':
+                  onDelete?.call();
+              }
+            },
+            itemBuilder: (_) {
+              final items = <PopupMenuEntry<String>>[
+                const PopupMenuItem(value: 'edit', child: Text('Editar')),
+              ];
+              if (!isSubtask) {
+                items.add(const PopupMenuItem(
+                    value: 'move', child: Text('Mover para…')));
+              }
+              items.add(const PopupMenuItem(
+                  value: 'delete', child: Text('Deletar')));
+              return items;
+            },
+          ),
         ],
       ),
     );
@@ -536,7 +845,7 @@ Color _dueColor(DateTime? dueDate) {
 }
 
 Color _priorityColor(int priority) {
-  if (priority >= 3) return Colors.redAccent;
-  if (priority == 2) return BmoColors.accentYellow;
-  return BmoColors.accentGreen; // priority 1
+  if (priority >= 2) return Colors.redAccent;
+  if (priority == 1) return BmoColors.accentYellow;
+  return BmoColors.textMuted;
 }

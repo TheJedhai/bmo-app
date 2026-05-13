@@ -48,6 +48,7 @@ class MissionsRepository {
     TaskStatus? status,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
   }) =>
       _client.createTask(
         title: title,
@@ -61,6 +62,7 @@ class MissionsRepository {
         status: status,
         priority: priority,
         sortOrder: sortOrder,
+        reminderMinutesBefore: reminderMinutesBefore,
       );
 
   Future<Task> updateTask(
@@ -68,28 +70,38 @@ class MissionsRepository {
     String? title,
     String? notes,
     DateTime? dueDate,
+    bool clearDueDate = false,
     String? dueTime,
+    bool clearDueTime = false,
     RecurrenceType? recurrenceType,
+    bool clearRecurrence = false,
     List<int>? recurrenceDays,
     int? folderId,
     int? parentId,
     TaskStatus? status,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
+    bool clearReminder = false,
   }) =>
       _client.updateTask(
         id,
         title: title,
         notes: notes,
         dueDate: dueDate,
+        clearDueDate: clearDueDate,
         dueTime: dueTime,
+        clearDueTime: clearDueTime,
         recurrenceType: recurrenceType,
+        clearRecurrence: clearRecurrence,
         recurrenceDays: recurrenceDays,
         folderId: folderId,
         parentId: parentId,
         status: status,
         priority: priority,
         sortOrder: sortOrder,
+        reminderMinutesBefore: reminderMinutesBefore,
+        clearReminder: clearReminder,
       );
 
   Future<({Task completed, Task? nextOccurrence})> completeTask(int id) =>

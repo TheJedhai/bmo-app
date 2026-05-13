@@ -40,6 +40,8 @@ final class Task {
   final TaskStatus status;
   final int priority;
   final int sortOrder;
+  final int? reminderMinutesBefore;
+  final bool reminderSent;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
@@ -58,6 +60,8 @@ final class Task {
     required this.status,
     required this.priority,
     required this.sortOrder,
+    this.reminderMinutesBefore,
+    this.reminderSent = false,
     required this.createdAt,
     required this.updatedAt,
     this.completedAt,
@@ -96,6 +100,8 @@ final class Task {
       ),
       priority: json['priority'] as int? ?? 0,
       sortOrder: json['sort_order'] as int? ?? 0,
+      reminderMinutesBefore: json['reminder_minutes_before'] as int?,
+      reminderSent: json['reminder_sent'] as bool? ?? false,
       createdAt: _parseDateTime(json['created_at']),
       updatedAt: _parseDateTime(json['updated_at']),
       completedAt: json['completed_at'] is String
@@ -122,6 +128,8 @@ final class Task {
       'status': status.toJson(),
       'priority': priority,
       'sort_order': sortOrder,
+      if (reminderMinutesBefore != null)
+        'reminder_minutes_before': reminderMinutesBefore,
       'created_at': _formatDateTime(createdAt),
       'updated_at': _formatDateTime(updatedAt),
       if (completedAt != null) 'completed_at': _formatDateTime(completedAt!),

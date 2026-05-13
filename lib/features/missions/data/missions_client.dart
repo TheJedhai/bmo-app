@@ -125,6 +125,7 @@ class MissionsClient {
     TaskStatus? status,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
   }) async {
     final body = <String, dynamic>{
       'title': title,
@@ -141,6 +142,9 @@ class MissionsClient {
     if (status != null) body['status'] = status.toJson();
     if (priority != null) body['priority'] = priority;
     if (sortOrder != null) body['sort_order'] = sortOrder;
+    if (reminderMinutesBefore != null) {
+      body['reminder_minutes_before'] = reminderMinutesBefore;
+    }
 
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/tasks'),
@@ -156,24 +160,55 @@ class MissionsClient {
     String? title,
     String? notes,
     DateTime? dueDate,
+    bool clearDueDate = false,
     String? dueTime,
+    bool clearDueTime = false,
     RecurrenceType? recurrenceType,
+    bool clearRecurrence = false,
     List<int>? recurrenceDays,
     int? folderId,
     int? parentId,
     TaskStatus? status,
     int? priority,
     int? sortOrder,
+    int? reminderMinutesBefore,
+    bool clearReminder = false,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
     if (notes != null) body['notes'] = notes;
-    if (dueDate != null) body['due_date'] = _formatDate(dueDate);
-    if (dueTime != null) body['due_time'] = dueTime;
-    if (recurrenceType != null) {
-      body['recurrence_type'] = recurrenceType.toJson();
+
+    if (clearDueDate) {
+      body['due_date'] = null;
+      body['due_time'] = null;
+      body['recurrence_type'] = null;
+      body['recurrence_days'] = null;
+      body['reminder_minutes_before'] = null;
+    } else {
+      if (dueDate != null) body['due_date'] = _formatDate(dueDate);
+      if (clearDueTime) {
+        body['due_time'] = null;
+        body['reminder_minutes_before'] = null;
+      } else if (dueTime != null) {
+        body['due_time'] = dueTime;
+      }
+      if (clearRecurrence) {
+        body['recurrence_type'] = null;
+        body['recurrence_days'] = null;
+      } else {
+        if (recurrenceType != null) {
+          body['recurrence_type'] = recurrenceType.toJson();
+        }
+        if (recurrenceDays != null) body['recurrence_days'] = recurrenceDays;
+      }
     }
-    if (recurrenceDays != null) body['recurrence_days'] = recurrenceDays;
+
+    if (clearReminder) {
+      body['reminder_minutes_before'] = null;
+    } else if (reminderMinutesBefore != null) {
+      body['reminder_minutes_before'] = reminderMinutesBefore;
+    }
+
     if (folderId != null) body['folder_id'] = folderId;
     if (parentId != null) body['parent_id'] = parentId;
     if (status != null) body['status'] = status.toJson();
