@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
@@ -59,6 +60,10 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
       ref.invalidate(tasksProvider);
     case 'tasks.batch_updated':
       ref.invalidate(tasksProvider);
+    case 'memory.created':
+    case 'memory.updated':
+    case 'memory.deleted':
+      ref.invalidate(memoriesProvider);
     case 'connected':
       debugPrint('SSE connected');
   }

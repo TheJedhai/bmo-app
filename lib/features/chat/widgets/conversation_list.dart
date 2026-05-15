@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import 'package:bmo_app/features/memories/widgets/memories_modal.dart';
 import '../data/conversation.dart';
 import '../providers/chat_providers.dart';
 import 'rename_conversation_dialog.dart';
@@ -49,39 +50,61 @@ class _ConversationListState extends ConsumerState<ConversationList> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: BmoColors.accentGreen,
-                  foregroundColor: const Color(0xFF0F1115),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-                icon: const Icon(Icons.add, size: 18),
-                label: Text(
-                  'Nova conversa',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF0F1115),
-                    fontWeight: FontWeight.w600,
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BmoColors.accentGreen,
+                      foregroundColor: const Color(0xFF0F1115),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: Text(
+                      'Nova',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFF0F1115),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () async {
+                      try {
+                        final conv = await ref
+                            .read(conversationsProvider.notifier)
+                            .createNew();
+                        ref.read(selectedConversationIdProvider.notifier).state =
+                            conv.uuid;
+                        widget.onItemTap?.call();
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('falha ao criar: $e')),
+                          );
+                        }
+                      }
+                    },
                   ),
                 ),
-                onPressed: () async {
-                  try {
-                    final conv = await ref
-                        .read(conversationsProvider.notifier)
-                        .createNew();
-                    ref.read(selectedConversationIdProvider.notifier).state =
-                        conv.uuid;
-                    widget.onItemTap?.call();
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('falha ao criar: $e')),
-                      );
-                    }
-                  }
-                },
-              ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: BmoColors.accentGreen,
+                      foregroundColor: const Color(0xFF0F1115),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    icon: const Icon(Icons.psychology, size: 18),
+                    label: Text(
+                      'Memórias',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: const Color(0xFF0F1115),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    onPressed: () => showMemoriesModal(context),
+                  ),
+                ),
+              ],
             ),
           ),
           Padding(
