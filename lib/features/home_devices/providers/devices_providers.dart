@@ -96,10 +96,10 @@ class Devices extends _$Devices {
     switch (msg) {
       case InitialState(:final lights):
         state = AsyncData({for (final l in lights) l.name: l});
-      case StateUpdate(:final deviceName, :final stateStr):
+      case StateUpdate(:final deviceName, :final newState):
         final device = current[deviceName];
         if (device == null) break;
-        final newState = switch (stateStr.toUpperCase()) {
+        final lightState = switch (newState.toUpperCase()) {
           'ON' => LightState.on,
           'OFF' => LightState.off,
           _ => LightState.unknown,
@@ -108,7 +108,7 @@ class Devices extends _$Devices {
           ...current,
           deviceName: LightDevice(
             name: device.name,
-            state: newState,
+            state: lightState,
             linkquality: device.linkquality,
             online: device.online,
           ),

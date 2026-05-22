@@ -40,6 +40,6 @@ final class InitialState extends DeviceWsMessage {
 
 final class StateUpdate extends DeviceWsMessage {
   final String deviceName;
-  final String state;
-  const StateUpdate({required this.deviceName, required this.state});
+  final String newState;
+  const StateUpdate({required this.deviceName, required this.newState});
 }
