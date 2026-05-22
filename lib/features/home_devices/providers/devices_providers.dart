@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -34,13 +32,35 @@ final devicesWsClientProvider = Provider<DevicesWsClient>((ref) {
 final pendingTogglesProvider = StateProvider<Set<String>>((ref) => {});
 
 // ============================================================
+// WebSocket stream
+// ============================================================
+
+final devicesWsStreamProvider =
+    StreamProvider<DeviceWsMessage>((ref) async* {
+  final client = ref.read(devicesWsClientProvider);
+  var backoff = const Duration(seconds: 1);
+  const maxBackoff = Duration(seconds: 30);
+
+  while (true) {
+    try {
+      yield* client.connect();
+      backoff = const Duration(seconds: 1);
+    } catch (e) {
+      debugPrint(
+          'Devices WS error: $e. Reconnecting in ${backoff.inSeconds}s...');
+      await Future.delayed(backoff);
+      backoff = backoff * 2;
+      if (backoff > maxBackoff) backoff = maxBackoff;
+    }
+  }
+});
+
+// ============================================================
 // Devices
 // ============================================================
 
 @riverpod
 class Devices extends _$Devices {
-  StreamSubscription<DeviceWsMessage>? _wsSubscription;
-
   @override
   Future<Map<String, LightDevice>> build() async {
     final client = ref.read(devicesClientProvider);
@@ -49,46 +69,15 @@ class Devices extends _$Devices {
       for (final l in lights) l['name'] as String: LightDevice.fromJson(l),
     };
 
-    _startWsListener();
-
-    ref.onDispose(() {
-      _wsSubscription?.cancel();
+    ref.listen(devicesWsStreamProvider, (prev, next) {
+      next.when(
+        data: _handleWsMessage,
+        error: (error, _) => debugPrint('Devices WS stream error: $error'),
+        loading: () {},
+      );
     });
 
     return map;
-  }
-
-  void _startWsListener() {
-    _wsSubscription?.cancel();
-    _runWsLoop();
-  }
-
-  Future<void> _runWsLoop() async {
-    final wsClient = ref.read(devicesWsClientProvider);
-    var backoff = const Duration(seconds: 1);
-    const maxBackoff = Duration(seconds: 30);
-
-    while (true) {
-      try {
-        final stream = wsClient.connect();
-        _wsSubscription = stream.listen(
-          (msg) {
-            _handleWsMessage(msg);
-          },
-          onError: (error) {
-            debugPrint('Devices WS stream error: $error');
-          },
-        );
-        // Stream ended cleanly — reset backoff and reconnect.
-        backoff = const Duration(seconds: 1);
-      } catch (e) {
-        debugPrint(
-            'Devices WS error: $e. Reconnecting in ${backoff.inSeconds}s...');
-        await Future.delayed(backoff);
-        backoff = backoff * 2;
-        if (backoff > maxBackoff) backoff = maxBackoff;
-      }
-    }
   }
 
   void _handleWsMessage(DeviceWsMessage msg) {
@@ -127,7 +116,6 @@ class Devices extends _$Devices {
           .update((s) => s.difference({name}));
       rethrow;
     }
-    // Safety timeout: clear pending after 5s if no WS update received.
     Future.delayed(const Duration(seconds: 5), () {
       if (state.valueOrNull != null) {
         ref.read(pendingTogglesProvider.notifier)
