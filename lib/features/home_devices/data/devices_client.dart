@@ -30,7 +30,8 @@ class DevicesClient {
       Uri.parse('$_baseUrl/api/v1/lights'),
     );
     _ensureOk(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = body['lights'] as List<dynamic>;
     return list.cast<Map<String, dynamic>>();
   }
 
