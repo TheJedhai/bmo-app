@@ -9,6 +9,7 @@ import 'core/navigation/tab_provider.dart';
 import 'core/events/events_provider.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'features/home_devices/presentation/home_devices_screen.dart';
 import 'features/missions/presentation/missions_screen.dart';
 
 class BmoApp extends ConsumerWidget {
@@ -49,6 +50,7 @@ class _BmoShell extends ConsumerWidget {
               TabPage(keepAlive: false, child: HomeScreen()),
               TabPage(keepAlive: true, child: ChatScreen()),
               TabPage(keepAlive: true, child: MissionsScreen()),
+              TabPage(keepAlive: true, child: HomeDevicesScreen()),
             ],
           ),
         ),
