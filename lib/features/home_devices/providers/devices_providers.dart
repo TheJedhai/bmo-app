@@ -5,6 +5,8 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
 import '../data/device.dart';
+import '../data/device_position.dart';
+import '../data/device_positions_client.dart';
 import '../data/devices_client.dart';
 import '../data/devices_ws_client.dart';
 
@@ -85,20 +87,15 @@ class Devices extends _$Devices {
     switch (msg) {
       case InitialState(:final lights):
         state = AsyncData({for (final l in lights) l.name: l});
-      case StateUpdate(:final deviceName, :final newState):
+      case StateUpdate(:final deviceName, :final newState, :final linkquality):
         final device = current[deviceName];
         if (device == null) break;
-        final lightState = switch (newState.toUpperCase()) {
-          'ON' => LightState.on,
-          'OFF' => LightState.off,
-          _ => LightState.unknown,
-        };
         state = AsyncData({
           ...current,
           deviceName: LightDevice(
             name: device.name,
-            state: lightState,
-            linkquality: device.linkquality,
+            state: newState,
+            linkquality: linkquality,
             online: device.online,
           ),
         });
@@ -122,5 +119,49 @@ class Devices extends _$Devices {
             .update((s) => s.difference({name}));
       }
     });
+  }
+}
+
+// ============================================================
+// Device positions
+// ============================================================
+
+final devicePositionsClientProvider = Provider<DevicePositionsClient>((ref) {
+  return DevicePositionsClient(
+    client: createHttpClient(),
+    baseUrl: Env.bmoServerUrl,
+  );
+});
+
+@riverpod
+class DevicePositions extends _$DevicePositions {
+  @override
+  Future<Map<String, DevicePosition>> build() async {
+    final client = ref.read(devicePositionsClientProvider);
+    final positions = await client.listPositions();
+    return {for (final p in positions) p.deviceName: p};
+  }
+
+  Future<void> setPosition(String name, double x, double y) async {
+    final previous = state.valueOrNull;
+    // Optimistic update
+    state = AsyncData({
+      ...?previous,
+      name: DevicePosition(deviceName: name, x: x, y: y),
+    });
+
+    try {
+      await ref.read(devicePositionsClientProvider).setPosition(name, x, y);
+    } catch (e) {
+      debugPrint('DevicePositions: PUT failed for $name: $e');
+      // Revert on failure
+      if (previous != null) {
+        state = AsyncData(previous);
+      } else {
+        state = AsyncData({
+          ...state.valueOrNull ?? {},
+        }..remove(name));
+      }
+    }
   }
 }
