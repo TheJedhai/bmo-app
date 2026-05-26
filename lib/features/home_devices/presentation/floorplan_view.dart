@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../data/device.dart';
+import '../data/device_position.dart';
 import '../providers/devices_providers.dart';
 import '../providers/ui_providers.dart';
 
@@ -15,6 +16,11 @@ class FloorplanView extends ConsumerStatefulWidget {
 
 class _FloorplanViewState extends ConsumerState<FloorplanView> {
   Size? _imageSize;
+
+  // Drag state
+  String? _dragDevice;
+  double _dragX = 0;
+  double _dragY = 0;
 
   @override
   void initState() {
@@ -33,6 +39,9 @@ class _FloorplanViewState extends ConsumerState<FloorplanView> {
           }),
         );
   }
+
+  double _toPercent(double deltaPx, double renderSize) =>
+      deltaPx / renderSize * 100;
 
   @override
   Widget build(BuildContext context) {
@@ -76,25 +85,80 @@ class _FloorplanViewState extends ConsumerState<FloorplanView> {
               ),
             ),
             for (final entry in devices.entries)
-              Positioned(
-                left: offsetX +
-                    (positions[entry.key]?.x ?? 50) / 100 * renderW -
-                    22,
-                top: offsetY +
-                    (positions[entry.key]?.y ?? 50) / 100 * renderH -
-                    22,
-                child: _DeviceDot(
-                  device: entry.value,
-                  editMode: editMode,
-                  isDragging: false,
-                  onTap: () =>
-                      ref.read(devicesProvider.notifier).toggle(entry.key),
-                ),
+              _buildDeviceDot(
+                name: entry.key,
+                device: entry.value,
+                storedPosition: positions[entry.key],
+                editMode: editMode,
+                offsetX: offsetX,
+                offsetY: offsetY,
+                renderW: renderW,
+                renderH: renderH,
               ),
           ],
         );
       },
     );
+  }
+
+  Widget _buildDeviceDot({
+    required String name,
+    required LightDevice device,
+    DevicePosition? storedPosition,
+    required bool editMode,
+    required double offsetX,
+    required double offsetY,
+    required double renderW,
+    required double renderH,
+  }) {
+    final isDragging = _dragDevice == name;
+    final x = isDragging
+        ? _dragX
+        : (storedPosition?.x ?? 50);
+    final y = isDragging
+        ? _dragY
+        : (storedPosition?.y ?? 50);
+
+    final left = offsetX + x / 100 * renderW - 22;
+    final top = offsetY + y / 100 * renderH - 22;
+
+    Widget dot = _DeviceDot(
+      device: device,
+      editMode: editMode,
+      isDragging: isDragging,
+      onTap: () => ref.read(devicesProvider.notifier).toggle(name),
+    );
+
+    if (editMode) {
+      dot = GestureDetector(
+        onPanStart: (_) {
+          setState(() {
+            _dragDevice = name;
+            _dragX = x;
+            _dragY = y;
+          });
+        },
+        onPanUpdate: (details) {
+          setState(() {
+            _dragX = (_dragX + _toPercent(details.delta.dx, renderW))
+                .clamp(0.0, 100.0);
+            _dragY = (_dragY + _toPercent(details.delta.dy, renderH))
+                .clamp(0.0, 100.0);
+          });
+        },
+        onPanEnd: (_) {
+          final finalX = _dragX;
+          final finalY = _dragY;
+          setState(() => _dragDevice = null);
+          ref
+              .read(devicePositionsProvider.notifier)
+              .setPosition(name, finalX, finalY);
+        },
+        child: dot,
+      );
+    }
+
+    return Positioned(left: left, top: top, child: dot);
   }
 }
 
@@ -124,9 +188,11 @@ class _DeviceDot extends StatelessWidget {
           color: isOn ? BmoColors.accentYellow : BmoColors.screenBgElevated,
           shape: BoxShape.circle,
           border: Border.all(
-            color: isOn
-                ? BmoColors.accentYellow
-                : BmoColors.screenBgElevated,
+            color: isDragging
+                ? BmoColors.accentGreen
+                : isOn
+                    ? BmoColors.accentYellow
+                    : BmoColors.screenBgElevated,
             width: 2,
           ),
           boxShadow: isOn
