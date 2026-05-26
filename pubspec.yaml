@@ -72,6 +72,7 @@ flutter:
   assets:
     - assets/fonts/
     - assets/avatars/
+    - assets/floorplan.png
 
   fonts:
     - family: PressStart2P
