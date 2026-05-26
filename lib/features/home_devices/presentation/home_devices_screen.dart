@@ -5,50 +5,68 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../providers/devices_providers.dart';
+import '../providers/ui_providers.dart';
+import 'floorplan_view.dart';
 
 class HomeDevicesScreen extends ConsumerWidget {
   const HomeDevicesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final devicesAsync = ref.watch(devicesProvider);
-    final pendingToggles = ref.watch(pendingTogglesProvider);
+    final viewMode = ref.watch(viewModeProvider);
 
     return Column(
       children: [
         _Header(),
         Expanded(
-          child: devicesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => _ErrorState(
-              error: error,
-              onRetry: () => ref.invalidate(devicesProvider),
-            ),
-            data: (devices) {
-              if (devices.isEmpty) return const _EmptyState();
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final isMobile = constraints.maxWidth < 600;
-                  return _DeviceGrid(
-                    devices: devices,
-                    pendingToggles: pendingToggles,
-                    isMobile: isMobile,
-                    onToggle: (name) =>
-                        ref.read(devicesProvider.notifier).toggle(name),
-                  );
-                },
-              );
-            },
-          ),
+          child: viewMode == HomeViewMode.planta
+              ? const FloorplanView()
+              : _DeviceList(),
         ),
       ],
     );
   }
 }
 
-class _Header extends StatelessWidget {
+class _DeviceList extends ConsumerWidget {
+  const _DeviceList();
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final devicesAsync = ref.watch(devicesProvider);
+    final pendingToggles = ref.watch(pendingTogglesProvider);
+
+    return devicesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => _ErrorState(
+        error: error,
+        onRetry: () => ref.invalidate(devicesProvider),
+      ),
+      data: (devices) {
+        if (devices.isEmpty) return const _EmptyState();
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 600;
+            return _DeviceGrid(
+              devices: devices,
+              pendingToggles: pendingToggles,
+              isMobile: isMobile,
+              onToggle: (name) =>
+                  ref.read(devicesProvider.notifier).toggle(name),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _Header extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final viewMode = ref.watch(viewModeProvider);
+    final editMode = ref.watch(editModeProvider);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
       child: Row(
@@ -58,22 +76,34 @@ class _Header extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const Spacer(),
+          if (viewMode == HomeViewMode.planta)
+            IconButton(
+              onPressed: () =>
+                  ref.read(editModeProvider.notifier).update((e) => !e),
+              icon: Icon(
+                editMode ? Icons.edit : Icons.edit_outlined,
+                size: 20,
+              ),
+              color: editMode ? BmoColors.accentGreen : BmoColors.textMuted,
+              tooltip: editMode ? 'Sair da edição' : 'Editar posições',
+            ),
           _ViewToggle(
             label: 'Lista',
             icon: Icons.view_list,
-            isActive: true,
-            onTap: () {},
+            isActive: viewMode == HomeViewMode.lista,
+            onTap: () {
+              ref.read(viewModeProvider.notifier).state = HomeViewMode.lista;
+              ref.read(editModeProvider.notifier).state = false;
+            },
           ),
           const SizedBox(width: 8),
-          Tooltip(
-            message: 'em breve',
-            child: _ViewToggle(
-              label: 'Planta',
-              icon: Icons.weekend_outlined,
-              isActive: false,
-              enabled: false,
-              onTap: null,
-            ),
+          _ViewToggle(
+            label: 'Planta',
+            icon: Icons.weekend_outlined,
+            isActive: viewMode == HomeViewMode.planta,
+            onTap: () {
+              ref.read(viewModeProvider.notifier).state = HomeViewMode.planta;
+            },
           ),
         ],
       ),
@@ -85,14 +115,12 @@ class _ViewToggle extends StatelessWidget {
   final String label;
   final IconData icon;
   final bool isActive;
-  final bool enabled;
   final VoidCallback? onTap;
 
   const _ViewToggle({
     required this.label,
     required this.icon,
     required this.isActive,
-    this.enabled = true,
     this.onTap,
   });
 
@@ -100,27 +128,24 @@ class _ViewToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = isActive ? BmoColors.accentGreen : BmoColors.textMuted;
     return InkWell(
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
       borderRadius: BorderRadius.circular(8),
-      child: Opacity(
-        opacity: enabled ? 1.0 : 0.4,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11,
-                  color: color,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                color: color,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -235,7 +260,7 @@ class _DeviceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'sinal: ${device.linkquality}%',
+                        'sinal: ${(device.linkquality / 255 * 100).round()}%',
                         style: const TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 12,
@@ -302,10 +327,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             TextButton.icon(
-              onPressed: () {
-                // Handled by parent via error state — empty state doesn't
-                // have retry since REST succeeded but returned no devices.
-              },
+              onPressed: () {},
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text(
                 'Tentar novamente',
