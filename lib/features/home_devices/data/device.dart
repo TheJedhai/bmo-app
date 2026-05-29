@@ -3,7 +3,7 @@ enum LightState { on, off, unknown }
 final class LightDevice {
   final String name;
   final LightState state;
-  final int linkquality;
+  final double linkquality;
   final bool online;
 
   const LightDevice({
@@ -14,7 +14,8 @@ final class LightDevice {
   });
 
   factory LightDevice.fromJson(Map<String, dynamic> json) {
-    final rawState = json['state']?['state'] as String? ?? '';
+    final stateObj = json['state'] as Map<String, dynamic>?;
+    final rawState = stateObj?['state'] as String? ?? '';
     final state = switch (rawState.toUpperCase()) {
       'ON' => LightState.on,
       'OFF' => LightState.off,
@@ -23,7 +24,7 @@ final class LightDevice {
     return LightDevice(
       name: json['name'] as String? ?? '',
       state: state,
-      linkquality: (json['linkquality'] as num?)?.toInt() ?? 0,
+      linkquality: (stateObj?['linkquality'] as num?)?.toDouble() ?? 0.0,
       online: json['online'] as bool? ?? false,
     );
   }
@@ -40,6 +41,11 @@ final class InitialState extends DeviceWsMessage {
 
 final class StateUpdate extends DeviceWsMessage {
   final String deviceName;
-  final String newState;
-  const StateUpdate({required this.deviceName, required this.newState});
+  final LightState newState;
+  final double linkquality;
+  const StateUpdate({
+    required this.deviceName,
+    required this.newState,
+    required this.linkquality,
+  });
 }

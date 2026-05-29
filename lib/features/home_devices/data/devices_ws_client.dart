@@ -32,9 +32,18 @@ class DevicesWsClient {
                 .toList();
             yield InitialState(lightsList);
           case 'state_update':
+            final stateObj = json['state'] as Map<String, dynamic>?;
+            final rawState = stateObj?['state'] as String? ?? '';
+            final lightState = switch (rawState.toUpperCase()) {
+              'ON' => LightState.on,
+              'OFF' => LightState.off,
+              _ => LightState.unknown,
+            };
             yield StateUpdate(
               deviceName: json['device'] as String? ?? '',
-              newState: json['state'] as String? ?? '',
+              newState: lightState,
+              linkquality:
+                  (stateObj?['linkquality'] as num?)?.toDouble() ?? 0.0,
             );
           default:
             debugPrint('DevicesWsClient: unknown message type: $type');
