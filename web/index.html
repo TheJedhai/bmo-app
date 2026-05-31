@@ -43,9 +43,9 @@
     If the stub is never overwritten, any dargon2 call will throw a
     visible error: "hash-wasm WASM module not loaded".
 
-    Without this stub, dargon2 would silently fall back to
-    import("https://cdn.jsdelivr.net/npm/hash-wasm@4.9.0/+esm")
-    — which is unacceptable for a zero-knowledge vault.
+    Without this stub, dargon2 would silently fall back to a dynamic
+    import() of the hash-wasm module from a third-party CDN — which
+    is unacceptable for a zero-knowledge vault.
   -->
   <script>
     window.hashwasm = {
