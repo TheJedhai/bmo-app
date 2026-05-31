@@ -206,11 +206,54 @@ class Articles extends _$Articles {
               isStarred: a.isStarred,
               summaryLlm: result.summary,
               summaryLlmAt: DateTime.now(),
+              imageUrl: a.imageUrl,
+              fullContent: a.fullContent,
+              fullContentFetchedAt: a.fullContentFetchedAt,
               createdAt: a.createdAt,
             )
           else
             item,
       ]);
+    }
+    return result;
+  }
+
+  /// Fetch full article content from the source and update it locally.
+  Future<({String? fullContent, bool available, bool cached, String? reason})>
+      fetchContent(int id) async {
+    final repo = ref.read(rssRepositoryProvider);
+    final result = await repo.fetchArticleContent(id);
+    if (result.available) {
+      final current = state.valueOrNull ?? const <Article>[];
+      final idx = current.indexWhere((a) => a.id == id);
+      if (idx != -1) {
+        final a = current[idx];
+        state = AsyncData([
+          for (final item in current)
+            if (item.id == id)
+              Article(
+                id: a.id,
+                feedId: a.feedId,
+                guid: a.guid,
+                title: a.title,
+                url: a.url,
+                author: a.author,
+                summaryRaw: a.summaryRaw,
+                content: a.content,
+                publishedAt: a.publishedAt,
+                isRead: a.isRead,
+                isStarred: a.isStarred,
+                summaryLlm: a.summaryLlm,
+                summaryLlmAt: a.summaryLlmAt,
+                imageUrl: a.imageUrl,
+                fullContent: result.fullContent,
+                fullContentFetchedAt: DateTime.now(),
+                createdAt: a.createdAt,
+              )
+            else
+              item,
+        ]);
+      }
     }
     return result;
   }

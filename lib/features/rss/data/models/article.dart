@@ -12,6 +12,9 @@ final class Article {
   final bool isStarred;
   final String? summaryLlm;
   final DateTime? summaryLlmAt;
+  final String? imageUrl;
+  final String? fullContent;
+  final DateTime? fullContentFetchedAt;
   final DateTime createdAt;
 
   const Article({
@@ -28,6 +31,9 @@ final class Article {
     required this.isStarred,
     this.summaryLlm,
     this.summaryLlmAt,
+    this.imageUrl,
+    this.fullContent,
+    this.fullContentFetchedAt,
     required this.createdAt,
   });
 
@@ -50,6 +56,11 @@ final class Article {
       summaryLlmAt: json['summary_llm_at'] is String
           ? DateTime.tryParse(json['summary_llm_at'] as String)
           : null,
+      imageUrl: json['image_url'] as String?,
+      fullContent: json['full_content'] as String?,
+      fullContentFetchedAt: json['full_content_fetched_at'] is String
+          ? DateTime.tryParse(json['full_content_fetched_at'] as String)
+          : null,
       createdAt: _parseDateTime(json['created_at']),
     );
   }
@@ -69,6 +80,10 @@ final class Article {
       'is_starred': isStarred,
       if (summaryLlm != null) 'summary_llm': summaryLlm,
       if (summaryLlmAt != null) 'summary_llm_at': _formatDateTime(summaryLlmAt!),
+      if (imageUrl != null) 'image_url': imageUrl,
+      if (fullContent != null) 'full_content': fullContent,
+      if (fullContentFetchedAt != null)
+        'full_content_fetched_at': _formatDateTime(fullContentFetchedAt!),
       'created_at': _formatDateTime(createdAt),
     };
   }

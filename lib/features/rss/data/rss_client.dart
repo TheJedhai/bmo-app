@@ -210,6 +210,22 @@ class RssClient {
     );
   }
 
+  Future<({String? fullContent, bool available, bool cached, String? reason})>
+      fetchArticleContent(int id) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/articles/$id/fetch-content'),
+      headers: {'Content-Type': 'application/json'},
+    );
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return (
+      fullContent: decoded['full_content'] as String?,
+      available: decoded['available'] as bool? ?? false,
+      cached: decoded['cached'] as bool? ?? false,
+      reason: decoded['reason'] as String?,
+    );
+  }
+
   // ============================================================
   // Helpers
   // ============================================================

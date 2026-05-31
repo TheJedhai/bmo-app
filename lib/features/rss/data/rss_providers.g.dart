@@ -22,7 +22,7 @@ final feedsProvider =
     );
 
 typedef _$Feeds = AutoDisposeAsyncNotifier<List<Feed>>;
-String _$articlesHash() => r'7224fcb4aa425d3e3c9c3480962a331a8f39c133';
+String _$articlesHash() => r'12206e6a511f9f361135802e18a2767071f187c2';
 
 /// Copied from Dart SDK
 class _SystemHash {
