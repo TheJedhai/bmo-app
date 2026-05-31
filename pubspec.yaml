@@ -45,6 +45,7 @@ dependencies:
   fetch_client: ^1.1.2
   flutter_markdown_plus: ^1.0.3
   web_socket_channel: ^3.0.1
+  dargon2_flutter: ^3.3.0
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +62,10 @@ dev_dependencies:
   build_runner: ^2.4.13
   custom_lint: ^0.7.6
   riverpod_lint: ^2.3.13
+  dargon2_flutter_web: ^3.2.0
+  dargon2_flutter_platform_interface: ^3.2.0
+  dargon2_interface: ^1.1.1
+  cryptography: ^2.7.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
