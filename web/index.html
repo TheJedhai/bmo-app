@@ -33,9 +33,48 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
+    Failsafe stub: ensures window.hashwasm is NEVER null, even if the
+    module script below fails to load (404, CSP, network error, etc.).
+
+    This runs synchronously during HTML parsing, BEFORE the deferred
+    module script. The module script (if successful) overwrites this
+    stub with the real hash-wasm functions.
+
+    If the stub is never overwritten, any dargon2 call will throw a
+    visible error: "hash-wasm WASM module not loaded".
+
+    Without this stub, dargon2 would silently fall back to
+    import("https://cdn.jsdelivr.net/npm/hash-wasm@4.9.0/+esm")
+    — which is unacceptable for a zero-knowledge vault.
+  -->
+  <script>
+    window.hashwasm = {
+      argon2i: function() {
+        throw new Error("hash-wasm WASM module not loaded. " +
+          "The self-hosted /hash-wasm/index.esm.js failed to initialize. " +
+          "The vault cannot derive keys.");
+      },
+      argon2d: function() {
+        throw new Error("hash-wasm WASM module not loaded. " +
+          "The self-hosted /hash-wasm/index.esm.js failed to initialize. " +
+          "The vault cannot derive keys.");
+      },
+      argon2id: function() {
+        throw new Error("hash-wasm WASM module not loaded. " +
+          "The self-hosted /hash-wasm/index.esm.js failed to initialize. " +
+          "The vault cannot derive keys.");
+      },
+      argon2Verify: function() {
+        throw new Error("hash-wasm WASM module not loaded. " +
+          "The self-hosted /hash-wasm/index.esm.js failed to initialize. " +
+          "The vault cannot derive keys.");
+      },
+    };
+  </script>
+
+  <!--
     Pre-load hash-wasm from local asset (zero CDN, required for vault crypto).
-    Sets window.hashwasm before Flutter/dargon2 initializes — dargon2 skips
-    its CDN import when it sees window.hashwasm already populated.
+    Overwrites the failsafe stub above with real WASM-backed functions.
   -->
   <script type="module">
     import { argon2i, argon2d, argon2id, argon2Verify }
