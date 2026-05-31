@@ -1,11 +1,16 @@
 /// Vault creation and unlocking — ties KDF, cipher, and envelope together.
 ///
-/// These are the two primary operations exposed to the rest of the app:
+/// These are the primary operations exposed to the rest of the app:
 /// - [createVault]: called once when a user first creates a vault.
 ///   Produces all material needed for `POST /api/v1/vaults`.
 /// - [unlock]: called every time the user unlocks their vault.
 ///   Takes password + server material from `GET /vaults/{id}/keys`,
 ///   validates the canary, and returns the DEK.
+/// - [unlockWithRecoveryKey]: unlock using the recovery key instead of password.
+/// - [revealRecoveryKey]: with the vault already unlocked (KEK in memory),
+///   decrypts the wrapped recovery key for re-display.
+/// - [verifyRecoveryKeyUnlocks]: proves a user-supplied recovery key truly
+///   unwraps the DEK (does NOT compare strings — performs the actual unwrap).
 ///
 /// ## Security rules (NEVER break these):
 /// - NEVER log, print, or debugPrint passwords, DEKs, recovery keys, or
@@ -16,6 +21,7 @@
 ///   The app MUST NOT store it.
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'argon2_kdf.dart';
@@ -31,6 +37,9 @@ import 'vault_kdf.dart';
 ///
 /// All fields except [recoveryKey] go in the POST /api/v1/vaults body.
 /// [recoveryKey] is shown to the user once and NEVER sent to the server.
+///
+/// [recoveryKeyWrapped] is the recovery key encrypted with the KEK — stored
+/// on the server so that [revealRecoveryKey] can re-display it later.
 final class VaultCreationMaterial {
   const VaultCreationMaterial({
     required this.salt,
@@ -40,6 +49,8 @@ final class VaultCreationMaterial {
     required this.canaryIv,
     required this.recoveryWrappedDek,
     required this.recoveryDekIv,
+    required this.recoveryKeyWrapped,
+    required this.recoveryKeyWrapIv,
     required this.recoveryKey,
   });
 
@@ -64,9 +75,36 @@ final class VaultCreationMaterial {
   /// 12-byte random IV for [recoveryWrappedDek].
   final Uint8List recoveryDekIv;
 
+  /// Recovery key encrypted with KEK (AES-256-GCM, includes GCM tag).
+  /// Stored server-side so [revealRecoveryKey] can re-display it.
+  final Uint8List recoveryKeyWrapped;
+
+  /// 12-byte random IV for [recoveryKeyWrapped].
+  final Uint8List recoveryKeyWrapIv;
+
   /// 32-byte recovery key. **Show to the user ONCE, then discard it.**
   /// Encode with [encodeRecoveryKey] to display as 64 hex chars.
   final Uint8List recoveryKey;
+
+  // -------------------------------------------------------------------------
+  // JSON serialization (base64 for binary fields)
+  // -------------------------------------------------------------------------
+
+  /// Serializes all server-safe fields to a JSON-ready map.
+  ///
+  /// **IMPORTANT:** [recoveryKey] is deliberately excluded — it must NEVER
+  /// be sent to the server.
+  Map<String, dynamic> toJson() => {
+        'salt': base64Encode(salt),
+        'wrapped_dek': base64Encode(wrappedDek),
+        'dek_iv': base64Encode(dekIv),
+        'canary_ciphertext': base64Encode(canaryCiphertext),
+        'canary_iv': base64Encode(canaryIv),
+        'recovery_wrapped_dek': base64Encode(recoveryWrappedDek),
+        'recovery_dek_iv': base64Encode(recoveryDekIv),
+        'recovery_key_wrapped': base64Encode(recoveryKeyWrapped),
+        'recovery_key_wrap_iv': base64Encode(recoveryKeyWrapIv),
+      };
 }
 
 /// Material fetched from the server to unlock a vault.
@@ -81,6 +119,8 @@ final class VaultUnlockMaterial {
     required this.canaryIv,
     required this.recoveryWrappedDek,
     required this.recoveryDekIv,
+    required this.recoveryKeyWrapped,
+    required this.recoveryKeyWrapIv,
   });
 
   final Uint8List salt;
@@ -90,6 +130,35 @@ final class VaultUnlockMaterial {
   final Uint8List canaryIv;
   final Uint8List recoveryWrappedDek;
   final Uint8List recoveryDekIv;
+
+  /// Recovery key encrypted with KEK. Retrieved from the server for
+  /// [revealRecoveryKey] to re-display the recovery key.
+  final Uint8List recoveryKeyWrapped;
+
+  /// 12-byte random IV for [recoveryKeyWrapped].
+  final Uint8List recoveryKeyWrapIv;
+
+  // -------------------------------------------------------------------------
+  // JSON deserialization (base64 for binary fields)
+  // -------------------------------------------------------------------------
+
+  factory VaultUnlockMaterial.fromJson(Map<String, dynamic> json) {
+    return VaultUnlockMaterial(
+      salt: base64Decode(json['salt'] as String? ?? ''),
+      wrappedDek: base64Decode(json['wrapped_dek'] as String? ?? ''),
+      dekIv: base64Decode(json['dek_iv'] as String? ?? ''),
+      canaryCiphertext:
+          base64Decode(json['canary_ciphertext'] as String? ?? ''),
+      canaryIv: base64Decode(json['canary_iv'] as String? ?? ''),
+      recoveryWrappedDek:
+          base64Decode(json['recovery_wrapped_dek'] as String? ?? ''),
+      recoveryDekIv: base64Decode(json['recovery_dek_iv'] as String? ?? ''),
+      recoveryKeyWrapped:
+          base64Decode(json['recovery_key_wrapped'] as String? ?? ''),
+      recoveryKeyWrapIv:
+          base64Decode(json['recovery_key_wrap_iv'] as String? ?? ''),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +174,7 @@ final class VaultUnlockMaterial {
 /// - KEK derived from password + salt via Argon2id
 /// - Wrapped DEK (DEK encrypted with KEK)
 /// - Recovery-wrapped DEK (DEK encrypted with recovery key)
+/// - Wrapped recovery key (recovery key encrypted with KEK) for re-display
 /// - Canary (known constant encrypted with KEK) for password validation
 ///
 /// Returns [VaultCreationMaterial] with everything the server needs
@@ -137,7 +207,13 @@ Future<VaultCreationMaterial> createVault(
   // 5. Create canary
   final (canaryIv, canaryCiphertext) = await createCanary(kek);
 
-  // 6. Wrap DEK with recovery key
+  // 6. Wrap recovery key with KEK (for re-display via revealRecoveryKey)
+  final (recoveryKeyWrapIv, recoveryKeyWrapped) = await _wrapRecoveryKey(
+    kek,
+    recoveryKey,
+  );
+
+  // 7. Wrap DEK with recovery key
   final (recoveryDekIv, recoveryWrappedDek) =
       await wrapDekWithRecoveryKey(recoveryKey, dek);
 
@@ -149,6 +225,8 @@ Future<VaultCreationMaterial> createVault(
     canaryIv: canaryIv,
     recoveryWrappedDek: recoveryWrappedDek,
     recoveryDekIv: recoveryDekIv,
+    recoveryKeyWrapped: recoveryKeyWrapped,
+    recoveryKeyWrapIv: recoveryKeyWrapIv,
     recoveryKey: recoveryKey,
   );
 }
@@ -211,6 +289,70 @@ Future<Uint8List> unlockWithRecoveryKey(
     material.recoveryDekIv,
     material.recoveryWrappedDek,
   );
+}
+
+/// Reveals the recovery key by decrypting [material.recoveryKeyWrapped] with
+/// the [kek] (which must already be derived from a successful password unlock).
+///
+/// The caller is responsible for deriving the KEK first — typically the
+/// repository derives it during [unlock] and keeps it in memory for this call.
+///
+/// Returns the 32-byte recovery key in plaintext.
+///
+/// **NEVER persist or log the returned key.** It is for one-time display only.
+///
+/// Throws [VaultCipherException] if decryption fails (should not happen with
+/// a valid KEK from a successful unlock).
+Future<Uint8List> revealRecoveryKey(
+  VaultUnlockMaterial material,
+  Uint8List kek,
+) async {
+  final cipher = const VaultCipher();
+  return cipher.decrypt(kek, material.recoveryKeyWrapIv,
+      material.recoveryKeyWrapped);
+}
+
+/// Verifies that [recoveryKey] truly unwraps the DEK.
+///
+/// Performs the actual unwrap of [material.recoveryWrappedDek] using the
+/// provided [recoveryKey] and validates the result by re-wrapping with
+/// the KEK-wrapped DEK. Returns `true` if the key works, `false` otherwise.
+///
+/// This is cryptographically sound — it does NOT compare plaintext strings.
+/// If GCM decryption succeeds, the key is correct; if it throws, the key
+/// is wrong.
+///
+/// Prefer this over string comparison of recovery keys. String comparison
+/// creates a side-channel risk and fails if the user copies with different
+/// formatting (whitespace, dashes, case).
+Future<bool> verifyRecoveryKeyUnlocks(
+  VaultUnlockMaterial material,
+  Uint8List recoveryKey,
+) async {
+  try {
+    await unwrapDek(
+      recoveryKey,
+      material.recoveryDekIv,
+      material.recoveryWrappedDek,
+    );
+    return true;
+  } on VaultCipherException {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Internal
+// ---------------------------------------------------------------------------
+
+/// Wraps (encrypts) the recovery key with the KEK so it can be stored on
+/// the server and re-displayed later via [revealRecoveryKey].
+Future<(Uint8List, Uint8List)> _wrapRecoveryKey(
+  Uint8List kek,
+  Uint8List recoveryKey,
+) async {
+  final cipher = const VaultCipher();
+  return cipher.encrypt(kek, recoveryKey);
 }
 
 // ---------------------------------------------------------------------------

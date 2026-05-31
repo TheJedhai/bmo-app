@@ -210,6 +210,8 @@ void main() {
         canaryIv: material.canaryIv,
         recoveryWrappedDek: material.recoveryWrappedDek,
         recoveryDekIv: material.recoveryDekIv,
+        recoveryKeyWrapped: material.recoveryKeyWrapped,
+        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
       );
       final dekFromPassword = await unlock(password, unlockMat, kdf: mockKdf);
 
@@ -238,6 +240,8 @@ void main() {
         canaryIv: material.canaryIv,
         recoveryWrappedDek: material.recoveryWrappedDek,
         recoveryDekIv: material.recoveryDekIv,
+        recoveryKeyWrapped: material.recoveryKeyWrapped,
+        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
       );
 
       expect(
@@ -311,6 +315,8 @@ void main() {
         canaryIv: material.canaryIv,
         recoveryWrappedDek: material.recoveryWrappedDek,
         recoveryDekIv: material.recoveryDekIv,
+        recoveryKeyWrapped: material.recoveryKeyWrapped,
+        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
       );
 
       expect(
@@ -336,6 +342,8 @@ void main() {
         canaryIv: material.canaryIv,
         recoveryWrappedDek: material.recoveryWrappedDek,
         recoveryDekIv: material.recoveryDekIv,
+        recoveryKeyWrapped: material.recoveryKeyWrapped,
+        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
       );
 
       expect(
@@ -357,6 +365,8 @@ void main() {
         canaryIv: material.canaryIv,
         recoveryWrappedDek: material.recoveryWrappedDek,
         recoveryDekIv: material.recoveryDekIv,
+        recoveryKeyWrapped: material.recoveryKeyWrapped,
+        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
       );
 
       final dek = await unlock(password, unlockMat, kdf: mockKdf);
