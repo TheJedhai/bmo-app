@@ -5,6 +5,7 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/models/feed.dart';
 import '../data/rss_providers.dart';
 import 'selected_view_provider.dart';
+import 'widgets/article_list.dart';
 
 const _kMobileBreakpoint = 600.0;
 const _kSidebarWidth = 260.0;
@@ -53,7 +54,7 @@ class _DesktopLayout extends ConsumerWidget {
           color: BmoColors.textMuted.withValues(alpha: 0.2),
         ),
         const Expanded(
-          child: _ContentArea(),
+          child: ArticleList(),
         ),
       ],
     );
@@ -112,7 +113,7 @@ class _MobileLayout extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      body: const _ContentArea(),
+      body: const ArticleList(),
     );
   }
 }
@@ -387,47 +388,6 @@ class _ErrorState extends StatelessWidget {
 }
 
 // ============================================================
-// Content area (placeholder for now — article list comes in 7d)
+// Error state
 // ============================================================
 
-class _ContentArea extends ConsumerWidget {
-  const _ContentArea();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final view = ref.watch(currentRssViewProvider);
-    final theme = Theme.of(context);
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.rss_feed,
-            size: 48,
-            color: BmoColors.textMuted.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Selecione uma lista ou fonte',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: BmoColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            switch (view) {
-              AllArticles() => 'Todos os artigos',
-              UnreadArticles() => 'Apenas não lidos',
-              StarredArticles() => 'Apenas favoritos',
-              FeedView(:final feedId) => 'Feed #$feedId',
-            },
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: BmoColors.textMuted.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
