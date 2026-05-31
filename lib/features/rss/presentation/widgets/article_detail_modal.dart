@@ -7,6 +7,8 @@ import '../../data/models/article.dart';
 import '../../data/rss_providers.dart';
 import '../helpers.dart';
 
+enum _ContentStatus { idle, loading, available, unavailable }
+
 class ArticleDetailModal extends ConsumerStatefulWidget {
   final Article article;
   final ({
@@ -30,12 +32,21 @@ class ArticleDetailModal extends ConsumerStatefulWidget {
 class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
   bool _summarizing = false;
   String? _summarizeError;
+  _ContentStatus _contentStatus = _ContentStatus.idle;
+  String? _contentReason;
 
   @override
   void initState() {
     super.initState();
     // Mark as read on open
     _markRead();
+    // Fetch full content if not already present
+    if (widget.article.fullContent != null &&
+        widget.article.fullContent!.isNotEmpty) {
+      _contentStatus = _ContentStatus.available;
+    } else {
+      _fetchContent();
+    }
   }
 
   Future<void> _markRead() async {
@@ -47,6 +58,36 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
       } catch (_) {
         // Silently ignore — read status is cosmetic
       }
+    }
+  }
+
+  Future<void> _fetchContent() async {
+    if (_contentStatus == _ContentStatus.loading) return;
+
+    setState(() {
+      _contentStatus = _ContentStatus.loading;
+      _contentReason = null;
+    });
+
+    try {
+      final result = await ref
+          .read(articlesProvider(widget.filter).notifier)
+          .fetchContent(widget.article.id);
+      if (!mounted) return;
+      setState(() {
+        if (result.available) {
+          _contentStatus = _ContentStatus.available;
+        } else {
+          _contentStatus = _ContentStatus.unavailable;
+          _contentReason = result.reason;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _contentStatus = _ContentStatus.unavailable;
+        _contentReason = 'Falha na conexão ao buscar conteúdo.';
+      });
     }
   }
 
@@ -110,6 +151,8 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
               filter: widget.filter,
               summarizing: _summarizing,
               summarizeError: _summarizeError,
+              contentStatus: _contentStatus,
+              contentReason: _contentReason,
               onSummarize: _summarize,
               onStarToggle: _toggleStar,
               theme: theme,
@@ -119,6 +162,8 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
               filter: widget.filter,
               summarizing: _summarizing,
               summarizeError: _summarizeError,
+              contentStatus: _contentStatus,
+              contentReason: _contentReason,
               onSummarize: _summarize,
               onStarToggle: _toggleStar,
               theme: theme,
@@ -136,6 +181,8 @@ class _DesktopDetail extends StatelessWidget {
   final dynamic filter; // Type would be verbose; only passed through
   final bool summarizing;
   final String? summarizeError;
+  final _ContentStatus contentStatus;
+  final String? contentReason;
   final VoidCallback onSummarize;
   final VoidCallback onStarToggle;
   final ThemeData theme;
@@ -145,6 +192,8 @@ class _DesktopDetail extends StatelessWidget {
     required this.filter,
     required this.summarizing,
     required this.summarizeError,
+    required this.contentStatus,
+    required this.contentReason,
     required this.onSummarize,
     required this.onStarToggle,
     required this.theme,
@@ -152,11 +201,16 @@ class _DesktopDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasImage =
+        article.imageUrl != null && article.imageUrl!.isNotEmpty;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 720),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Image at top
+          if (hasImage)
+            _DetailImage(imageUrl: article.imageUrl!),
           _DetailAppBar(
             article: article,
             onStarToggle: onStarToggle,
@@ -169,6 +223,8 @@ class _DesktopDetail extends StatelessWidget {
                 filter: filter,
                 summarizing: summarizing,
                 summarizeError: summarizeError,
+                contentStatus: contentStatus,
+                contentReason: contentReason,
                 onSummarize: onSummarize,
                 theme: theme,
               ),
@@ -189,6 +245,8 @@ class _MobileDetail extends StatelessWidget {
   final dynamic filter;
   final bool summarizing;
   final String? summarizeError;
+  final _ContentStatus contentStatus;
+  final String? contentReason;
   final VoidCallback onSummarize;
   final VoidCallback onStarToggle;
   final ThemeData theme;
@@ -198,6 +256,8 @@ class _MobileDetail extends StatelessWidget {
     required this.filter,
     required this.summarizing,
     required this.summarizeError,
+    required this.contentStatus,
+    required this.contentReason,
     required this.onSummarize,
     required this.onStarToggle,
     required this.theme,
@@ -205,6 +265,8 @@ class _MobileDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasImage =
+        article.imageUrl != null && article.imageUrl!.isNotEmpty;
     return Scaffold(
       backgroundColor: BmoColors.screenBg,
       appBar: AppBar(
@@ -229,13 +291,26 @@ class _MobileDetail extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
-        child: _DetailBody(
-          article: article,
-          filter: filter,
-          summarizing: summarizing,
-          summarizeError: summarizeError,
-          onSummarize: onSummarize,
-          theme: theme,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Image at top
+            if (hasImage)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _DetailImage(imageUrl: article.imageUrl!),
+              ),
+            _DetailBody(
+              article: article,
+              filter: filter,
+              summarizing: summarizing,
+              summarizeError: summarizeError,
+              contentStatus: contentStatus,
+              contentReason: contentReason,
+              onSummarize: onSummarize,
+              theme: theme,
+            ),
+          ],
         ),
       ),
     );
@@ -291,6 +366,8 @@ class _DetailBody extends ConsumerWidget {
   final dynamic filter;
   final bool summarizing;
   final String? summarizeError;
+  final _ContentStatus contentStatus;
+  final String? contentReason;
   final VoidCallback onSummarize;
   final ThemeData theme;
 
@@ -299,13 +376,15 @@ class _DetailBody extends ConsumerWidget {
     required this.filter,
     required this.summarizing,
     required this.summarizeError,
+    required this.contentStatus,
+    required this.contentReason,
     required this.onSummarize,
     required this.theme,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch for updates from summarize / star toggle
+    // Watch for updates from summarize / star toggle / fetchContent
     final currentArticleAsync =
         ref.watch(articlesProvider(filter as ({
           int? feedId,
@@ -314,16 +393,20 @@ class _DetailBody extends ConsumerWidget {
           String? titleContains,
         })));
     final currentArticle = currentArticleAsync.hasValue
-        ? currentArticleAsync.value!.where((a) => a.id == article.id).firstOrNull ?? article
+        ? currentArticleAsync.value!
+                .where((a) => a.id == article.id)
+                .firstOrNull ??
+            article
         : article;
 
     final author = currentArticle.author;
     final dateStr = currentArticle.publishedAt != null
         ? formatRelativeDate(currentArticle.publishedAt!)
         : '';
-    final content = currentArticle.content;
-    final summaryRaw = currentArticle.summaryRaw;
-    final bodyHtml = (content != null && content.isNotEmpty) ? content : summaryRaw;
+    final bodyHtml = (currentArticle.content != null &&
+            currentArticle.content!.isNotEmpty)
+        ? currentArticle.content
+        : currentArticle.summaryRaw;
     final bodyText = bodyHtml != null ? stripHtml(bodyHtml) : '';
 
     // Resolve feed name
@@ -345,8 +428,6 @@ class _DetailBody extends ConsumerWidget {
           currentArticle.title,
           style: theme.textTheme.titleLarge?.copyWith(
             color: BmoColors.textPrimary,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'PressStart2P',
           ),
         ),
         const SizedBox(height: 12),
@@ -427,7 +508,7 @@ class _DetailBody extends ConsumerWidget {
             currentArticle.summaryLlm!.isNotEmpty) ...[
           _SummaryBlock(
             text: currentArticle.summaryLlm!,
-            cached: true, // todo: use actual cached flag when available
+            cached: true,
             theme: theme,
           ),
           const SizedBox(height: 20),
@@ -468,16 +549,52 @@ class _DetailBody extends ConsumerWidget {
         Divider(color: BmoColors.textMuted.withValues(alpha: 0.2)),
         const SizedBox(height: 12),
 
-        // Body text
-        if (bodyText.isNotEmpty)
+        // ---- Content section ----
+
+        // Loading
+        if (contentStatus == _ContentStatus.loading) ...[
+          _ContentLoading(),
+          const SizedBox(height: 16),
+        ],
+
+        // Full content (available)
+        if (contentStatus == _ContentStatus.available &&
+            currentArticle.fullContent != null &&
+            currentArticle.fullContent!.isNotEmpty) ...[
+          ...renderParagraphs(
+            currentArticle.fullContent!,
+            theme.textTheme.bodyMedium?.copyWith(
+                  color: BmoColors.textPrimary,
+                  height: 1.6,
+                ) ??
+                TextStyle(
+                  color: BmoColors.textPrimary,
+                  height: 1.6,
+                ),
+          ),
+        ],
+
+        // Fallback content (unavailable or idle with body text)
+        if ((contentStatus == _ContentStatus.unavailable ||
+                contentStatus == _ContentStatus.idle) &&
+            bodyText.isNotEmpty) ...[
+          if (contentStatus == _ContentStatus.unavailable) ...[
+            _FallbackNote(reason: contentReason),
+            const SizedBox(height: 16),
+          ],
           Text(
             bodyText,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: BmoColors.textPrimary,
               height: 1.6,
             ),
-          )
-        else
+          ),
+        ],
+
+        // Truly empty
+        if ((contentStatus == _ContentStatus.unavailable ||
+                contentStatus == _ContentStatus.idle) &&
+            bodyText.isEmpty)
           Text(
             'Sem conteúdo disponível.',
             style: theme.textTheme.bodyMedium?.copyWith(
@@ -605,6 +722,173 @@ class _SummaryBlock extends StatelessWidget {
             style: theme.textTheme.bodyMedium?.copyWith(
               color: BmoColors.textPrimary,
               height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Detail image (modal top)
+// ============================================================
+
+class _DetailImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _DetailImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      child: Image.network(
+        imageUrl,
+        height: 200,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 200,
+            color: BmoColors.screenBgElevated,
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 120,
+          color: BmoColors.screenBgElevated,
+          child: Center(
+            child: Icon(
+              Icons.rss_feed,
+              size: 32,
+              color: BmoColors.textMuted.withValues(alpha: 0.3),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Content loading (scraping in progress)
+// ============================================================
+
+class _ContentLoading extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBgElevated,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: BmoColors.accentGreen,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Buscando conteúdo completo...',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: BmoColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Fallback note (content unavailable)
+// ============================================================
+
+class _FallbackNote extends StatelessWidget {
+  final String? reason;
+
+  const _FallbackNote({this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: BmoColors.accentYellow.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: BmoColors.accentYellow.withValues(alpha: 0.5),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(
+              Icons.info_outline,
+              size: 16,
+              color: BmoColors.accentYellow.withValues(alpha: 0.8),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Não foi possível carregar a matéria completa — '
+                  'exibindo o resumo disponível.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: BmoColors.accentYellow.withValues(alpha: 0.9),
+                    height: 1.4,
+                  ),
+                ),
+                if (reason != null && reason!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    reason!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: BmoColors.textMuted,
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Text(
+                  "Toque em 'Abrir original' para ler no site.",
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: BmoColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
