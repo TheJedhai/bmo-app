@@ -65,3 +65,26 @@ abstract class VaultKdf {
     required Uint8List salt,
   });
 }
+
+/// Thrown when the KDF cannot operate because the hash-wasm WASM module
+/// is not loaded.
+///
+/// This is a **visible failure** — it prevents the vault from silently
+/// falling back to a CDN import. If you see this, the self-hosted
+/// `web/hash-wasm/index.esm.js` failed to load and the vault cannot
+/// derive keys until the underlying issue is resolved.
+///
+/// This exception is part of **Camada 1** of the CDN-fallback defense.
+/// Camada 2 (failsafe stub in `web/index.html`) ensures that dargon2
+/// never sees `window.hashwasm` as null, preventing the CDN import
+/// from ever being triggered.
+final class VaultKdfUnavailableException implements Exception {
+  const VaultKdfUnavailableException();
+
+  @override
+  String toString() =>
+    'VaultKdfUnavailableException: hash-wasm WASM module not loaded. '
+    'The self-hosted web/hash-wasm/index.esm.js failed to initialize. '
+    'The vault cannot derive keys until this is resolved. '
+    'Verify that web/hash-wasm/index.esm.js exists and is served correctly.';
+}
