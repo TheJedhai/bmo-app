@@ -37,8 +37,20 @@ class ArticleList extends ConsumerWidget {
 
         final isFeedView = view is FeedView;
         if (isFeedView) {
+          // Resolve feed name for the flat list
+          final feedsAsync = ref.watch(feedsProvider);
+          String feedName = 'Feed';
+          if (feedsAsync.hasValue) {
+            final feedId = view.feedId;
+            feedName = feedsAsync.value!
+                    .where((f) => f.id == feedId)
+                    .firstOrNull
+                    ?.title ??
+                'Feed';
+          }
           return _FlatArticleList(
             articles: articles,
+            feedName: feedName,
             onTap: (a) => _openDetail(context, ref, a),
             onStarToggle: (a) =>
                 ref.read(articlesProvider(filter).notifier).toggleStar(a.id),
@@ -180,8 +192,11 @@ class _GroupedArticleList extends StatelessWidget {
           final articleIndex = index - cursor;
           if (articleIndex < entry.value.length) {
             final article = entry.value[articleIndex];
+            final feedName =
+                feedMap[entry.key.id]?.title ?? entry.key.title;
             return _ArticleCard(
               article: article,
+              feedName: feedName,
               onTap: () => onTap(article),
               onStarToggle: () => onStarToggle(article),
             );
@@ -200,11 +215,13 @@ class _GroupedArticleList extends StatelessWidget {
 
 class _FlatArticleList extends StatelessWidget {
   final List<Article> articles;
+  final String feedName;
   final _ArticleAction onTap;
   final _ArticleAction onStarToggle;
 
   const _FlatArticleList({
     required this.articles,
+    required this.feedName,
     required this.onTap,
     required this.onStarToggle,
   });
@@ -218,6 +235,7 @@ class _FlatArticleList extends StatelessWidget {
         final article = articles[index];
         return _ArticleCard(
           article: article,
+          feedName: feedName,
           onTap: () => onTap(article),
           onStarToggle: () => onStarToggle(article),
         );
@@ -257,11 +275,13 @@ class _GroupHeader extends StatelessWidget {
 
 class _ArticleCard extends ConsumerWidget {
   final Article article;
+  final String feedName;
   final VoidCallback onTap;
   final VoidCallback onStarToggle;
 
   const _ArticleCard({
     required this.article,
+    required this.feedName,
     required this.onTap,
     required this.onStarToggle,
   });
@@ -283,40 +303,89 @@ class _ArticleCard extends ConsumerWidget {
         ? formatRelativeDate(article.publishedAt!)
         : '';
 
+    final hasImage = article.imageUrl != null && article.imageUrl!.isNotEmpty;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: BmoColors.screenBg,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Unread indicator dot
-              if (!isRead)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, right: 8),
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
+            color: BmoColors.screenBgElevated,
+            borderRadius: BorderRadius.circular(10),
+            border: !isRead
+                ? const Border(
+                    left: BorderSide(
                       color: BmoColors.accentGreen,
-                      shape: BoxShape.circle,
+                      width: 3,
                     ),
-                  ),
-                )
-              else
-                const SizedBox(width: 16),
-              // Content
-              Expanded(
+                  )
+                : null,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Image section (only when imageUrl is present)
+              if (hasImage)
+                Stack(
+                  children: [
+                    _ArticleImage(imageUrl: article.imageUrl!),
+                    // Star overlay on image
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: _StarBadge(
+                        isStarred: isStarred,
+                        onTap: onStarToggle,
+                      ),
+                    ),
+                  ],
+                ),
+              // Content section
+              Padding(
+                padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // No-image layout: star in row with date
+                    if (!hasImage)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              feedName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: BmoColors.accentGreen,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          _StarBadge(
+                            isStarred: isStarred,
+                            onTap: onStarToggle,
+                          ),
+                        ],
+                      )
+                    else ...[
+                      // Feed name below image
+                      Text(
+                        feedName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: BmoColors.accentGreen,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    // Title
                     Text(
                       article.title,
                       maxLines: 2,
@@ -326,48 +395,117 @@ class _ArticleCard extends ConsumerWidget {
                         fontWeight: titleWeight,
                       ),
                     ),
+                    // Summary (1 line)
                     if (stripped != null && stripped.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
                         stripped,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: isRead
-                              ? BmoColors.textMuted.withValues(alpha: 0.5)
-                              : BmoColors.textMuted,
-                          fontSize: 12,
+                          color: BmoColors.textMuted,
+                          fontSize: 11,
                         ),
                       ),
                     ],
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
+                    // Date
                     Text(
                       dateText,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: BmoColors.textSecondary,
-                        fontSize: 11,
+                        fontSize: 10,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Star icon
-              GestureDetector(
-                onTap: onStarToggle,
-                behavior: HitTestBehavior.opaque,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: Icon(
-                    isStarred ? Icons.star : Icons.star_border,
-                    size: 18,
-                    color: isStarred
-                        ? BmoColors.accentYellow
-                        : BmoColors.textMuted.withValues(alpha: 0.4),
-                  ),
-                ),
-              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Article image with loading & error fallback
+// ============================================================
+
+class _ArticleImage extends StatelessWidget {
+  final String imageUrl;
+
+  const _ArticleImage({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+      child: Image.network(
+        imageUrl,
+        height: 160,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 160,
+            color: BmoColors.screenBgElevated,
+            child: const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          height: 100,
+          color: BmoColors.screenBgElevated,
+          child: Center(
+            child: Icon(
+              Icons.rss_feed,
+              size: 28,
+              color: BmoColors.textMuted.withValues(alpha: 0.3),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Star badge (shared between image and no-image layouts)
+// ============================================================
+
+class _StarBadge extends StatelessWidget {
+  final bool isStarred;
+  final VoidCallback onTap;
+
+  const _StarBadge({required this.isStarred, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: BmoColors.screenBg.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          isStarred ? Icons.star : Icons.star_border,
+          size: 18,
+          color: isStarred
+              ? BmoColors.accentYellow
+              : BmoColors.textMuted.withValues(alpha: 0.6),
         ),
       ),
     );
