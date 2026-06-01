@@ -261,7 +261,18 @@ void main() {
     // -------------------------------------------------------------------
     // 6. fetchChunkRange — middle chunk (index 2)
     // -------------------------------------------------------------------
-    test('6. fetchChunkRange — middle chunk decrypts correctly', () async {
+    // -------------------------------------------------------------------
+    // 6. fetchChunkRange — middle chunk (with partial-transfer proof)
+    // -------------------------------------------------------------------
+    //
+    // GUARDS AGAINST REGRESSION: this test proves that the server sends
+    // ONLY the requested chunk bytes (partial transfer), not the full blob.
+    // If someone changes the implementation to "download everything and
+    // slice locally", these assertions will catch it:
+    //   - statusCode must be 206 (Partial Content), not 200.
+    //   - encryptedBytesReceived must be ~1 MiB (chunk + GCM tag),
+    //     not ~5 MiB (full blob).
+    test('6. fetchChunkRange — middle chunk (proof: 206 + partial bytes)', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -271,12 +282,12 @@ void main() {
       const chunkSize = VaultChunkedCipher.defaultChunkSize;
       final original = _testBytes(fileSize, seed: 100);
 
-      // Fetch header first.
       final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
       // Decrypt chunk 2 (bytes 2 097 152 .. 3 145 727 in plaintext).
       const chunkIndex = 2;
-      final decrypted = await repo.fetchChunkRange(
+      final (decrypted, statusCode, encryptedBytesReceived) =
+          await repo.fetchChunkRange(
         vaultId!,
         dek!,
         itemId!,
@@ -284,21 +295,36 @@ void main() {
         header,
       );
 
-      // Verify against the same slice of the original plaintext.
+      // -- Partial-transfer proofs --
+      // 1. Server MUST respond 206 Partial Content when a Range is requested.
+      expect(statusCode, 206,
+          reason: 'Server must return 206 for Range requests — '
+              '200 would mean the full blob was downloaded');
+      // 2. Encrypted bytes received MUST equal one chunk + GCM tag,
+      //    NOT the full blob (~5 MiB). A full download would expose
+      //    ~5 242 981 bytes here instead of ~1 048 592.
+      const expectedEncryptedSize = chunkSize + 16; // 1 MiB + 16-byte tag
+      expect(encryptedBytesReceived, expectedEncryptedSize,
+          reason: 'Only one chunk should be transferred ($expectedEncryptedSize bytes), '
+              'not the full blob');
+
+      // -- Content proof --
       final expectedStart = chunkIndex * chunkSize;
       final expectedEnd = (chunkIndex + 1) * chunkSize;
       final expectedSlice = Uint8List.sublistView(
-        original,
-        expectedStart,
-        expectedEnd,
-      );
-
+        original, expectedStart, expectedEnd);
       expect(decrypted, expectedSlice);
     });
 
     // -------------------------------------------------------------------
     // 7. Cross-chunk plaintext range
     // -------------------------------------------------------------------
+    // -------------------------------------------------------------------
+    // 7. Cross-chunk range with partial-transfer proof
+    // -------------------------------------------------------------------
+    //
+    // GUARDS AGAINST REGRESSION: each chunk fetch must return 206 with
+    // only that chunk's encrypted bytes — not the full blob.
     test('7. cross-chunk range mapping and fetch/decrypt', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
@@ -317,25 +343,26 @@ void main() {
       const plainEnd = 2100000;
 
       final chunks = VaultRepository.mapPlaintextRangeToChunks(
-        plainStart,
-        plainEnd,
-        chunkSize,
-        fileSize,
-      );
-
+        plainStart, plainEnd, chunkSize, fileSize);
       expect(chunks.length, 2);
 
       // Fetch and decrypt each needed chunk, then assemble.
       final decryptedParts = <Uint8List>[];
       for (final (ci, offset, length) in chunks) {
-        final chunkPlain = await repo.fetchChunkRange(
-          vaultId!,
-          dek!,
-          itemId!,
-          ci,
-          header,
+        final (chunkPlain, statusCode, encryptedBytesReceived) =
+            await repo.fetchChunkRange(
+          vaultId!, dek!, itemId!, ci, header,
         );
-        decryptedParts.add(Uint8List.sublistView(chunkPlain, offset, offset + length));
+
+        // Each chunk fetch must be a partial transfer.
+        expect(statusCode, 206,
+            reason: 'Cross-chunk fetch for chunk $ci must be 206');
+        expect(encryptedBytesReceived, chunkSize + 16,
+            reason: 'Chunk $ci should transfer $chunkSize+16 encrypted bytes, '
+                'not the full blob');
+
+        decryptedParts.add(
+          Uint8List.sublistView(chunkPlain, offset, offset + length));
       }
 
       // Concatenate.
@@ -349,19 +376,18 @@ void main() {
 
       // Compare with original slice.
       final expected = Uint8List.sublistView(
-        original,
-        plainStart,
-        plainEnd + 1,
-      );
-
+        original, plainStart, plainEnd + 1);
       expect(assembled.length, plainEnd - plainStart + 1);
       expect(assembled, expected);
     });
 
     // -------------------------------------------------------------------
-    // 8. fetchChunkRange for last (partial) chunk
+    // 8. fetchChunkRange for last chunk (with partial-transfer proof)
     // -------------------------------------------------------------------
-    test('8. fetchChunkRange — last partial chunk', () async {
+    //
+    // GUARDS AGAINST REGRESSION: last chunk must also be a 206 partial
+    // transfer, with only that chunk's encrypted bytes.
+    test('8. fetchChunkRange — last chunk (proof: 206 + partial bytes)', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -372,29 +398,29 @@ void main() {
       final totalChunks =
           VaultChunkedCipher.totalChunks(fileSize, chunkSize);
 
-      // 5 MiB is exactly 5 × 1 MiB, so the last chunk (index 4) should be
-      // exactly chunkSize bytes — there is no partial chunk.
+      // 5 MiB is exactly 5 × 1 MiB, so the last chunk (index 4) is a full
+      // chunk (no partial plaintext).
       expect(totalChunks, 5);
 
       final original = _testBytes(fileSize, seed: 100);
       final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
-      // Decrypt last chunk.
       const lastIdx = 4;
-      final decrypted = await repo.fetchChunkRange(
-        vaultId!,
-        dek!,
-        itemId!,
-        lastIdx,
-        header,
+      final (decrypted, statusCode, encryptedBytesReceived) =
+          await repo.fetchChunkRange(
+        vaultId!, dek!, itemId!, lastIdx, header,
       );
 
+      // -- Partial-transfer proofs --
+      expect(statusCode, 206,
+          reason: 'Last chunk fetch must be 206 Partial Content');
+      expect(encryptedBytesReceived, chunkSize + 16,
+          reason: 'Last chunk should transfer $chunkSize+16 encrypted bytes, '
+              'not the full blob');
+
+      // -- Content proof --
       final expectedSlice = Uint8List.sublistView(
-        original,
-        lastIdx * chunkSize,
-        fileSize,
-      );
-
+        original, lastIdx * chunkSize, fileSize);
       expect(decrypted, expectedSlice);
     });
 

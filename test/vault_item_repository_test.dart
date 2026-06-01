@@ -654,9 +654,13 @@ void main() {
       final repo = _createRepo(mockClient);
 
       // Fetch and decrypt chunk 1 (middle chunk).
-      final decrypted =
+      final (decrypted, statusCode, encryptedBytes) =
           await repo.fetchChunkRange('1', testDek, '10', 1, header);
       expect(decrypted, plaintextChunks[1]);
+      // Mock returns 206 when content-range header is present.
+      expect(statusCode, 206);
+      // Encrypted bytes = plaintext + 16-byte GCM tag.
+      expect(encryptedBytes, chunkSize + 16);
     });
 
     test('fetchChunkRange handles last (partial) chunk correctly', () async {
@@ -704,9 +708,13 @@ void main() {
       expect(plaintextChunks.length, 3);
       expect(plaintextChunks[2].length, 50);
 
-      final decrypted =
+      final (decrypted, statusCode, encryptedBytes) =
           await repo.fetchChunkRange('1', testDek, '10', 2, header);
       expect(decrypted, plaintextChunks[2]);
+      // Mock returns 206 when content-range header is present.
+      expect(statusCode, 206);
+      // Last chunk: 50 bytes plaintext + 16-byte GCM tag = 66 encrypted.
+      expect(encryptedBytes, 50 + 16);
     });
   });
 
