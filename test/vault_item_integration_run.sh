@@ -16,6 +16,7 @@
 set -euo pipefail
 
 VENV_PY="$HOME/Library/Application Support/BMO/venv/bin/python"
+VENV_ALEMBIC="$HOME/Library/Application Support/BMO/venv/bin/alembic"
 TEST_PORT=8090
 
 echo "=== Vault Item E2E Test Runner ==="
@@ -23,14 +24,19 @@ echo "=== Vault Item E2E Test Runner ==="
 # -- Create temp paths --------------------------------------------------------
 export BMO_TEST_DB
 BMO_TEST_DB=$(mktemp /tmp/bmo-e2e-items-XXXXXX.db)
-echo "[1/5] Temp DB: $BMO_TEST_DB"
+echo "[1/6] Temp DB: $BMO_TEST_DB"
 
 export BMO_TEST_BLOBS
 BMO_TEST_BLOBS=$(mktemp -d /tmp/bmo-e2e-blobs-items-XXXXXX)
 echo "       Temp blob dir: $BMO_TEST_BLOBS"
 
+# -- Run migrations on temp DB ------------------------------------------------
+echo "[2/6] Running Alembic migrations ..."
+(cd "$HOME/Documents/bmo-server" && BMO_DB_PATH="$BMO_TEST_DB" \
+  "$VENV_ALEMBIC" upgrade head)
+
 # -- Start disposable server --------------------------------------------------
-echo "[2/5] Starting disposable bmo-server on port $TEST_PORT ..."
+echo "[3/6] Starting disposable bmo-server on port $TEST_PORT ..."
 BMO_DB_PATH="$BMO_TEST_DB" \
 BMO_VAULT_BLOB_DIR="$BMO_TEST_BLOBS" \
 BMO_HOST="127.0.0.1" \
@@ -41,7 +47,7 @@ BMO_HOST="127.0.0.1" \
 SERVER_PID=$!
 
 # -- Wait for server to be healthy --------------------------------------------
-echo "[3/5] Waiting for server to be healthy ..."
+echo "[4/6] Waiting for server to be healthy ..."
 for i in $(seq 1 30); do
   if curl -sf "http://127.0.0.1:$TEST_PORT/health" >/dev/null 2>&1; then
     echo "       Server is up (PID=$SERVER_PID)."
@@ -56,7 +62,7 @@ for i in $(seq 1 30); do
 done
 
 # -- Run the Flutter test -----------------------------------------------------
-echo "[4/5] Running Flutter integration test ..."
+echo "[5/6] Running Flutter integration test ..."
 set +e
 BMO_SERVER_URL="http://127.0.0.1:$TEST_PORT" \
   flutter test --platform=chrome test/vault_item_integration_test.dart
@@ -64,7 +70,7 @@ TEST_EXIT=$?
 set -e
 
 # -- Tear down ----------------------------------------------------------------
-echo "[5/5] Tearing down ..."
+echo "[6/6] Tearing down ..."
 kill "$SERVER_PID" 2>/dev/null || true
 wait "$SERVER_PID" 2>/dev/null || true
 rm -f "$BMO_TEST_DB"

@@ -55,6 +55,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:bmo_app/features/vault/crypto/vault_chunked_cipher.dart';
+import 'package:bmo_app/features/vault/crypto/vault_kdf.dart';
 import 'package:bmo_app/features/vault/data/vault_client.dart';
 import 'package:bmo_app/features/vault/data/vault_repository.dart';
 
@@ -67,14 +68,42 @@ import 'package:bmo_app/features/vault/data/vault_repository.dart';
 const _testServerUrl = 'http://127.0.0.1:8090';
 
 // ---------------------------------------------------------------------------
+// Mock KDF — fast, deterministic, no WASM
+// ---------------------------------------------------------------------------
+
+/// Mock KDF for E2E tests. The real Argon2id KDF requires the hash-wasm
+/// WASM module which is loaded via web/index.html — unavailable in the
+/// Flutter test environment. Argon2id correctness is tested by
+/// vault_crypto_test.dart; the item E2E test focuses on the integration of
+/// chunked encryption with the server.
+final class _MockKdf implements VaultKdf {
+  const _MockKdf();
+
+  @override
+  Future<Uint8List> derive({
+    required Uint8List password,
+    required Uint8List salt,
+  }) async {
+    final result = Uint8List(32);
+    for (var i = 0; i < 32; i++) {
+      result[i] =
+          password[i % password.length] ^ salt[i % salt.length] ^ (i * 0x1B);
+    }
+    return result;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Creates a [VaultRepository] pointed at the disposable test server.
+/// Creates a [VaultRepository] pointed at the disposable test server,
+/// using a mock KDF that doesn't require the hash-wasm WASM module.
 VaultRepository _createRepo() {
   final client = http.Client();
   return VaultRepository(
     VaultClient(client: client, baseUrl: _testServerUrl),
+    kdf: const _MockKdf(),
   );
 }
 
@@ -216,10 +245,9 @@ void main() {
       expect(vaultId, isNotNull);
       expect(itemId, isNotNull);
 
-      final (header, blobSize) = await repo.fetchItemHeader(vaultId!, itemId!);
+      final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
       expect(header.length, headerByteLength);
-      expect(blobSize, greaterThan(headerByteLength));
 
       // Parse header to verify it's valid.
       final (version, noncePrefix, chunkSize, originalSize) =
@@ -244,7 +272,7 @@ void main() {
       final original = _testBytes(fileSize, seed: 100);
 
       // Fetch header first.
-      final (header, _) = await repo.fetchItemHeader(vaultId!, itemId!);
+      final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
       // Decrypt chunk 2 (bytes 2 097 152 .. 3 145 727 in plaintext).
       const chunkIndex = 2;
@@ -281,7 +309,7 @@ void main() {
       const chunkSize = VaultChunkedCipher.defaultChunkSize;
       final original = _testBytes(fileSize, seed: 100);
 
-      final (header, _) = await repo.fetchItemHeader(vaultId!, itemId!);
+      final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
       // Request a plaintext range that crosses chunk 1→2 boundary:
       // bytes 1 500 000 .. 2 100 000
@@ -349,7 +377,7 @@ void main() {
       expect(totalChunks, 5);
 
       final original = _testBytes(fileSize, seed: 100);
-      final (header, _) = await repo.fetchItemHeader(vaultId!, itemId!);
+      final header = await repo.fetchItemHeader(vaultId!, itemId!);
 
       // Decrypt last chunk.
       const lastIdx = 4;
@@ -388,13 +416,10 @@ void main() {
       // Delete vault.
       await repo.deleteVault(vaultId!);
 
-      // Verify vault is gone.
-      try {
-        await repo.getVault(vaultId!);
-        fail('Expected VaultApiException after delete');
-      } on VaultApiException catch (e) {
-        expect(e.statusCode, 404);
-      }
+      // Verify vault is gone — list all vaults, confirm our id is absent.
+      // (bmo-server does NOT have GET /vaults/{id}; uses list + key fetch.)
+      final allVaults = await repo.listVaults();
+      expect(allVaults.where((v) => v.id == vaultId), isEmpty);
     });
   });
 }

@@ -597,11 +597,10 @@ void main() {
       });
 
       final repo = _createRepo(mockClient);
-      final (fetchedHeader, blobSize) = await repo.fetchItemHeader('1', '10');
+      final fetchedHeader = await repo.fetchItemHeader('1', '10');
 
       expect(fetchedHeader.length, headerByteLength);
       expect(fetchedHeader, header);
-      expect(blobSize, blob.length);
     });
   });
 
