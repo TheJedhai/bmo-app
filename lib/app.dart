@@ -12,6 +12,7 @@ import 'features/home/presentation/home_screen.dart';
 import 'features/home_devices/presentation/home_devices_screen.dart';
 import 'features/missions/presentation/missions_screen.dart';
 import 'features/rss/presentation/rss_screen.dart';
+import 'features/vault/presentation/vault_screen.dart';
 
 class BmoApp extends ConsumerWidget {
   const BmoApp({super.key});
@@ -53,6 +54,7 @@ class _BmoShell extends ConsumerWidget {
               TabPage(keepAlive: true, child: MissionsScreen()),
               TabPage(keepAlive: true, child: HomeDevicesScreen()),
               TabPage(keepAlive: true, child: RssScreen()),
+              TabPage(keepAlive: false, child: VaultScreen()),
             ],
           ),
         ),
