@@ -13,6 +13,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -124,6 +125,186 @@ final class VaultClient {
   }
 
   // ============================================================
+  // Vault items
+  // ============================================================
+
+  /// Uploads an encrypted item to a vault via multipart form.
+  ///
+  /// [encryptedBlob] is the full encrypted blob (header + chunk ciphertexts
+  /// concatenated). [metadataBlobBase64] and [metadataIvBase64] are the
+  /// base64-encoded encrypted metadata (file name, MIME type, size).
+  ///
+  /// [encryptionScheme] must be "gcm_single" or "gcm_chunked".
+  /// [chunkSize] is required for "gcm_chunked", null for "gcm_single".
+  ///
+  /// [onProgress] is called with (bytesSent, totalBytes) during upload.
+  /// For Flutter web, this fires as the stream is consumed.
+  Future<VaultItem> uploadItem({
+    required String vaultId,
+    required List<int> encryptedBlob,
+    required String metadataBlobBase64,
+    required String metadataIvBase64,
+    required String encryptionScheme,
+    required int? chunkSize,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items');
+    final request = http.MultipartRequest('POST', uri);
+
+    // Attach blob as a file — stream with progress tracking.
+    final total = encryptedBlob.length;
+    final trackedStream = _progressStream(encryptedBlob, total, onProgress);
+    request.files.add(http.MultipartFile(
+      'blob',
+      trackedStream,
+      total,
+      filename: 'encrypted.blob',
+    ));
+
+    // Metadata fields.
+    request.fields['metadata_blob'] = metadataBlobBase64;
+    request.fields['metadata_iv'] = metadataIvBase64;
+    request.fields['encryption_scheme'] = encryptionScheme;
+    if (chunkSize != null) {
+      request.fields['chunk_size'] = chunkSize.toString();
+    }
+
+    final streamedResponse = await _client.send(request);
+    final response = await http.Response.fromStream(streamedResponse);
+    _ensureOk(response);
+    return VaultItem.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Lists all items in a vault.
+  ///
+  /// Returns metadata for each item. Content blobs are NOT included —
+  /// use [downloadItemBlob] or [fetchItemBlobRange] to retrieve content.
+  Future<List<VaultItem>> listItems(String vaultId) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items'),
+    );
+    _ensureOk(response);
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => VaultItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Downloads the full encrypted blob for an item.
+  ///
+  /// Returns the raw bytes (header + all chunk ciphertexts).
+  ///
+  /// [onProgress] is called with (bytesReceived, totalBytes) as the
+  /// streamed response is read.
+  ///
+  /// Throws [VaultApiException] if the item is not found (404) or the
+  /// blob file is missing from disk (410).
+  Future<Uint8List> downloadItemBlob({
+    required String vaultId,
+    required String itemId,
+    void Function(int received, int total)? onProgress,
+  }) async {
+    final request = http.Request(
+      'GET',
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/$itemId'),
+    );
+    final streamedResponse = await _client.send(request);
+
+    if (streamedResponse.statusCode == 410) {
+      throw VaultApiException(
+        statusCode: 410,
+        errorCode: 'blob_file_missing',
+        message: 'Blob file not found for item $itemId',
+      );
+    }
+    _ensureOkStreamed(streamedResponse);
+
+    final total = streamedResponse.contentLength ?? 0;
+    final bytes = <int>[];
+    var received = 0;
+    await for (final chunk in streamedResponse.stream) {
+      bytes.addAll(chunk);
+      received += chunk.length;
+      onProgress?.call(received, total > 0 ? total : received);
+    }
+    return Uint8List.fromList(bytes);
+  }
+
+  /// Fetches a byte range of an item's encrypted blob.
+  ///
+  /// [start] and [end] are inclusive byte offsets into the blob.
+  /// Sets `Range: bytes=<start>-<end>` on the request.
+  ///
+  /// Returns the partial bytes. The server responds with 206 Partial Content
+  /// and a Content-Range header on success.
+  ///
+  /// Throws [VaultApiException] on 404 (item not found), 410 (blob file
+  /// missing), or 416 (range not satisfiable).
+  Future<Uint8List> fetchItemBlobRange({
+    required String vaultId,
+    required String itemId,
+    required int start,
+    required int end,
+  }) async {
+    final request = http.Request(
+      'GET',
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/$itemId'),
+    );
+    request.headers['Range'] = 'bytes=$start-$end';
+
+    final streamedResponse = await _client.send(request);
+
+    if (streamedResponse.statusCode == 410) {
+      throw VaultApiException(
+        statusCode: 410,
+        errorCode: 'blob_file_missing',
+        message: 'Blob file not found for item $itemId',
+      );
+    }
+    if (streamedResponse.statusCode == 416) {
+      throw VaultApiException(
+        statusCode: 416,
+        errorCode: 'range_not_satisfiable',
+        message: 'Range $start-$end not satisfiable for item $itemId',
+      );
+    }
+    _ensureOkStreamed(streamedResponse);
+
+    final bytes = <int>[];
+    await for (final chunk in streamedResponse.stream) {
+      bytes.addAll(chunk);
+    }
+    return Uint8List.fromList(bytes);
+  }
+
+  /// Returns the size of an item's blob in bytes without downloading it.
+  ///
+  /// Uses a HEAD request and reads the Content-Length header.
+  Future<int> getItemBlobSize({
+    required String vaultId,
+    required String itemId,
+  }) async {
+    final response = await _client.head(
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/$itemId'),
+    );
+    _ensureOk(response);
+    final length = response.headers['content-length'];
+    return length != null ? int.parse(length) : 0;
+  }
+
+  /// Deletes a single item from a vault.
+  ///
+  /// Returns normally on 204. Throws [VaultApiException] on 404.
+  Future<void> deleteItem(String vaultId, String itemId) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/$itemId'),
+    );
+    _ensureOk(response);
+  }
+
+  // ============================================================
   // Helpers
   // ============================================================
 
@@ -145,5 +326,39 @@ final class VaultClient {
       errorCode: errorCode,
       message: message,
     );
+  }
+
+  /// Validates a streamed response status code, decoding the body for error
+  /// details when possible.
+  void _ensureOkStreamed(http.StreamedResponse response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    // For streamed responses we can't read the body twice, so use the
+    // reason phrase as the message.
+    throw VaultApiException(
+      statusCode: response.statusCode,
+      errorCode: 'request_failed',
+      message: response.reasonPhrase ?? 'HTTP ${response.statusCode}',
+    );
+  }
+
+  /// Wraps [data] in a stream that calls [onProgress] as bytes are consumed.
+  static Stream<List<int>> _progressStream(
+    List<int> data,
+    int total,
+    void Function(int sent, int total)? onProgress,
+  ) async* {
+    if (onProgress == null) {
+      yield data;
+      return;
+    }
+    // Emit in chunks to provide progress over time.
+    const chunkSize = 256 * 1024; // 256 KiB
+    var sent = 0;
+    while (sent < total) {
+      final end = sent + chunkSize > total ? total : sent + chunkSize;
+      yield data.sublist(sent, end);
+      sent = end;
+      onProgress(sent, total);
+    }
   }
 }
