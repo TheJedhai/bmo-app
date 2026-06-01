@@ -237,12 +237,12 @@ final class VaultClient {
   /// [start] and [end] are inclusive byte offsets into the blob.
   /// Sets `Range: bytes=<start>-<end>` on the request.
   ///
-  /// Returns the partial bytes. The server responds with 206 Partial Content
-  /// and a Content-Range header on success.
+  /// Returns `(bytes, totalBlobSize)` where [totalBlobSize] is parsed from the
+  /// server's Content-Range header (e.g. `bytes 0-20/5242901` → 5242901).
   ///
   /// Throws [VaultApiException] on 404 (item not found), 410 (blob file
   /// missing), or 416 (range not satisfiable).
-  Future<Uint8List> fetchItemBlobRange({
+  Future<(Uint8List, int)> fetchItemBlobRange({
     required String vaultId,
     required String itemId,
     required int start,
@@ -272,26 +272,16 @@ final class VaultClient {
     }
     _ensureOkStreamed(streamedResponse);
 
+    // Parse total size from Content-Range: "bytes <start>-<end>/<total>"
+    // Header name is case-insensitive per HTTP spec; Fetch API may lowercase it.
+    final contentRange = _headerValue(streamedResponse.headers, 'content-range');
+    final totalSize = _parseContentRangeTotal(contentRange);
+
     final bytes = <int>[];
     await for (final chunk in streamedResponse.stream) {
       bytes.addAll(chunk);
     }
-    return Uint8List.fromList(bytes);
-  }
-
-  /// Returns the size of an item's blob in bytes without downloading it.
-  ///
-  /// Uses a HEAD request and reads the Content-Length header.
-  Future<int> getItemBlobSize({
-    required String vaultId,
-    required String itemId,
-  }) async {
-    final response = await _client.head(
-      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/$itemId'),
-    );
-    _ensureOk(response);
-    final length = response.headers['content-length'];
-    return length != null ? int.parse(length) : 0;
+    return (Uint8List.fromList(bytes), totalSize);
   }
 
   /// Deletes a single item from a vault.
@@ -339,6 +329,25 @@ final class VaultClient {
       errorCode: 'request_failed',
       message: response.reasonPhrase ?? 'HTTP ${response.statusCode}',
     );
+  }
+
+  /// Case-insensitive header lookup.
+  static String _headerValue(Map<String, String> headers, String name) {
+    final lower = name.toLowerCase();
+    for (final key in headers.keys) {
+      if (key.toLowerCase() == lower) return headers[key] ?? '';
+    }
+    // Try direct lookup as fallback (works for mock/http package maps).
+    return headers[name] ?? '';
+  }
+
+  /// Parses the total size from a Content-Range header value.
+  /// Format: "bytes <start>-<end>/<total>" → returns <total>.
+  /// Returns 0 if the header is missing or malformed.
+  static int _parseContentRangeTotal(String contentRange) {
+    final slash = contentRange.lastIndexOf('/');
+    if (slash < 0) return 0;
+    return int.tryParse(contentRange.substring(slash + 1).trim()) ?? 0;
   }
 
   /// Wraps [data] in a stream that calls [onProgress] as bytes are consumed.

@@ -398,29 +398,29 @@ final class VaultRepository {
   ///
   /// The header contains the encryption parameters (nonce prefix, chunk size,
   /// original size) needed to compute chunk byte ranges and decrypt individual
-  /// chunks. This is a tiny request — ideal for caching before video playback.
+  /// chunks. This is a tiny Range request (21 bytes) — ideal for caching
+  /// before video playback.
   ///
   /// Callers should cache the returned header and pass it to
   /// [fetchChunkRange] for on-demand chunk decryption.
   ///
-  /// Returns `(header, blobSize)` where [header] is the 21-byte blob header
-  /// and [blobSize] is the total encrypted blob size from the server.
-  Future<(Uint8List, int)> fetchItemHeader(
+  /// NOTE: The total blob size (available via Content-Range on the 206
+  /// response) is not exposed cross-origin by default — the browser Fetch
+  /// API hides non-safelisted response headers unless the server sets
+  /// Access-Control-Expose-Headers. If blob size is needed, call
+  /// [downloadItemBlob] which uses Content-Length (safelisted).
+  Future<Uint8List> fetchItemHeader(
     String vaultId,
     String itemId,
   ) async {
     // Range: bytes=0-20 (inclusive) → first 21 bytes.
-    final headerBytes = await _client.fetchItemBlobRange(
+    final (headerBytes, _) = await _client.fetchItemBlobRange(
       vaultId: vaultId,
       itemId: itemId,
       start: 0,
       end: headerByteLength - 1,
     );
-    final blobSize = await _client.getItemBlobSize(
-      vaultId: vaultId,
-      itemId: itemId,
-    );
-    return (headerBytes, blobSize);
+    return headerBytes;
   }
 
   // ============================================================
@@ -454,7 +454,7 @@ final class VaultRepository {
     const chunked = VaultChunkedCipher();
     final (start, end) = chunked.chunkByteRange(header, chunkIndex);
 
-    final encryptedChunk = await _client.fetchItemBlobRange(
+    final (encryptedChunk, _) = await _client.fetchItemBlobRange(
       vaultId: vaultId,
       itemId: itemId,
       start: start,
