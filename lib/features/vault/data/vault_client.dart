@@ -237,12 +237,16 @@ final class VaultClient {
   /// [start] and [end] are inclusive byte offsets into the blob.
   /// Sets `Range: bytes=start-end` on the request.
   ///
-  /// Returns `(bytes, totalBlobSize)` where [totalBlobSize] is parsed from the
-  /// server's Content-Range header (e.g. `bytes 0-20/5242901` → 5242901).
+  /// Returns `(bytes, totalBlobSize, statusCode)`:
+  /// - [bytes]: the partial content from the server.
+  /// - [totalBlobSize]: parsed from Content-Range (e.g. `bytes 0-20/5242901`).
+  /// - [statusCode]: the HTTP status (206 on success, or 200 if the server
+  ///   ignored the Range header — callers should assert 206 to prove partial
+  ///   transfer rather than assuming it).
   ///
   /// Throws [VaultApiException] on 404 (item not found), 410 (blob file
   /// missing), or 416 (range not satisfiable).
-  Future<(Uint8List, int)> fetchItemBlobRange({
+  Future<(Uint8List, int, int)> fetchItemBlobRange({
     required String vaultId,
     required String itemId,
     required int start,
@@ -255,15 +259,16 @@ final class VaultClient {
     request.headers['Range'] = 'bytes=$start-$end';
 
     final streamedResponse = await _client.send(request);
+    final statusCode = streamedResponse.statusCode;
 
-    if (streamedResponse.statusCode == 410) {
+    if (statusCode == 410) {
       throw VaultApiException(
         statusCode: 410,
         errorCode: 'blob_file_missing',
         message: 'Blob file not found for item $itemId',
       );
     }
-    if (streamedResponse.statusCode == 416) {
+    if (statusCode == 416) {
       throw VaultApiException(
         statusCode: 416,
         errorCode: 'range_not_satisfiable',
@@ -281,7 +286,7 @@ final class VaultClient {
     await for (final chunk in streamedResponse.stream) {
       bytes.addAll(chunk);
     }
-    return (Uint8List.fromList(bytes), totalSize);
+    return (Uint8List.fromList(bytes), totalSize, statusCode);
   }
 
   /// Deletes a single item from a vault.

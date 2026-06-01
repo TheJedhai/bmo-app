@@ -414,7 +414,7 @@ final class VaultRepository {
     String itemId,
   ) async {
     // Range: bytes=0-20 (inclusive) → first 21 bytes.
-    final (headerBytes, _) = await _client.fetchItemBlobRange(
+    final (headerBytes, _, _) = await _client.fetchItemBlobRange(
       vaultId: vaultId,
       itemId: itemId,
       start: 0,
@@ -437,6 +437,16 @@ final class VaultRepository {
   /// or from a prior full download). Cache this — do NOT re-fetch it
   /// for every chunk.
   ///
+  /// Returns `(plaintext, httpStatus, encryptedBytesReceived)`:
+  /// - [plaintext]: the decrypted chunk bytes.
+  /// - [httpStatus]: the HTTP status from the server (SHOULD be 206).
+  /// - [encryptedBytesReceived]: the number of encrypted bytes transferred
+  ///   over the network (ciphertext + GCM tag). Callers SHOULD assert that
+  ///   this equals `chunkSize + 16` (or less for the last partial chunk),
+  ///   NOT the full blob size. This assertion proves the transfer was truly
+  ///   partial — a bug that downloads the full blob and slices locally
+  ///   would show the full blob size here, catching the regression.
+  ///
   /// This is the low-level method for on-demand chunk access. For video
   /// playback (Phase 8.3d), the player requests a plaintext byte range,
   /// the range is mapped to chunk indices via [mapPlaintextRangeToChunks],
@@ -444,7 +454,7 @@ final class VaultRepository {
   ///
   /// Throws [VaultCipherException] if the chunk index is out of range
   /// or decryption fails (GCM tag validation).
-  Future<Uint8List> fetchChunkRange(
+  Future<(Uint8List, int, int)> fetchChunkRange(
     String vaultId,
     Uint8List dek,
     String itemId,
@@ -454,14 +464,16 @@ final class VaultRepository {
     const chunked = VaultChunkedCipher();
     final (start, end) = chunked.chunkByteRange(header, chunkIndex);
 
-    final (encryptedChunk, _) = await _client.fetchItemBlobRange(
+    final (encryptedChunk, _, statusCode) = await _client.fetchItemBlobRange(
       vaultId: vaultId,
       itemId: itemId,
       start: start,
       end: end,
     );
 
-    return chunked.decryptChunk(dek, header, chunkIndex, encryptedChunk);
+    final plaintext = await chunked.decryptChunk(
+      dek, header, chunkIndex, encryptedChunk);
+    return (plaintext, statusCode, encryptedChunk.length);
   }
 
   /// Deletes a single item from a vault.
