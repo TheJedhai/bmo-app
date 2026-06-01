@@ -235,7 +235,7 @@ final class VaultClient {
   /// Fetches a byte range of an item's encrypted blob.
   ///
   /// [start] and [end] are inclusive byte offsets into the blob.
-  /// Sets `Range: bytes=<start>-<end>` on the request.
+  /// Sets `Range: bytes=start-end` on the request.
   ///
   /// Returns `(bytes, totalBlobSize)` where [totalBlobSize] is parsed from the
   /// server's Content-Range header (e.g. `bytes 0-20/5242901` → 5242901).
@@ -342,7 +342,7 @@ final class VaultClient {
   }
 
   /// Parses the total size from a Content-Range header value.
-  /// Format: "bytes <start>-<end>/<total>" → returns <total>.
+  /// Format: `bytes start-end/total` — returns the total.
   /// Returns 0 if the header is missing or malformed.
   static int _parseContentRangeTotal(String contentRange) {
     final slash = contentRange.lastIndexOf('/');
