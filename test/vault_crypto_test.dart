@@ -199,7 +199,7 @@ void main() {
       const password = 'my-secret-password';
 
       // Create vault
-      final material = await createVault(password, kdf: mockKdf);
+      final material = await createVault(password, 'test-vault', kdf: mockKdf);
 
       // Unlock with password
       final unlockMat = VaultUnlockMaterial(
@@ -212,6 +212,8 @@ void main() {
         recoveryDekIv: material.recoveryDekIv,
         recoveryKeyWrapped: material.recoveryKeyWrapped,
         recoveryKeyWrapIv: material.recoveryKeyWrapIv,
+        nameBlob: material.nameBlob,
+        nameIv: material.nameIv,
       );
       final dekFromPassword = await unlock(password, unlockMat, kdf: mockKdf);
 
@@ -226,7 +228,7 @@ void main() {
 
     test('wrong recovery key fails to unlock', () async {
       const mockKdf = MockKdf();
-      final material = await createVault('password', kdf: mockKdf);
+      final material = await createVault('password', 'test-vault', kdf: mockKdf);
 
       final wrongRecoveryKey = VaultCipher.generateKey();
       // Ensure different
@@ -242,6 +244,8 @@ void main() {
         recoveryDekIv: material.recoveryDekIv,
         recoveryKeyWrapped: material.recoveryKeyWrapped,
         recoveryKeyWrapIv: material.recoveryKeyWrapIv,
+        nameBlob: material.nameBlob,
+        nameIv: material.nameIv,
       );
 
       expect(
@@ -301,7 +305,7 @@ void main() {
 
     test('tampered wrapped DEK causes unlock to fail', () async {
       const mockKdf = MockKdf();
-      final material = await createVault('password', kdf: mockKdf);
+      final material = await createVault('password', 'test-vault', kdf: mockKdf);
 
       // Tamper with the wrapped DEK
       final tamperedDek = Uint8List.fromList(material.wrappedDek);
@@ -317,6 +321,8 @@ void main() {
         recoveryDekIv: material.recoveryDekIv,
         recoveryKeyWrapped: material.recoveryKeyWrapped,
         recoveryKeyWrapIv: material.recoveryKeyWrapIv,
+        nameBlob: material.nameBlob,
+        nameIv: material.nameIv,
       );
 
       expect(
@@ -332,7 +338,7 @@ void main() {
   group('Wrong password', () {
     test('wrong password throws WrongPasswordException', () async {
       const mockKdf = MockKdf();
-      final material = await createVault('correct-password', kdf: mockKdf);
+      final material = await createVault('correct-password', 'test-vault', kdf: mockKdf);
 
       final unlockMat = VaultUnlockMaterial(
         salt: material.salt,
@@ -344,6 +350,8 @@ void main() {
         recoveryDekIv: material.recoveryDekIv,
         recoveryKeyWrapped: material.recoveryKeyWrapped,
         recoveryKeyWrapIv: material.recoveryKeyWrapIv,
+        nameBlob: material.nameBlob,
+        nameIv: material.nameIv,
       );
 
       expect(
@@ -355,7 +363,7 @@ void main() {
     test('correct password unlocks successfully', () async {
       const mockKdf = MockKdf();
       const password = 'correct-password';
-      final material = await createVault(password, kdf: mockKdf);
+      final material = await createVault(password, 'test-vault', kdf: mockKdf);
 
       final unlockMat = VaultUnlockMaterial(
         salt: material.salt,
@@ -367,6 +375,8 @@ void main() {
         recoveryDekIv: material.recoveryDekIv,
         recoveryKeyWrapped: material.recoveryKeyWrapped,
         recoveryKeyWrapIv: material.recoveryKeyWrapIv,
+        nameBlob: material.nameBlob,
+        nameIv: material.nameIv,
       );
 
       final dek = await unlock(password, unlockMat, kdf: mockKdf);

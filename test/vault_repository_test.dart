@@ -135,7 +135,7 @@ void main() {
       const password = 'correct-password';
 
       // Create real crypto material
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -164,7 +164,7 @@ void main() {
       const password = 'correct-password';
 
       // Create real crypto material
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -212,7 +212,7 @@ void main() {
       const password = 'some-password';
 
       // Create real crypto material
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -239,7 +239,7 @@ void main() {
       const password = 'some-password';
 
       // Create real crypto material
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -273,7 +273,7 @@ void main() {
       const password = 'test-password';
 
       // Create real crypto material
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -315,7 +315,7 @@ void main() {
     test('returns true for correct recovery key', () async {
       const password = 'test-password';
 
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {
@@ -341,7 +341,7 @@ void main() {
     test('returns false for wrong recovery key', () async {
       const password = 'test-password';
 
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final keysJson = _keysJsonFromMaterial(material);
 
       final mockClient = MockClient((request) async {

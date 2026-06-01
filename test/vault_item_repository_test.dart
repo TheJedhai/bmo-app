@@ -211,7 +211,7 @@ void main() {
   group('uploadItem', () {
     test('encrypts metadata + content and uploads via multipart', () async {
       const password = 'test-password';
-      final material = await createVault(password, kdf: const MockKdf());
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
       final repo = _createRepo(_mockForUpload(
         material: material,
         vaultId: '1',
