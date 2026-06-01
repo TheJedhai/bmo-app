@@ -21,6 +21,22 @@ import '../crypto/vault_crypto.dart';
 import 'vault_models.dart';
 
 // ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/// A vault ID + its unlock material, returned by
+/// [VaultClient.getUnlockMaterials].
+///
+/// Use this to test a password or recovery key against every vault without
+/// knowing in advance which vault the key belongs to.
+final class VaultUnlockLookup {
+  final String vaultId;
+  final VaultUnlockMaterial material;
+
+  const VaultUnlockLookup({required this.vaultId, required this.material});
+}
+
+// ---------------------------------------------------------------------------
 // Exception
 // ---------------------------------------------------------------------------
 
@@ -91,6 +107,31 @@ final class VaultClient {
     return list
         .map((e) => Vault.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Fetches unlock material for ALL vaults in a single request.
+  ///
+  /// Calls `GET /api/v1/vaults/unlock-material` which returns a list of
+  /// vault IDs with their salt, canary, and recovery-wrapped DEK — just
+  /// enough to test a password (or recovery key) against every vault without
+  /// revealing which vaults exist.
+  ///
+  /// Returns a list where each entry has a [vaultId] and the minimal
+  /// [VaultUnlockMaterial] needed for password/recovery-key validation.
+  /// After finding the matching vault, call [getKeys] for the full material.
+  Future<List<VaultUnlockLookup>> getUnlockMaterials() async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/api/v1/vaults/unlock-material'),
+    );
+    _ensureOk(response);
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list.map((e) {
+      final map = e as Map<String, dynamic>;
+      return VaultUnlockLookup(
+        vaultId: map['vault_id']?.toString() ?? '',
+        material: VaultUnlockMaterial.fromJson(map),
+      );
+    }).toList();
   }
 
   /// Fetches metadata for a single vault.

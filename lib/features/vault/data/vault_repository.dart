@@ -48,8 +48,8 @@ final class VaultCreationResult {
 
 /// Returned by [VaultRepository.unlockWithPassword].
 ///
-/// Holds both the DEK (for item encryption) and the KEK (for
-/// [VaultRepository.revealRecoveryKey]).
+/// Holds both the DEK (for item encryption), the KEK (for
+/// [VaultRepository.revealRecoveryKey]), and the decrypted vault name.
 final class VaultUnlockResult {
   /// 32-byte Data Encryption Key — encrypts/decrypts vault items.
   final Uint8List dek;
@@ -59,7 +59,15 @@ final class VaultUnlockResult {
   /// key without re-deriving.
   final Uint8List kek;
 
-  const VaultUnlockResult({required this.dek, required this.kek});
+  /// The vault name, decrypted from [VaultUnlockMaterial.nameBlob] with the
+  /// KEK. **NEVER persist or log.**
+  final String decryptedName;
+
+  const VaultUnlockResult({
+    required this.dek,
+    required this.kek,
+    required this.decryptedName,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +98,7 @@ final class VaultRepository {
     String name,
     String password,
   ) async {
-    final material = await crypto.createVault(password, kdf: _kdf);
+    final material = await crypto.createVault(password, name, kdf: _kdf);
     final vault = await _client.createVault(name: name, material: material);
     return VaultCreationResult(vault: vault, recoveryKey: material.recoveryKey);
   }
@@ -137,7 +145,14 @@ final class VaultRepository {
     // Unwrap DEK
     final dek = await unwrapDek(kek, material.dekIv, material.wrappedDek);
 
-    return VaultUnlockResult(dek: dek, kek: kek);
+    // Decrypt vault name
+    final decryptedName = await crypto.decryptName(
+      kek,
+      material.nameIv,
+      material.nameBlob,
+    );
+
+    return VaultUnlockResult(dek: dek, kek: kek, decryptedName: decryptedName);
   }
 
   // ============================================================
@@ -210,6 +225,34 @@ final class VaultRepository {
 
   /// Lists all vaults for the current agent.
   Future<List<Vault>> listVaults() => _client.listVaults();
+
+  /// Fetches unlock material for ALL vaults in a single request.
+  ///
+  /// Returns a list of (vaultId, minimal unlock material) pairs for
+  /// password/recovery-key testing without knowing which vault the key
+  /// belongs to.
+  Future<List<VaultUnlockLookup>> listUnlockMaterials() =>
+      _client.getUnlockMaterials();
+
+  /// Tests a [password] against a single vault's canary.
+  ///
+  /// Derives the KEK from [password] + [salt] (Argon2id), then validates
+  /// the canary. Returns `true` if the password is correct for this vault.
+  ///
+  /// This is cheaper than a full unlock — it only downloads the canary
+  /// material (via [listUnlockMaterials]) and validates locally.
+  ///
+  /// **NEVER log [password].**
+  Future<bool> testCanary({
+    required String password,
+    required Uint8List salt,
+    required Uint8List canaryIv,
+    required Uint8List canaryCiphertext,
+  }) async {
+    final passwordBytes = Uint8List.fromList(password.codeUnits);
+    final kek = await _kdf.derive(password: passwordBytes, salt: salt);
+    return validateCanary(kek, canaryIv, canaryCiphertext);
+  }
 
   /// Fetches metadata for a single vault.
   Future<Vault> getVault(String id) => _client.getVault(id);

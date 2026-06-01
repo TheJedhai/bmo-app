@@ -52,6 +52,8 @@ final class VaultCreationMaterial {
     required this.recoveryKeyWrapped,
     required this.recoveryKeyWrapIv,
     required this.recoveryKey,
+    required this.nameBlob,
+    required this.nameIv,
   });
 
   /// 16-byte random salt for Argon2id KEK derivation.
@@ -86,6 +88,13 @@ final class VaultCreationMaterial {
   /// Encode with [encodeRecoveryKey] to display as 64 hex chars.
   final Uint8List recoveryKey;
 
+  /// Vault name encrypted with KEK (AES-256-GCM, includes 16-byte GCM tag).
+  /// Stored server-side so the name can only be read after password unlock.
+  final Uint8List nameBlob;
+
+  /// 12-byte random IV for [nameBlob].
+  final Uint8List nameIv;
+
   // -------------------------------------------------------------------------
   // JSON serialization (base64 for binary fields)
   // -------------------------------------------------------------------------
@@ -104,6 +113,8 @@ final class VaultCreationMaterial {
         'recovery_dek_iv': base64Encode(recoveryDekIv),
         'recovery_key_wrapped': base64Encode(recoveryKeyWrapped),
         'recovery_key_wrap_iv': base64Encode(recoveryKeyWrapIv),
+        'name_blob': base64Encode(nameBlob),
+        'name_iv': base64Encode(nameIv),
       };
 }
 
@@ -121,6 +132,8 @@ final class VaultUnlockMaterial {
     required this.recoveryDekIv,
     required this.recoveryKeyWrapped,
     required this.recoveryKeyWrapIv,
+    required this.nameBlob,
+    required this.nameIv,
   });
 
   final Uint8List salt;
@@ -137,6 +150,13 @@ final class VaultUnlockMaterial {
 
   /// 12-byte random IV for [recoveryKeyWrapped].
   final Uint8List recoveryKeyWrapIv;
+
+  /// Vault name encrypted with KEK (AES-256-GCM).
+  /// Decrypt with the KEK after a successful password unlock.
+  final Uint8List nameBlob;
+
+  /// 12-byte random IV for [nameBlob].
+  final Uint8List nameIv;
 
   // -------------------------------------------------------------------------
   // JSON deserialization (base64 for binary fields)
@@ -157,6 +177,8 @@ final class VaultUnlockMaterial {
           base64Decode(json['recovery_key_wrapped'] as String? ?? ''),
       recoveryKeyWrapIv:
           base64Decode(json['recovery_key_wrap_iv'] as String? ?? ''),
+      nameBlob: base64Decode(json['name_blob'] as String? ?? ''),
+      nameIv: base64Decode(json['name_iv'] as String? ?? ''),
     );
   }
 }
@@ -165,7 +187,7 @@ final class VaultUnlockMaterial {
 // Public API
 // ---------------------------------------------------------------------------
 
-/// Creates a new vault from a user's [password].
+/// Creates a new vault from a user's [password] and [name].
 ///
 /// Generates:
 /// - A random 16-byte salt
@@ -176,13 +198,15 @@ final class VaultUnlockMaterial {
 /// - Recovery-wrapped DEK (DEK encrypted with recovery key)
 /// - Wrapped recovery key (recovery key encrypted with KEK) for re-display
 /// - Canary (known constant encrypted with KEK) for password validation
+/// - Encrypted name (name encrypted with KEK)
 ///
 /// Returns [VaultCreationMaterial] with everything the server needs
 /// PLUS the recovery key (shown to user once, NEVER sent to server).
 ///
 /// [kdf] allows injection of a mock for testing.
 Future<VaultCreationMaterial> createVault(
-  String password, {
+  String password,
+  String name, {
   VaultKdf? kdf,
 }) async {
   final effectiveKdf = kdf ?? const Argon2Kdf();
@@ -217,6 +241,10 @@ Future<VaultCreationMaterial> createVault(
   final (recoveryDekIv, recoveryWrappedDek) =
       await wrapDekWithRecoveryKey(recoveryKey, dek);
 
+  // 8. Encrypt vault name with KEK
+  final nameBytes = Uint8List.fromList(name.codeUnits);
+  final (nameIv, nameBlob) = await _encryptName(kek, nameBytes);
+
   return VaultCreationMaterial(
     salt: salt,
     wrappedDek: wrappedDek,
@@ -228,6 +256,8 @@ Future<VaultCreationMaterial> createVault(
     recoveryKeyWrapped: recoveryKeyWrapped,
     recoveryKeyWrapIv: recoveryKeyWrapIv,
     recoveryKey: recoveryKey,
+    nameBlob: nameBlob,
+    nameIv: nameIv,
   );
 }
 
@@ -353,6 +383,35 @@ Future<(Uint8List, Uint8List)> _wrapRecoveryKey(
 ) async {
   final cipher = const VaultCipher();
   return cipher.encrypt(kek, recoveryKey);
+}
+
+/// Encrypts the vault name with the KEK.
+///
+/// Returns `(iv, nameBlob)` where nameBlob is the AES-256-GCM ciphertext
+/// (includes 16-byte GCM tag) of the UTF-8 encoded name.
+Future<(Uint8List, Uint8List)> _encryptName(
+  Uint8List kek,
+  Uint8List nameBytes,
+) async {
+  final cipher = const VaultCipher();
+  return cipher.encrypt(kek, nameBytes);
+}
+
+/// Decrypts the vault name with the KEK.
+///
+/// Returns the decrypted name bytes (UTF-8 encoded).
+/// Caller should decode with [String.fromCharCodes] to get the plaintext name.
+///
+/// Throws [VaultCipherException] if the KEK is wrong or the name blob has
+/// been tampered with.
+Future<String> decryptName(
+  Uint8List kek,
+  Uint8List nameIv,
+  Uint8List nameBlob,
+) async {
+  final cipher = const VaultCipher();
+  final nameBytes = await cipher.decrypt(kek, nameIv, nameBlob);
+  return String.fromCharCodes(nameBytes);
 }
 
 // ---------------------------------------------------------------------------
