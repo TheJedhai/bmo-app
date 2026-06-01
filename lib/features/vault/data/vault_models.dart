@@ -34,7 +34,7 @@ final class Vault {
 
   factory Vault.fromJson(Map<String, dynamic> json) {
     return Vault(
-      id: json['id'] as String? ?? '',
+      id: _parseId(json['id']),
       name: json['name'] as String? ?? '',
       createdAt: _parseDateTime(json['created_at']),
       updatedAt: _parseDateTime(json['updated_at']),
