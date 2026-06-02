@@ -11,6 +11,8 @@ import 'dart:html' as html;
 import 'dart:typed_data';
 
 import '../data/vault_models.dart';
+import '../data/vault_file_save.dart';
+import '../crypto/vault_chunked_cipher.dart';
 import '../providers/vault_providers.dart';
 
 // ============================================================
@@ -809,6 +811,10 @@ class _UnlockedVaultView extends ConsumerStatefulWidget {
 }
 
 class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
+  /// Files above 25 MB use the streaming download path (File System Access API)
+  /// instead of decryptAll + Blob URL, to avoid doubling memory.
+  static const _kLargeFileThreshold = 25 * 1024 * 1024; // 25 MiB
+
   List<VaultItemDecrypted>? _items;
   bool _isLoading = true;
   String? _error;
@@ -952,6 +958,137 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // ----------------------------------------------------------
 
   Future<void> _downloadItem(VaultItemDecrypted item) async {
+    final isLarge = item.originalSize >= _kLargeFileThreshold;
+    final canStream = isFileSystemAccessApiAvailable;
+
+    if (isLarge && canStream) {
+      await _downloadItemStreaming(item);
+    } else if (isLarge && !canStream) {
+      _showError(
+        'Arquivo muito grande para este navegador.\n'
+        'Use Chrome ou Brave para baixar arquivos grandes.',
+      );
+    } else {
+      await _downloadItemBlob(item);
+    }
+  }
+
+  /// Streaming download via fetchChunkRange + File System Access API.
+  ///
+  /// Fetches the 21-byte header, opens a save dialog, then downloads and
+  /// decrypts each chunk sequentially — writing each to disk immediately
+  /// via the File System Access API. Never holds the full file in memory.
+  Future<void> _downloadItemStreaming(VaultItemDecrypted item) async {
+    setState(() {
+      _downloadingItemId = item.id;
+      _downloadProgress = 0;
+      _downloadFileName = item.fileName;
+    });
+
+    try {
+      final repo = ref.read(vaultRepositoryProvider);
+
+      // 1. Fetch the blob header (21 bytes) to get chunk parameters.
+      final header = await repo.fetchItemHeader(
+        _session.vaultId,
+        item.id,
+      );
+
+      // 2. Parse header to know total chunk count.
+      final (_, _, chunkSize, originalSize) =
+          VaultChunkedCipher.parseHeader(header);
+      final totalChunks =
+          VaultChunkedCipher.totalChunks(originalSize, chunkSize);
+
+      // 3. Open save dialog (File System Access API).
+      final result = await openSaveStream(item.fileName);
+      if (result == null) {
+        // User cancelled the save dialog — clean up without error.
+        if (!mounted) return;
+        setState(() {
+          _downloadingItemId = null;
+          _downloadFileName = '';
+        });
+        return;
+      }
+      final stream = result.stream;
+
+      // 4. Fetch, decrypt, and write each chunk sequentially.
+      for (var i = 0; i < totalChunks; i++) {
+        if (!mounted) {
+          await closeStream(stream);
+          return;
+        }
+
+        try {
+          final (plaintext, statusCode, _) = await repo.fetchChunkRange(
+            _session.vaultId,
+            _session.dek,
+            item.id,
+            i,
+            header,
+          );
+
+          if (statusCode != 206 && plaintext.isEmpty) {
+            await closeStream(stream);
+            if (!mounted) return;
+            setState(() {
+              _downloadingItemId = null;
+              _downloadFileName = '';
+            });
+            _showError(
+              'Falha no download: servidor retornou status $statusCode.',
+            );
+            return;
+          }
+
+          await writeChunk(stream, plaintext);
+
+          if (mounted) {
+            setState(() {
+              _downloadProgress = (i + 1) / totalChunks;
+            });
+          }
+        } on VaultApiException catch (e) {
+          await closeStream(stream);
+          if (!mounted) return;
+          setState(() {
+            _downloadingItemId = null;
+            _downloadFileName = '';
+          });
+          if (e.statusCode == 410) {
+            _showError(
+                'Arquivo não encontrado no servidor. O blob foi removido.');
+          } else {
+            _showError('Falha no download: ${_friendlyError(e)}');
+          }
+          return;
+        }
+      }
+
+      // 5. Finalize the file.
+      await closeStream(stream);
+
+      if (!mounted) return;
+      setState(() {
+        _downloadingItemId = null;
+        _downloadFileName = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _downloadingItemId = null;
+        _downloadFileName = '';
+      });
+      _showError('Falha no download: ${_friendlyError(e)}');
+    }
+  }
+
+  /// Small-file download via decryptAll + Blob URL.
+  ///
+  /// Suitable for files < 25 MB. For larger files the streaming path
+  /// ([_downloadItemStreaming]) avoids double memory allocation.
+  Future<void> _downloadItemBlob(VaultItemDecrypted item) async {
     setState(() {
       _downloadingItemId = item.id;
       _downloadProgress = 0;
