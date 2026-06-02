@@ -24,6 +24,7 @@ import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
@@ -35,7 +36,7 @@ import '../../providers/vault_providers.dart';
 // Viewer dialog
 // ============================================================
 
-class VaultPdfViewer extends StatefulWidget {
+class VaultPdfViewer extends ConsumerStatefulWidget {
   final VaultItemDecrypted item;
   final VaultSession session;
   final VaultRepository repo;
@@ -50,10 +51,10 @@ class VaultPdfViewer extends StatefulWidget {
   });
 
   @override
-  State<VaultPdfViewer> createState() => _VaultPdfViewerState();
+  ConsumerState<VaultPdfViewer> createState() => _VaultPdfViewerState();
 }
 
-class _VaultPdfViewerState extends State<VaultPdfViewer> {
+class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
   bool _isLoading = true;
   double _progress = 0;
   String? _error;
@@ -114,6 +115,10 @@ class _VaultPdfViewerState extends State<VaultPdfViewer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(vaultSessionProvider, (prev, next) {
+      if (next == null) Navigator.of(context).pop();
+    });
+
     final isMobile = widget.isMobile;
 
     return Dialog(

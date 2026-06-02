@@ -13,6 +13,7 @@ library;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
@@ -24,7 +25,7 @@ import '../../providers/vault_providers.dart';
 // Viewer dialog
 // ============================================================
 
-class VaultTextViewer extends StatefulWidget {
+class VaultTextViewer extends ConsumerStatefulWidget {
   final VaultItemDecrypted item;
   final VaultSession session;
   final VaultRepository repo;
@@ -39,10 +40,10 @@ class VaultTextViewer extends StatefulWidget {
   });
 
   @override
-  State<VaultTextViewer> createState() => _VaultTextViewerState();
+  ConsumerState<VaultTextViewer> createState() => _VaultTextViewerState();
 }
 
-class _VaultTextViewerState extends State<VaultTextViewer> {
+class _VaultTextViewerState extends ConsumerState<VaultTextViewer> {
   String? _text;
   bool _isLoading = true;
   double _progress = 0;
@@ -110,6 +111,10 @@ class _VaultTextViewerState extends State<VaultTextViewer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(vaultSessionProvider, (prev, next) {
+      if (next == null) Navigator.of(context).pop();
+    });
+
     final isMobile = widget.isMobile;
 
     return Dialog(

@@ -29,6 +29,7 @@ import 'dart:html' as html;
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
@@ -40,7 +41,7 @@ import '../../providers/vault_providers.dart';
 // Viewer dialog
 // ============================================================
 
-class VaultVideoViewer extends StatefulWidget {
+class VaultVideoViewer extends ConsumerStatefulWidget {
   final VaultItemDecrypted item;
   final VaultSession session;
   final VaultRepository repo;
@@ -55,10 +56,10 @@ class VaultVideoViewer extends StatefulWidget {
   });
 
   @override
-  State<VaultVideoViewer> createState() => _VaultVideoViewerState();
+  ConsumerState<VaultVideoViewer> createState() => _VaultVideoViewerState();
 }
 
-class _VaultVideoViewerState extends State<VaultVideoViewer> {
+class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   bool _isLoading = true;
   double _progress = 0;
   String? _error;
@@ -159,8 +160,15 @@ class _VaultVideoViewerState extends State<VaultVideoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(vaultSessionProvider, (prev, next) {
+      if (next == null) {
+        _videoElement?.pause();
+        html.document.exitFullscreen();
+        Navigator.of(context).pop();
+      }
+    });
+
     final isMobile = widget.isMobile;
-    // On mobile, make it nearly fullscreen since phones have small screens
     final effectiveMobile = isMobile;
 
     return Dialog(

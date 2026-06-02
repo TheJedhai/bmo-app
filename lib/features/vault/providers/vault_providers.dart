@@ -17,8 +17,7 @@
 /// or decrypted name.**
 library;
 
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
@@ -257,6 +256,16 @@ final class VaultSessionNotifier extends Notifier<VaultSession?> {
   /// The keys are gone — the user must re-enter their password.
   void lock() {
     state = null;
+  }
+
+  /// Test-only: injects a pre-built session without going through unlock.
+  ///
+  /// This bypasses password validation and Argon2id — use ONLY in tests.
+  /// Setting to `null` simulates a lock event, which observers
+  /// (viewer dialogs, etc.) must react to by closing themselves.
+  @visibleForTesting
+  void setTestSession(VaultSession? session) {
+    state = session;
   }
 }
 

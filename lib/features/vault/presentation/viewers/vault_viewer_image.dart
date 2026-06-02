@@ -12,6 +12,7 @@ library;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
@@ -23,7 +24,7 @@ import '../../providers/vault_providers.dart';
 // Viewer dialog (modal, mirrors ArticleDetailModal pattern)
 // ============================================================
 
-class VaultImageViewer extends StatefulWidget {
+class VaultImageViewer extends ConsumerStatefulWidget {
   final VaultItemDecrypted item;
   final VaultSession session;
   final VaultRepository repo;
@@ -38,13 +39,14 @@ class VaultImageViewer extends StatefulWidget {
   });
 
   @override
-  State<VaultImageViewer> createState() => _VaultImageViewerState();
+  ConsumerState<VaultImageViewer> createState() => _VaultImageViewerState();
 }
 
-class _VaultImageViewerState extends State<VaultImageViewer> {
+class _VaultImageViewerState extends ConsumerState<VaultImageViewer> {
   Uint8List? _bytes;
   bool _isLoading = true;
   String? _error;
+  bool _isFullscreenOpen = false;
 
   @override
   void initState() {
@@ -84,26 +86,48 @@ class _VaultImageViewerState extends State<VaultImageViewer> {
 
   void _openFullscreen() {
     if (_bytes == null) return;
-    Navigator.of(context).push(
+    _isFullscreenOpen = true;
+    Navigator.of(context)
+        .push(
       PageRouteBuilder(
         opaque: false,
         barrierColor: Colors.black,
         barrierDismissible: true,
         fullscreenDialog: true,
-        // ignore: unused_element
         pageBuilder: (context, animation, secondaryAnimation) =>
             _ImageFullscreenOverlay(
           bytes: _bytes!,
           fileName: widget.item.fileName,
         ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            FadeTransition(opacity: animation, child: child),
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
       ),
-    );
+    )
+        .then((_) {
+      if (mounted) _isFullscreenOpen = false;
+    });
+  }
+
+  /// Closes this viewer — first the fullscreen overlay (if open), then
+  /// the dialog itself. Called when [vaultSessionProvider] becomes `null`
+  /// (vault locked via tab switch, explicit lock, or inactivity timer).
+  void _closeOnLock() {
+    if (_isFullscreenOpen) {
+      Navigator.of(context).pop(); // fullscreen overlay
+    }
+    Navigator.of(context).pop(); // this dialog
   }
 
   @override
   Widget build(BuildContext context) {
+    // Close this viewer when the vault locks (session → null).
+    // Must be called from build, not initState — Riverpod requires
+    // ref.listen to be registered during the build phase.
+    ref.listen(vaultSessionProvider, (prev, next) {
+      if (next == null) _closeOnLock();
+    });
+
     final isMobile = widget.isMobile;
 
     return Dialog(
