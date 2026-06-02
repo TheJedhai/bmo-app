@@ -14,6 +14,7 @@ import '../data/vault_models.dart';
 import '../data/vault_file_save.dart';
 import '../crypto/vault_chunked_cipher.dart';
 import '../providers/vault_providers.dart';
+import 'viewers/vault_viewer_router.dart';
 
 // ============================================================
 // Screen root
@@ -1191,6 +1192,20 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   }
 
   // ----------------------------------------------------------
+  // Open viewer
+  // ----------------------------------------------------------
+
+  void _openViewer(VaultItemDecrypted item) {
+    openVaultItemViewer(
+      context,
+      item: item,
+      session: _session,
+      ref: ref,
+      onDownload: () => _downloadItem(item),
+    );
+  }
+
+  // ----------------------------------------------------------
   // Delete vault (with password confirmation)
   // ----------------------------------------------------------
 
@@ -1400,6 +1415,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           item: item,
           isDownloading: isDownloading,
           downloadProgress: isDownloading ? _downloadProgress : null,
+          onTap: () => _openViewer(item),
           onDownload: () => _downloadItem(item),
           onDelete: () => _deleteItem(item),
         );
@@ -1544,6 +1560,7 @@ class _VaultFileItem extends StatelessWidget {
   final double? downloadProgress;
   final VoidCallback onDownload;
   final VoidCallback onDelete;
+  final VoidCallback onTap;
 
   const _VaultFileItem({
     required this.item,
@@ -1551,6 +1568,7 @@ class _VaultFileItem extends StatelessWidget {
     required this.downloadProgress,
     required this.onDownload,
     required this.onDelete,
+    required this.onTap,
   });
 
   @override
@@ -1559,38 +1577,46 @@ class _VaultFileItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Row(
         children: [
-          // File type icon
-          Icon(_iconForMimeType(item.mimeType),
-              size: 24, color: BmoColors.textMuted),
-          const SizedBox(width: 12),
-
-          // Name + metadata
+          // Tap target: icon + text opens the viewer
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.fileName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: BmoColors.textPrimary,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(_iconForMimeType(item.mimeType),
+                        size: 24, color: BmoColors.textMuted),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.fileName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 14,
+                              color: BmoColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${_formatSize(item.originalSize)} · ${_formatDate(item.createdAt)}',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: BmoColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${_formatSize(item.originalSize)} · ${_formatDate(item.createdAt)}',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: BmoColors.textMuted,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
