@@ -128,7 +128,7 @@ final class VaultClient {
     return list.map((e) {
       final map = e as Map<String, dynamic>;
       return VaultUnlockLookup(
-        vaultId: map['vault_id']?.toString() ?? '',
+        vaultId: map['id']?.toString() ?? '',
         material: VaultUnlockMaterial.fromJson(map),
       );
     }).toList();

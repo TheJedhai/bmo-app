@@ -443,4 +443,159 @@ void main() {
       );
     });
   });
+
+  // -----------------------------------------------------------------------
+  // listUnlockMaterials — regression: vaultId parsed from "id" (int)
+  // -----------------------------------------------------------------------
+  group('listUnlockMaterials', () {
+    test('parses vaultId from id field (int) as the server sends it', () async {
+      // The server returns "id" as an integer, NOT "vault_id".
+      // Regression: vault_client.dart was reading map['vault_id'] → always ''.
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/vaults/unlock-material') {
+          return http.Response(
+            jsonEncode([
+              {
+                'id': 1,
+                'salt': 'XFPxZHmuJ7nCwGkpy+4Cig==',
+                'canary_ciphertext': '5d0yVktCHCDg80gLT9ikN45EW1Ew1zl3Ddlj0ndq8kyzuL0=',
+                'canary_iv': 'BM+EMrXf8PYPCIrE',
+              },
+              {
+                'id': 2,
+                'salt': 'YWJjZGVmZ2hpamtsbW5vcA==',
+                'canary_ciphertext': 'q80yVktCHCDg80gLT9ikN45EW1Ew1zl3Ddlj0ndq8kyzuL0=',
+                'canary_iv': 'CM+EMrXf8PYPCIrF',
+              },
+            ]),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final repo = _createRepo(mockClient);
+      final lookups = await repo.listUnlockMaterials();
+
+      expect(lookups.length, 2);
+      // The critical assertion: vaultId must be parsed from the "id" field.
+      expect(lookups[0].vaultId, '1');
+      expect(lookups[1].vaultId, '2');
+      // Material fields must also be parsed.
+      expect(lookups[0].material.salt.length, greaterThan(0));
+      expect(lookups[0].material.canaryCiphertext.length, greaterThan(0));
+      expect(lookups[0].material.canaryIv.length, greaterThan(0));
+    });
+
+    test('empty vaultId when id field is missing', () async {
+      // If the server omits the id field, vaultId should be empty, not crash.
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/vaults/unlock-material') {
+          return http.Response(
+            jsonEncode([
+              {
+                'salt': 'XFPxZHmuJ7nCwGkpy+4Cig==',
+                'canary_ciphertext': '5d0yVktCHCDg80gLT9ikN45EW1Ew1zl3Ddlj0ndq8kyzuL0=',
+                'canary_iv': 'BM+EMrXf8PYPCIrE',
+              },
+            ]),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final repo = _createRepo(mockClient);
+      final lookups = await repo.listUnlockMaterials();
+
+      expect(lookups.length, 1);
+      expect(lookups[0].vaultId, '');
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Full unlock flow → correct keys URL (regression: no // in URL)
+  // -----------------------------------------------------------------------
+  group('unlock flow URL regression', () {
+    test('unlockWithPassword calls GET /vaults/{id}/keys with real id', () async {
+      const password = 'correct-password';
+      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
+      final keysJson = _keysJsonFromMaterial(material);
+
+      String? keysRequestPath;
+
+      final mockClient = MockClient((request) async {
+        final path = request.url.path;
+
+        // Step 1: unlock-material → returns server-shaped JSON with "id": int
+        if (path == '/api/v1/vaults/unlock-material') {
+          // Build the unlock-material response with the same canary fields.
+          final unlockList = [
+            {
+              'id': 42, // integer, as the production server sends
+              'salt': base64Encode(material.salt),
+              'canary_ciphertext': base64Encode(material.canaryCiphertext),
+              'canary_iv': base64Encode(material.canaryIv),
+            },
+          ];
+          return http.Response(
+            jsonEncode(unlockList),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        // Step 2: getKeys — capture the URL path for assertion.
+        if (path.startsWith('/api/v1/vaults/') && path.endsWith('/keys')) {
+          keysRequestPath = path;
+          return http.Response(
+            jsonEncode(keysJson),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
+        return http.Response('not found', 404);
+      });
+
+      // Simulate the VaultSessionNotifier.unlockWithPassword flow.
+      final repo = _createRepo(mockClient);
+
+      // 1. Get unlock materials
+      final lookups = await repo.listUnlockMaterials();
+      expect(lookups, isNotEmpty);
+
+      // 2. Test canary against each vault.
+      String? matchedVaultId;
+      for (final lookup in lookups) {
+        final ok = await repo.testCanary(
+          password: password,
+          salt: lookup.material.salt,
+          canaryIv: lookup.material.canaryIv,
+          canaryCiphertext: lookup.material.canaryCiphertext,
+        );
+        if (ok) {
+          matchedVaultId = lookup.vaultId;
+          break;
+        }
+      }
+      expect(matchedVaultId, isNotNull);
+      expect(matchedVaultId, '42'); // from "id": 42 (int → string)
+
+      // 3. Full unlock with the matched vault.
+      final result = await repo.unlockWithPassword(matchedVaultId!, password);
+
+      // The critical regression assertion: the keys URL must contain the
+      // actual vault ID, NOT be /vaults//keys (empty ID).
+      expect(keysRequestPath, isNotNull);
+      expect(keysRequestPath, '/api/v1/vaults/42/keys');
+      expect(keysRequestPath, isNot(contains('//keys')));
+
+      // Unlock result should be valid.
+      expect(result.dek.length, 32);
+      expect(result.kek.length, 32);
+    });
+  });
 }
