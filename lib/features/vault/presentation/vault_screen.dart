@@ -1,9 +1,16 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../crypto/vault_crypto.dart' as crypto;
 import '../data/vault_client.dart';
+import 'dart:async';
+import 'dart:html' as html;
+import 'dart:typed_data';
+
+import '../data/vault_models.dart';
 import '../providers/vault_providers.dart';
 
 // ============================================================
@@ -789,88 +796,919 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
 }
 
 // ============================================================
-// Unlocked vault view — placeholder for Phase 8.3d sub-stage 2
+// Unlocked vault view — file management
 // ============================================================
 
-class _UnlockedVaultView extends ConsumerWidget {
+class _UnlockedVaultView extends ConsumerStatefulWidget {
   final VaultSession session;
 
   const _UnlockedVaultView({required this.session});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_UnlockedVaultView> createState() => _UnlockedVaultViewState();
+}
+
+class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
+  List<VaultItemDecrypted>? _items;
+  bool _isLoading = true;
+  String? _error;
+
+  // Upload state
+  bool _isUploading = false;
+  double _uploadProgress = 0;
+  String _uploadFileName = '';
+
+  // Download state
+  String? _downloadingItemId;
+  double _downloadProgress = 0;
+  String _downloadFileName = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  VaultSession get _session => widget.session;
+
+  Future<void> _loadItems() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final repo = ref.read(vaultRepositoryProvider);
+      final items = await repo.listItems(_session.vaultId, _session.dek);
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = _friendlyError(e);
+        _isLoading = false;
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Upload
+  // ----------------------------------------------------------
+
+  /// Opens the browser file picker and returns the selected file, or `null`
+  /// if the user cancelled the dialog.
+  ///
+  /// Uses window focus to detect dialog dismissal — when the file dialog
+  /// closes without a file being selected, `onChange` never fires, so we
+  /// complete with `null` on the next window focus event after a short delay
+  /// to let a legitimate `onChange` event arrive first.
+  Future<html.File?> _pickFile() async {
+    final input = html.FileUploadInputElement()
+      ..accept = '*/*'
+      ..multiple = false;
+
+    final completer = Completer<html.File?>();
+
+    input.onChange.listen((_) {
+      completer.complete(input.files?.first);
+    });
+
+    // Detect cancel: when window regains focus after file dialog closes,
+    // give onChange a short window to fire, then treat as cancelled.
+    late final StreamSubscription<html.Event> focusSub;
+    focusSub = html.window.onFocus.listen((_) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!completer.isCompleted) {
+          completer.complete(null);
+        }
+      });
+    });
+
+    input.click();
+
+    try {
+      return await completer.future;
+    } finally {
+      focusSub.cancel();
+    }
+  }
+
+  Future<void> _pickAndUploadFile() async {
+    final file = await _pickFile();
+    if (file == null) return; // User cancelled the dialog.
+
+    // Read file bytes in browser
+    final reader = html.FileReader();
+    reader.readAsArrayBuffer(file);
+    await reader.onLoadEnd.first;
+
+    final bytes = Uint8List.fromList(reader.result as List<int>);
+    final fileName = file.name;
+    final mimeType =
+        file.type.isNotEmpty ? file.type : 'application/octet-stream';
+
+    if (!mounted) return;
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0;
+      _uploadFileName = fileName;
+    });
+
+    try {
+      final repo = ref.read(vaultRepositoryProvider);
+      await repo.uploadItem(
+        _session.vaultId,
+        _session.dek,
+        bytes,
+        fileName,
+        mimeType,
+        onProgress: (sent, total) {
+          if (!mounted) return;
+          setState(() {
+            _uploadProgress = total > 0 ? sent / total : 0;
+          });
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _isUploading = false;
+        _uploadFileName = '';
+      });
+      await _loadItems();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isUploading = false;
+        _uploadFileName = '';
+      });
+      _showError('Falha no upload: ${_friendlyError(e)}');
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Download
+  // ----------------------------------------------------------
+
+  Future<void> _downloadItem(VaultItemDecrypted item) async {
+    setState(() {
+      _downloadingItemId = item.id;
+      _downloadProgress = 0;
+      _downloadFileName = item.fileName;
+    });
+
+    try {
+      final repo = ref.read(vaultRepositoryProvider);
+      final plaintext = await repo.downloadItem(
+        _session.vaultId,
+        _session.dek,
+        item.id,
+        onProgress: (received, total) {
+          if (!mounted) return;
+          setState(() {
+            _downloadProgress = total > 0 ? received / total : 0;
+          });
+        },
+      );
+      if (!mounted) return;
+
+      // Save file via browser download
+      final blob = html.Blob([plaintext], item.mimeType);
+      final url = html.Url.createObjectUrl(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', item.fileName)
+        ..style.display = 'none';
+      html.document.body?.children.add(anchor);
+      anchor.click();
+      html.document.body?.children.remove(anchor);
+      html.Url.revokeObjectUrl(url);
+
+      setState(() {
+        _downloadingItemId = null;
+        _downloadFileName = '';
+      });
+    } on VaultApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _downloadingItemId = null;
+        _downloadFileName = '';
+      });
+      if (e.statusCode == 410) {
+        _showError(
+            'Arquivo não encontrado no servidor. O blob foi removido.');
+      } else {
+        _showError('Falha no download: ${_friendlyError(e)}');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _downloadingItemId = null;
+        _downloadFileName = '';
+      });
+      _showError('Falha no download: ${_friendlyError(e)}');
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Delete item
+  // ----------------------------------------------------------
+
+  Future<void> _deleteItem(VaultItemDecrypted item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text('Deletar arquivo?',
+            style: TextStyle(color: BmoColors.textPrimary, fontSize: 14)),
+        content: Text(
+          "Deletar '${item.fileName}'?\n"
+          'O arquivo será removido permanentemente.',
+          style:
+              const TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Deletar',
+                style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      try {
+        final repo = ref.read(vaultRepositoryProvider);
+        await repo.deleteItem(_session.vaultId, item.id);
+        await _loadItems();
+      } catch (e) {
+        if (!mounted) return;
+        _showError('Falha ao deletar: ${_friendlyError(e)}');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Delete vault (with password confirmation)
+  // ----------------------------------------------------------
+
+  Future<void> _deleteVault() async {
+    final password = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _DeleteVaultDialog(),
+    );
+
+    if (password == null || password.isEmpty || !mounted) return;
+
+    // Validate password locally — re-derive KEK and check canary.
+    try {
+      final repo = ref.read(vaultRepositoryProvider);
+      final lookups = await repo.listUnlockMaterials();
+      final lookup = lookups
+          .where((l) => l.vaultId == _session.vaultId)
+          .firstOrNull;
+
+      if (lookup == null) {
+        if (!mounted) return;
+        _showError(
+            'Não foi possível verificar a senha. Tente novamente.');
+        return;
+      }
+
+      final canaryOk = await repo.testCanary(
+        password: password,
+        salt: lookup.material.salt,
+        canaryIv: lookup.material.canaryIv,
+        canaryCiphertext: lookup.material.canaryCiphertext,
+      );
+
+      if (!canaryOk) {
+        if (!mounted) return;
+        _showError('Senha incorreta.');
+        return;
+      }
+
+      // Password confirmed — delete vault.
+      await repo.deleteVault(_session.vaultId);
+
+      if (!mounted) return;
+      ref.read(vaultSessionProvider.notifier).lock();
+      // Screen returns to locked view automatically via vaultSessionProvider.
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Falha ao deletar cofre: ${_friendlyError(e)}');
+    }
+  }
+
+  // ----------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontSize: 13)),
+        backgroundColor: BmoColors.screenBgElevated,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _friendlyError(Object e) {
+    if (e is VaultApiException) {
+      return 'Erro do servidor (${e.statusCode}).';
+    }
+    return e.toString();
+  }
+
+  // ----------------------------------------------------------
+  // Build
+  // ----------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 24 : 48,
-          vertical: 32,
+    return Column(
+      children: [
+        // Header
+        _VaultHeader(
+          vaultName: _session.decryptedName,
+          isMobile: isMobile,
+          isUploading: _isUploading,
+          onAddFile: _pickAndUploadFile,
+          onLock: () => ref.read(vaultSessionProvider.notifier).lock(),
+          onDeleteVault: _deleteVault,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Unlocked icon
-            Icon(
-              Icons.lock_open_outlined,
-              size: isMobile ? 48 : 64,
-              color: BmoColors.accentGreen,
-            ),
-            const SizedBox(height: 16),
+        const Divider(color: BmoColors.textMuted, height: 1),
 
-            // Vault name
-            Text(
-              'Cofre: ${session.decryptedName}',
+        // Upload progress bar
+        if (_isUploading)
+          _ProgressBar(
+            progress: _uploadProgress,
+            label: 'Enviando $_uploadFileName…',
+          ),
+
+        // Download progress bar
+        if (_downloadingItemId != null)
+          _ProgressBar(
+            progress: _downloadProgress,
+            label: 'Baixando $_downloadFileName…',
+          ),
+
+        // File list / states
+        Expanded(child: _buildContent(isMobile)),
+      ],
+    );
+  }
+
+  Widget _buildContent(bool isMobile) {
+    // Loading
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: BmoColors.accentGreen),
+      );
+    }
+
+    // Error
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline,
+                  color: Colors.redAccent, size: 32),
+              const SizedBox(height: 8),
+              const Text(
+                'falha ao carregar',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Colors.redAccent,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: BmoColors.textMuted,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _loadItems,
+                child: const Text('tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Empty
+    if (_items == null || _items!.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.folder_open_outlined,
+                  size: 48, color: BmoColors.textMuted),
+              const SizedBox(height: 12),
+              const Text(
+                'Nenhum arquivo ainda.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: BmoColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Toque no + para adicionar.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // File list
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: _items!.length,
+      itemBuilder: (context, index) {
+        final item = _items![index];
+        final isDownloading = _downloadingItemId == item.id;
+        return _VaultFileItem(
+          item: item,
+          isDownloading: isDownloading,
+          downloadProgress: isDownloading ? _downloadProgress : null,
+          onDownload: () => _downloadItem(item),
+          onDelete: () => _deleteItem(item),
+        );
+      },
+    );
+  }
+}
+
+// ============================================================
+// Vault header
+// ============================================================
+
+class _VaultHeader extends StatelessWidget {
+  final String vaultName;
+  final bool isMobile;
+  final bool isUploading;
+  final VoidCallback onAddFile;
+  final VoidCallback onLock;
+  final VoidCallback onDeleteVault;
+
+  const _VaultHeader({
+    required this.vaultName,
+    required this.isMobile,
+    required this.isUploading,
+    required this.onAddFile,
+    required this.onLock,
+    required this.onDeleteVault,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 16 : 24,
+        vertical: isMobile ? 12 : 16,
+      ),
+      child: Row(
+        children: [
+          // Vault icon + name
+          Icon(Icons.lock_open_outlined,
+              size: isMobile ? 20 : 24, color: BmoColors.accentGreen),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              vaultName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'PressStart2P',
-                fontSize: isMobile ? 14 : 18,
+                fontSize: isMobile ? 12 : 14,
                 color: BmoColors.accentGreen,
               ),
             ),
-            const SizedBox(height: 12),
+          ),
 
-            // Placeholder text
-            Text(
-              'O cofre está destravado.\n'
-              'O envio e a visualização de arquivos\n'
-              'estarão disponíveis na próxima atualização.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: isMobile ? 13 : 14,
-                color: BmoColors.textMuted,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 32),
+          // Add file button
+          _HeaderIconButton(
+            icon: Icons.add,
+            tooltip: 'Adicionar arquivo',
+            isLoading: isUploading,
+            onPressed: onAddFile,
+          ),
+          const SizedBox(width: 4),
 
-            // Lock button
-            SizedBox(
-              width: isMobile ? double.infinity : 320,
-              height: 48,
-              child: OutlinedButton.icon(
-                onPressed: () => ref.read(vaultSessionProvider.notifier).lock(),
-                icon: const Icon(Icons.lock_outline, size: 20),
-                label: Text(
-                  'Travar cofre',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: BmoColors.accentYellow,
-                  side: const BorderSide(color: BmoColors.accentYellow),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
+          // Lock button
+          _HeaderIconButton(
+            icon: Icons.lock_outline,
+            tooltip: 'Travar cofre',
+            onPressed: onLock,
+          ),
+          const SizedBox(width: 4),
+
+          // More menu (delete vault)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert,
+                size: 20, color: BmoColors.textMuted),
+            color: BmoColors.screenBgElevated,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            onSelected: (v) {
+              if (v == 'delete') onDeleteVault();
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Deletar cofre…',
+                    style: TextStyle(color: Colors.redAccent)),
               ),
-            ),
-          ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool isLoading;
+  final VoidCallback onPressed;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    this.isLoading = false,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: isLoading ? null : onPressed,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: BmoColors.accentGreen,
+                  ),
+                )
+              : Icon(icon, size: 20, color: BmoColors.textSecondary),
         ),
       ),
+    );
+  }
+}
+
+// ============================================================
+// File item row
+// ============================================================
+
+class _VaultFileItem extends StatelessWidget {
+  final VaultItemDecrypted item;
+  final bool isDownloading;
+  final double? downloadProgress;
+  final VoidCallback onDownload;
+  final VoidCallback onDelete;
+
+  const _VaultFileItem({
+    required this.item,
+    required this.isDownloading,
+    required this.downloadProgress,
+    required this.onDownload,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Row(
+        children: [
+          // File type icon
+          Icon(_iconForMimeType(item.mimeType),
+              size: 24, color: BmoColors.textMuted),
+          const SizedBox(width: 12),
+
+          // Name + metadata
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${_formatSize(item.originalSize)} · ${_formatDate(item.createdAt)}',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Download progress indicator (or menu)
+          if (isDownloading)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: BmoColors.accentGreen,
+                  value: downloadProgress,
+                ),
+              ),
+            )
+          else
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert,
+                  size: 18, color: BmoColors.textMuted),
+              color: BmoColors.screenBgElevated,
+              padding: EdgeInsets.zero,
+              constraints:
+                  const BoxConstraints(minWidth: 28, minHeight: 28),
+              onSelected: (v) {
+                switch (v) {
+                  case 'download':
+                    onDownload();
+                  case 'delete':
+                    onDelete();
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'download',
+                  child: Text('Baixar'),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('Deletar'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ---- helpers (free functions would be cleaner but matching codebase pattern) ----
+
+  static IconData _iconForMimeType(String mimeType) {
+    if (mimeType.startsWith('image/')) return Icons.image_outlined;
+    if (mimeType.startsWith('video/')) return Icons.movie_outlined;
+    if (mimeType.startsWith('audio/')) return Icons.audio_file_outlined;
+    if (mimeType.startsWith('text/')) return Icons.description_outlined;
+    if (mimeType.contains('pdf')) return Icons.picture_as_pdf_outlined;
+    if (mimeType.contains('zip') ||
+        mimeType.contains('rar') ||
+        mimeType.contains('tar') ||
+        mimeType.contains('gzip') ||
+        mimeType.contains('7z')) {
+      return Icons.folder_zip_outlined;
+    }
+    return Icons.insert_drive_file_outlined;
+  }
+
+  static String _formatSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    if (bytes < 1073741824) {
+      return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / 1073741824).toStringAsFixed(1)} GB';
+  }
+
+  static String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 1) return 'agora';
+    if (diff.inHours < 1) return '${diff.inMinutes}min';
+    if (diff.inDays < 1) return '${diff.inHours}h';
+    if (diff.inDays < 7) return '${diff.inDays}d';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
+// ============================================================
+// Progress bar
+// ============================================================
+
+class _ProgressBar extends StatelessWidget {
+  final double progress;
+  final String label;
+
+  const _ProgressBar({required this.progress, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBgElevated,
+        border: const Border(
+          bottom: BorderSide(color: BmoColors.textMuted, width: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              color: BmoColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 4,
+              backgroundColor: BmoColors.textMuted.withValues(alpha: 0.2),
+              color: BmoColors.accentGreen,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${(progress * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                color: BmoColors.textMuted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Delete vault dialog (password confirmation)
+// ============================================================
+
+class _DeleteVaultDialog extends StatefulWidget {
+  @override
+  State<_DeleteVaultDialog> createState() => _DeleteVaultDialogState();
+}
+
+class _DeleteVaultDialogState extends State<_DeleteVaultDialog> {
+  final _passwordController = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: BmoColors.screenBgElevated,
+      title: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded,
+              color: BmoColors.accentYellow, size: 24),
+          const SizedBox(width: 12),
+          const Text(
+            'Deletar cofre?',
+            style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+          ),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Esta ação é irreversível.\n'
+            'Todos os arquivos do cofre serão\n'
+            'permanentemente apagados.',
+            style: TextStyle(
+              color: BmoColors.textSecondary,
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passwordController,
+            obscureText: _obscure,
+            textInputAction: TextInputAction.go,
+            onSubmitted: (_) =>
+                Navigator.of(context).pop(_passwordController.text),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              color: BmoColors.textPrimary,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Senha',
+              hintText: 'Digite a senha do cofre para confirmar',
+              hintStyle:
+                  const TextStyle(fontSize: 13, color: BmoColors.textMuted),
+              labelStyle:
+                  const TextStyle(fontSize: 13, color: BmoColors.textSecondary),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscure
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: BmoColors.textMuted,
+                ),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+              filled: true,
+              fillColor: BmoColors.screenBg,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                    color: BmoColors.textMuted.withValues(alpha: 0.3)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: BmoColors.accentYellow),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+          onPressed: () =>
+              Navigator.of(context).pop(_passwordController.text),
+          child: const Text('Deletar cofre'),
+        ),
+      ],
     );
   }
 }
