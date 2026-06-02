@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../data/image_proxy.dart';
 import '../../data/models/article.dart';
 import '../../data/rss_providers.dart';
 import '../helpers.dart';
@@ -338,7 +339,7 @@ class _CardImage extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Image.network(
-          imageUrl,
+          articleImageProxyUrl(imageUrl),
           fit: BoxFit.cover,
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;

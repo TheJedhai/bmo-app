@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../data/image_proxy.dart';
 import '../../data/models/article.dart';
 import '../../data/rss_providers.dart';
 import '../helpers.dart';
@@ -744,7 +745,7 @@ class _DetailImage extends StatelessWidget {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       child: Image.network(
-        imageUrl,
+        articleImageProxyUrl(imageUrl),
         height: 200,
         width: double.infinity,
         fit: BoxFit.cover,
