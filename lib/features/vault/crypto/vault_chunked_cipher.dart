@@ -429,40 +429,54 @@ Uint8List _buildChunkAad(Uint8List header, int chunkIndex, bool isLast) {
 
 // ---------------------------------------------------------------------------
 // Binary encoding helpers (big-endian)
+//
+// **JS safety**: All functions use integer division (`~/`) and multiplication
+// instead of bit-shift operators (`<<`, `>>`).  Dart's `<<` and `>>` compile to
+// JavaScript's `<<` and `>>`, which:
+// - Truncate the shift count modulo 32 (`>> 56` → `>> 24`)
+// - Operate on **signed** 32-bit integers (result can be negative)
+// - Convert both operands to 32-bit before shifting (high 32 bits lost)
+//
+// Integer division/multiplication uses full JS numbers (53-bit integer
+// precision), which is safe for file sizes up to ~9 PiB.
 // ---------------------------------------------------------------------------
 
 void _encodeUint32BE(Uint8List bytes, int offset, int value) {
-  bytes[offset] = (value >> 24) & 0xFF;
-  bytes[offset + 1] = (value >> 16) & 0xFF;
-  bytes[offset + 2] = (value >> 8) & 0xFF;
+  bytes[offset] = (value ~/ 16777216) & 0xFF; // value ~/ 2^24
+  bytes[offset + 1] = (value ~/ 65536) & 0xFF; // value ~/ 2^16
+  bytes[offset + 2] = (value ~/ 256) & 0xFF; // value ~/ 2^8
   bytes[offset + 3] = value & 0xFF;
 }
 
+/// Decodes a big-endian unsigned 32-bit integer from [bytes] at [offset].
+///
+/// Uses multiplication instead of bit-shift OR-ing so the result is always a
+/// non-negative Dart integer, correct on both VM and JS backends.
 int _decodeUint32BE(Uint8List bytes, int offset) {
-  return (bytes[offset] << 24) |
-      (bytes[offset + 1] << 16) |
-      (bytes[offset + 2] << 8) |
+  return (bytes[offset] * 16777216) + // 2^24
+      (bytes[offset + 1] * 65536) + // 2^16
+      (bytes[offset + 2] * 256) + // 2^8
       bytes[offset + 3];
 }
 
 void _encodeUint64BE(Uint8List bytes, int offset, int value) {
-  bytes[offset] = (value >> 56) & 0xFF;
-  bytes[offset + 1] = (value >> 48) & 0xFF;
-  bytes[offset + 2] = (value >> 40) & 0xFF;
-  bytes[offset + 3] = (value >> 32) & 0xFF;
-  bytes[offset + 4] = (value >> 24) & 0xFF;
-  bytes[offset + 5] = (value >> 16) & 0xFF;
-  bytes[offset + 6] = (value >> 8) & 0xFF;
+  bytes[offset] = (value ~/ 72057594037927936) & 0xFF; // value ~/ 2^56
+  bytes[offset + 1] = (value ~/ 281474976710656) & 0xFF; // value ~/ 2^48
+  bytes[offset + 2] = (value ~/ 1099511627776) & 0xFF; // value ~/ 2^40
+  bytes[offset + 3] = (value ~/ 4294967296) & 0xFF; // value ~/ 2^32
+  bytes[offset + 4] = (value ~/ 16777216) & 0xFF; // value ~/ 2^24
+  bytes[offset + 5] = (value ~/ 65536) & 0xFF; // value ~/ 2^16
+  bytes[offset + 6] = (value ~/ 256) & 0xFF; // value ~/ 2^8
   bytes[offset + 7] = value & 0xFF;
 }
 
+/// Decodes a big-endian unsigned 64-bit integer from [bytes] at [offset].
+///
+/// Splits into high/low 32-bit halves decoded via [_decodeUint32BE] and
+/// combines with multiplication.  Correct up to 2^53 - 1 (~9 PiB) on all
+/// backends — far beyond any practical file size.
 int _decodeUint64BE(Uint8List bytes, int offset) {
-  return (bytes[offset] << 56) |
-      (bytes[offset + 1] << 48) |
-      (bytes[offset + 2] << 40) |
-      (bytes[offset + 3] << 32) |
-      (bytes[offset + 4] << 24) |
-      (bytes[offset + 5] << 16) |
-      (bytes[offset + 6] << 8) |
-      bytes[offset + 7];
+  final high = _decodeUint32BE(bytes, offset);
+  final low = _decodeUint32BE(bytes, offset + 4);
+  return high * 4294967296 + low; // 2^32
 }

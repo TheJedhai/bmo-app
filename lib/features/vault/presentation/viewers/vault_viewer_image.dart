@@ -30,12 +30,16 @@ class VaultImageViewer extends ConsumerStatefulWidget {
   final VaultRepository repo;
   final bool isMobile;
 
+  /// Called when the user taps "Baixar" after a memory error.
+  final VoidCallback? onDownload;
+
   const VaultImageViewer({
     super.key,
     required this.item,
     required this.session,
     required this.repo,
     required this.isMobile,
+    this.onDownload,
   });
 
   @override
@@ -46,6 +50,7 @@ class _VaultImageViewerState extends ConsumerState<VaultImageViewer> {
   Uint8List? _bytes;
   bool _isLoading = true;
   String? _error;
+  bool _isMemoryError = false;
   bool _isFullscreenOpen = false;
 
   @override
@@ -55,6 +60,7 @@ class _VaultImageViewerState extends ConsumerState<VaultImageViewer> {
   }
 
   Future<void> _load() async {
+    _isMemoryError = false;
     try {
       final bytes = await widget.repo.downloadItem(
         widget.session.vaultId,
@@ -72,10 +78,24 @@ class _VaultImageViewerState extends ConsumerState<VaultImageViewer> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = _friendlyError(e);
-        _isLoading = false;
-      });
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('memory') ||
+          msg.contains('allocation') ||
+          msg.contains('out of') ||
+          msg.contains('overflow') ||
+          msg.contains('array length')) {
+        setState(() {
+          _isMemoryError = true;
+          _error = 'Não foi possível carregar — arquivo grande demais '
+              'para a memória disponível.\nUse a opção Baixar.';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -207,10 +227,22 @@ class _VaultImageViewerState extends ConsumerState<VaultImageViewer> {
                       color: BmoColors.textMuted),
                   maxLines: 3),
               const SizedBox(height: 12),
-              TextButton(
-                onPressed: _load,
-                child: const Text('tentar novamente'),
-              ),
+              if (_isMemoryError && widget.onDownload != null)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: BmoColors.accentGreen),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onDownload!.call();
+                  },
+                  child: const Text('Baixar',
+                      style: TextStyle(color: BmoColors.screenBg)),
+                )
+              else
+                TextButton(
+                  onPressed: _load,
+                  child: const Text('tentar novamente'),
+                ),
             ],
           ),
         ),

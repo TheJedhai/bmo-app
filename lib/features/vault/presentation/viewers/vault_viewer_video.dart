@@ -13,10 +13,20 @@
 /// - Native controls, seek, and fullscreen
 /// - Same user experience as any web video
 ///
-/// ## Memory protection
-/// - Above 1 GiB: warning dialog before loading (handled by the router)
-/// - Decrypt + blob creation wrapped in try-catch for memory errors
-/// - Blob URL revoked on close
+/// ## Memory / platform view lifecycle
+/// Flutter's [platformViewRegistry] has no `unregisterFactory` — once a factory
+/// is registered for a viewType, it stays in the registry forever.  If the
+/// factory closure captures the `<video>` element directly, that element (and
+/// its decoded frame buffers) can never be GC'd.
+///
+/// **Fix**: the factory captures only a *string key* (the viewType).  Video
+/// elements live in a top-level `_videoElements` map.  On dispose, the element
+/// is removed from the map → the factory can no longer reach it → GC collects
+/// the ~250 MiB of decoded frames.
+///
+/// ViewType IDs use a monotonically-increasing counter so each instance gets a
+/// unique key (avoiding the `registerViewFactory` collision that a static
+/// viewType would cause on the second opening).
 ///
 /// ## Security
 /// - Decrypted content lives only as a blob URL while the viewer is open.
@@ -37,6 +47,26 @@ import '../../data/vault_models.dart';
 import '../../data/vault_repository.dart';
 import '../../providers/vault_providers.dart';
 
+// ---------------------------------------------------------------------------
+// Global video element registry
+// ---------------------------------------------------------------------------
+
+/// Maps viewType → live `<video>` element so the platform view factory
+/// can look up the element without capturing it in a closure.
+final _videoElements = <String, html.VideoElement>{};
+
+int _nextViewId = 0;
+
+/// Creates a unique viewType for a single viewer instance.
+String _nextVideoViewType() => 'vault-video-${_nextViewId++}';
+
+/// Platform view factory.  Captures only [viewType] (a short string), NOT
+/// the video element.  Looks up the global [_videoElements] map so that
+/// removing the element from the map on dispose severs the last reference.
+html.VideoElement _videoPlatformFactory(int viewId, String viewType) {
+  return _videoElements[viewType]!;
+}
+
 // ============================================================
 // Viewer dialog
 // ============================================================
@@ -47,12 +77,17 @@ class VaultVideoViewer extends ConsumerStatefulWidget {
   final VaultRepository repo;
   final bool isMobile;
 
+  /// Called when the user taps "Baixar" after a memory error.
+  /// If null, the download button is hidden and only retry is shown.
+  final VoidCallback? onDownload;
+
   const VaultVideoViewer({
     super.key,
     required this.item,
     required this.session,
     required this.repo,
     required this.isMobile,
+    this.onDownload,
   });
 
   @override
@@ -63,6 +98,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   bool _isLoading = true;
   double _progress = 0;
   String? _error;
+  bool _isMemoryError = false;
   String? _blobUrl;
   late final String _viewType;
 
@@ -71,11 +107,16 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   @override
   void initState() {
     super.initState();
-    _viewType = 'video-viewer-${identityHashCode(this)}';
+    _viewType = _nextVideoViewType();
     _load();
   }
 
   Future<void> _load() async {
+    // Clean up any state from a previous attempt before starting fresh.
+    _cleanupVideoElement();
+    _cleanupBlobUrl();
+    _isMemoryError = false;
+
     try {
       final bytes = await widget.repo.downloadItem(
         widget.session.vaultId,
@@ -98,6 +139,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       } catch (e) {
         if (!mounted) return;
         setState(() {
+          _isMemoryError = true;
           _error = 'Não foi possível carregar — arquivo grande demais '
               'para a memória disponível.\nUse a opção Baixar.';
           _isLoading = false;
@@ -105,7 +147,11 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
         return;
       }
 
-      if (!mounted) return;
+      if (!mounted) {
+        // Widget was disposed while creating blob — revoke it immediately.
+        html.Url.revokeObjectUrl(blobUrl);
+        return;
+      }
 
       // Create the video element.
       final video = html.VideoElement()
@@ -117,11 +163,17 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
         ..setAttribute('playsinline', 'true');
 
       _videoElement = video;
+      _videoElements[_viewType] = video;
 
-      // Register platform view.
+      // Register the platform view factory.  The closure captures only
+      // [_viewType] (a short string), NOT [video].  The factory looks up
+      // the global [_videoElements] map at call time.  When this viewer
+      // is disposed, the entry is removed from [_videoElements] → the
+      // factory can no longer reach the element → GC collects the frames.
+      // ignore: unnecessary_lambdas
       ui_web.platformViewRegistry.registerViewFactory(
         _viewType,
-        (int viewId) => video,
+        (int viewId) => _videoPlatformFactory(viewId, _viewType),
       );
 
       setState(() {
@@ -130,12 +182,18 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       });
     } catch (e) {
       if (!mounted) return;
+      // Clean up any partially-created resources on error.
+      _cleanupVideoElement();
+      _cleanupBlobUrl();
+
       final msg = e.toString().toLowerCase();
       if (msg.contains('memory') ||
           msg.contains('allocation') ||
           msg.contains('out of') ||
-          msg.contains('overflow')) {
+          msg.contains('overflow') ||
+          msg.contains('array length')) {
         setState(() {
+          _isMemoryError = true;
           _error = 'Não foi possível carregar — arquivo grande demais '
               'para a memória disponível.\nUse a opção Baixar.';
           _isLoading = false;
@@ -158,6 +216,50 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
     _videoElement?.requestFullscreen();
   }
 
+  // ---------------------------------------------------------------------------
+  // Resource cleanup
+  // ---------------------------------------------------------------------------
+
+  /// Revokes the blob URL and clears the reference.
+  void _cleanupBlobUrl() {
+    if (_blobUrl != null) {
+      html.Url.revokeObjectUrl(_blobUrl!);
+      _blobUrl = null;
+    }
+  }
+
+  /// Properly tears down the native `<video>` element so that media buffers
+  /// are released back to the browser:
+  /// 1. Pause playback
+  /// 2. Clear `src` + call `load()` to reset the media pipeline (releases
+  ///    decoded frame buffers held by the element)
+  /// 3. Detach from DOM if still attached
+  /// 4. Remove from the global [_videoElements] map so the platform view
+  ///    factory (still registered in [platformViewRegistry]) no longer
+  ///    reaches this element → GC can collect it
+  void _cleanupVideoElement() {
+    final v = _videoElement;
+    if (v == null) return;
+
+    try {
+      v.pause();
+      v.src = '';
+      v.load();
+      if (v.parentNode != null) {
+        v.remove();
+      }
+    } catch (_) {
+      // Best-effort cleanup — never throw during dispose.
+    }
+
+    _videoElements.remove(_viewType);
+    _videoElement = null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     ref.listen(vaultSessionProvider, (prev, next) {
@@ -168,8 +270,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       }
     });
 
-    final isMobile = widget.isMobile;
-    final effectiveMobile = isMobile;
+    final effectiveMobile = widget.isMobile;
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,
@@ -267,10 +368,24 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
                       color: BmoColors.textMuted),
                   maxLines: 5),
               const SizedBox(height: 12),
-              TextButton(
-                onPressed: _load,
-                child: const Text('tentar novamente'),
-              ),
+              // For memory errors, offer download as the primary action.
+              // Retry is only shown for transient (non-memory) errors.
+              if (_isMemoryError && widget.onDownload != null)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: BmoColors.accentGreen),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onDownload!.call();
+                  },
+                  child: const Text('Baixar',
+                      style: TextStyle(color: BmoColors.screenBg)),
+                )
+              else
+                TextButton(
+                  onPressed: _load,
+                  child: const Text('tentar novamente'),
+                ),
             ],
           ),
         ),
@@ -288,12 +403,8 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
 
   @override
   void dispose() {
-    // Revoke blob URL — decrypted video bytes are gone.
-    if (_blobUrl != null) {
-      html.Url.revokeObjectUrl(_blobUrl!);
-      _blobUrl = null;
-    }
-    _videoElement = null;
+    _cleanupVideoElement();
+    _cleanupBlobUrl();
     super.dispose();
   }
 }

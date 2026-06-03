@@ -69,6 +69,7 @@ void openVaultItemViewer(
         session: session,
         repo: repo,
         isMobile: isMobile,
+        onDownload: onDownload,
       ),
     );
   } else if (mime.startsWith('text/') ||
@@ -89,6 +90,7 @@ void openVaultItemViewer(
         session: session,
         repo: repo,
         isMobile: isMobile,
+        onDownload: onDownload,
       ),
     );
   } else if (mime == 'application/pdf') {
@@ -106,6 +108,7 @@ void openVaultItemViewer(
         session: session,
         repo: repo,
         isMobile: isMobile,
+        onDownload: onDownload,
       ),
     );
   } else if (mime.startsWith('video/')) {
@@ -183,6 +186,7 @@ void _checkVideoSizeThenOpen(
       session: session,
       repo: repo,
       isMobile: isMobile,
+      onDownload: onDownload,
     ),
   );
 }
@@ -362,6 +366,7 @@ void _showLargeVideoDialog(
                 session: session,
                 repo: repo,
                 isMobile: isMobile,
+                onDownload: onDownload,
               ),
             );
           },

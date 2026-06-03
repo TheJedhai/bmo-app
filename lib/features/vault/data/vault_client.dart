@@ -240,6 +240,12 @@ final class VaultClient {
   /// [onProgress] is called with (bytesReceived, totalBytes) as the
   /// streamed response is read.
   ///
+  /// **Web memory safety**: When [contentLength] is known we pre-allocate a
+  /// single [Uint8List] and write chunks directly into it.  This avoids
+  /// building a growable `List<int>` backed by a JS Array, where each byte
+  /// becomes a boxed JS number (~8× overhead) and array growth can fail with
+  /// "Invalid array length" for downloads > ~200 MiB.
+  ///
   /// Throws [VaultApiException] if the item is not found (404) or the
   /// blob file is missing from disk (410).
   Future<Uint8List> downloadItemBlob({
@@ -263,14 +269,31 @@ final class VaultClient {
     _ensureOkStreamed(streamedResponse);
 
     final total = streamedResponse.contentLength ?? 0;
-    final bytes = <int>[];
+
+    if (total > 0) {
+      // Fast path: pre-allocate a single Uint8List and write chunks directly.
+      // This avoids the JS Array intermediate on web and eliminates the risk
+      // of "Invalid array length" from growable-list backing-store growth.
+      final bytes = Uint8List(total);
+      var offset = 0;
+      await for (final chunk in streamedResponse.stream) {
+        bytes.setRange(offset, offset + chunk.length, chunk);
+        offset += chunk.length;
+        onProgress?.call(offset, total);
+      }
+      return bytes;
+    }
+
+    // Fallback: content-length unknown (chunked transfer encoding).
+    // Use a BytesBuilder which is more memory-efficient than List<int>.
+    final builder = BytesBuilder(copy: false);
     var received = 0;
     await for (final chunk in streamedResponse.stream) {
-      bytes.addAll(chunk);
+      builder.add(chunk);
       received += chunk.length;
-      onProgress?.call(received, total > 0 ? total : received);
+      onProgress?.call(received, received);
     }
-    return Uint8List.fromList(bytes);
+    return builder.toBytes();
   }
 
   /// Fetches a byte range of an item's encrypted blob.

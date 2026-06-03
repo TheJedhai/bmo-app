@@ -13,6 +13,12 @@
 /// - No z-order issues (the iframe is the only platform view in the dialog,
 ///   and the close button is in a Flutter header above it)
 ///
+/// ## Memory / platform view lifecycle
+/// Same strategy as the video viewer: the platform view factory closes over
+/// only a string key (viewType), looking up the actual iframe element from a
+/// global map.  On dispose the entry is removed → the factory (stuck in the
+/// registry forever) no longer reaches the element → GC collects the buffer.
+///
 /// ## Security
 /// - Decrypted PDF bytes → blob URL → iframe. Blob URL is revoked on close.
 /// - No plaintext in log/storage.
@@ -32,6 +38,25 @@ import '../../data/vault_models.dart';
 import '../../data/vault_repository.dart';
 import '../../providers/vault_providers.dart';
 
+// ---------------------------------------------------------------------------
+// Global iframe element registry
+// ---------------------------------------------------------------------------
+
+/// Maps viewType → live `<iframe>` element so the platform view factory
+/// can look up the element without capturing it in a closure.
+final _iframeElements = <String, html.IFrameElement>{};
+
+int _nextPdfViewId = 0;
+
+/// Creates a unique viewType for a single viewer instance.
+String _nextPdfViewType() => 'vault-pdf-${_nextPdfViewId++}';
+
+/// Platform view factory.  Captures only [viewType] (a short string), NOT
+/// the iframe element.
+html.IFrameElement _pdfPlatformFactory(int viewId, String viewType) {
+  return _iframeElements[viewType]!;
+}
+
 // ============================================================
 // Viewer dialog
 // ============================================================
@@ -42,12 +67,16 @@ class VaultPdfViewer extends ConsumerStatefulWidget {
   final VaultRepository repo;
   final bool isMobile;
 
+  /// Called when the user taps "Baixar" after a memory error.
+  final VoidCallback? onDownload;
+
   const VaultPdfViewer({
     super.key,
     required this.item,
     required this.session,
     required this.repo,
     required this.isMobile,
+    this.onDownload,
   });
 
   @override
@@ -58,6 +87,7 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
   bool _isLoading = true;
   double _progress = 0;
   String? _error;
+  bool _isMemoryError = false;
   String? _blobUrl;
 
   @override
@@ -67,6 +97,10 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
   }
 
   Future<void> _load() async {
+    // Clean up state from a previous attempt.
+    _cleanupBlobUrl();
+    _isMemoryError = false;
+
     try {
       final bytes = await widget.repo.downloadItem(
         widget.session.vaultId,
@@ -85,32 +119,49 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
       final blob = html.Blob([bytes], 'application/pdf');
       final url = html.Url.createObjectUrl(blob);
 
-      if (!mounted) return;
+      if (!mounted) {
+        html.Url.revokeObjectUrl(url);
+        return;
+      }
       setState(() {
         _blobUrl = url;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = _friendlyError(e);
-        _isLoading = false;
-      });
+      _cleanupBlobUrl();
+
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('memory') ||
+          msg.contains('allocation') ||
+          msg.contains('out of') ||
+          msg.contains('overflow') ||
+          msg.contains('array length')) {
+        setState(() {
+          _isMemoryError = true;
+          _error = 'Não foi possível carregar — arquivo grande demais '
+              'para a memória disponível.\nUse a opção Baixar.';
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+      }
     }
   }
 
   String _friendlyError(Object e) {
     if (e is VaultApiException) return 'Erro do servidor (${e.statusCode}).';
-    // Check for memory/allocation errors
-    final msg = e.toString().toLowerCase();
-    if (msg.contains('memory') ||
-        msg.contains('allocation') ||
-        msg.contains('out of') ||
-        msg.contains('overflow')) {
-      return 'Não foi possível carregar — arquivo grande demais '
-          'para a memória disponível.\nUse a opção Baixar.';
-    }
     return e.toString();
+  }
+
+  void _cleanupBlobUrl() {
+    if (_blobUrl != null) {
+      html.Url.revokeObjectUrl(_blobUrl!);
+      _blobUrl = null;
+    }
   }
 
   @override
@@ -123,7 +174,6 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,
-      // Fullscreen on mobile, large dialog on desktop
       shape: isMobile
           ? null
           : RoundedRectangleBorder(
@@ -206,10 +256,22 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
                       color: BmoColors.textMuted),
                   maxLines: 5),
               const SizedBox(height: 12),
-              TextButton(
-                onPressed: _load,
-                child: const Text('tentar novamente'),
-              ),
+              if (_isMemoryError && widget.onDownload != null)
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                      backgroundColor: BmoColors.accentGreen),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    widget.onDownload!.call();
+                  },
+                  child: const Text('Baixar',
+                      style: TextStyle(color: BmoColors.screenBg)),
+                )
+              else
+                TextButton(
+                  onPressed: _load,
+                  child: const Text('tentar novamente'),
+                ),
             ],
           ),
         ),
@@ -218,17 +280,16 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
 
     if (_blobUrl == null) return const SizedBox.shrink();
 
-    // Native browser PDF viewer via iframe
-    return _PdfIframe(blobUrl: _blobUrl!);
+    // Rebuild iframe when blob URL changes (key ensures a fresh widget).
+    return _PdfIframe(
+      key: ValueKey(_blobUrl),
+      blobUrl: _blobUrl!,
+    );
   }
 
   @override
   void dispose() {
-    // Revoke blob URL — the decrypted PDF bytes are gone.
-    if (_blobUrl != null) {
-      html.Url.revokeObjectUrl(_blobUrl!);
-      _blobUrl = null;
-    }
+    _cleanupBlobUrl();
     super.dispose();
   }
 }
@@ -240,7 +301,7 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
 class _PdfIframe extends StatefulWidget {
   final String blobUrl;
 
-  const _PdfIframe({required this.blobUrl});
+  const _PdfIframe({super.key, required this.blobUrl});
 
   @override
   State<_PdfIframe> createState() => _PdfIframeState();
@@ -253,22 +314,46 @@ class _PdfIframeState extends State<_PdfIframe> {
   @override
   void initState() {
     super.initState();
-    _viewType = 'pdf-viewer-${identityHashCode(this)}';
+    _viewType = _nextPdfViewType();
     _iframe = html.IFrameElement()
       ..src = widget.blobUrl
       ..style.width = '100%'
       ..style.height = '100%'
       ..style.border = 'none';
 
+    // Store in global registry so the factory can look it up without
+    // capturing the element directly.
+    _iframeElements[_viewType] = _iframe;
+
+    // Register factory.  The closure captures only [_viewType], NOT
+    // [_iframe] — see _pdfPlatformFactory.
     ui_web.platformViewRegistry.registerViewFactory(
       _viewType,
-      (int viewId) => _iframe,
+      (int viewId) => _pdfPlatformFactory(viewId, _viewType),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return HtmlElementView(viewType: _viewType);
+  }
+
+  @override
+  void dispose() {
+    // Release the iframe's reference to the blob (so Chrome frees the
+    // decoded PDF buffer) and remove from the global registry so the
+    // factory (still held by platformViewRegistry) can no longer reach
+    // this element → GC collects it.
+    try {
+      _iframe.src = '';
+      if (_iframe.parentNode != null) {
+        _iframe.remove();
+      }
+    } catch (_) {
+      // Best-effort cleanup.
+    }
+    _iframeElements.remove(_viewType);
+    super.dispose();
   }
 }
 

@@ -99,17 +99,27 @@ final class VaultCipher {
   /// - [ciphertext] includes the 16-byte GCM authentication tag appended
   ///
   /// [key] must be exactly 32 bytes (AES-256).
+  ///
+  /// Optional [iv] overrides the random IV generation — only use this when
+  /// the IV is constructed deterministically (e.g. chunked encryption).
+  /// Misusing this with a fixed or repeating IV breaks GCM security.
+  ///
+  /// Optional [additionalData] is authenticated but not encrypted (AAD).
+  /// Used by chunked encryption to bind chunk metadata (index, is-last flag).
   Future<(Uint8List, Uint8List)> encrypt(
     Uint8List key,
-    Uint8List plaintext,
-  ) async {
+    Uint8List plaintext, {
+    Uint8List? iv,
+    Uint8List? additionalData,
+  }) async {
     _assertKeyLength(key);
 
     final subtle = _subtleCrypto;
-    final iv = _randomBytes(ivLength);
+    final effectiveIv = iv ?? _randomBytes(ivLength);
 
     final cryptoKey = await _importAesKey(subtle, key, 'encrypt');
-    final algorithm = _aesGcmAlgorithm(iv);
+    final algorithm = _aesGcmAlgorithm(effectiveIv,
+        additionalData: additionalData);
     final data = (plaintext.buffer.toJS as JSArrayBuffer?)!;
 
     final resultBuffer = await subtle
@@ -117,7 +127,7 @@ final class VaultCipher {
         .toDart;
     final ciphertext = resultBuffer.toDart.asUint8List();
 
-    return (iv, ciphertext);
+    return (effectiveIv, ciphertext);
   }
 
   /// Decrypts [ciphertext] with AES-256-GCM.
@@ -125,15 +135,19 @@ final class VaultCipher {
   /// [key] must be the same 32-byte key used for encryption.
   /// [iv] must be the 12-byte IV returned by [encrypt].
   ///
+  /// Optional [additionalData] must match the AAD passed to [encrypt].
+  ///
   /// Throws [VaultCipherException] if:
-  /// - The GCM tag doesn't validate (wrong key, tampered data, corruption)
+  /// - The GCM tag doesn't validate (wrong key, tampered data, corruption,
+  ///   or mismatched AAD)
   /// - [key] is not 32 bytes
   /// - [iv] is not 12 bytes
   Future<Uint8List> decrypt(
     Uint8List key,
     Uint8List iv,
-    Uint8List ciphertext,
-  ) async {
+    Uint8List ciphertext, {
+    Uint8List? additionalData,
+  }) async {
     _assertKeyLength(key);
     if (iv.length != ivLength) {
       throw VaultCipherException(
@@ -143,7 +157,7 @@ final class VaultCipher {
 
     final subtle = _subtleCrypto;
     final cryptoKey = await _importAesKey(subtle, key, 'decrypt');
-    final algorithm = _aesGcmAlgorithm(iv);
+    final algorithm = _aesGcmAlgorithm(iv, additionalData: additionalData);
     final data = (ciphertext.buffer.toJS as JSArrayBuffer?)!;
     try {
       final resultBuffer = await subtle
@@ -204,12 +218,16 @@ final class VaultCipher {
     return result;
   }
 
-  static JSObject _aesGcmAlgorithm(Uint8List iv) {
-    return ({
+  static JSObject _aesGcmAlgorithm(Uint8List iv, {Uint8List? additionalData}) {
+    final algo = <String, JSAny?>{
       'name': 'AES-GCM'.toJS,
       'iv': iv.toJS,
       'tagLength': tagLength.toJS,
-    }).jsify()! as JSObject;
+    };
+    if (additionalData != null) {
+      algo['additionalData'] = additionalData.toJS;
+    }
+    return algo.jsify()! as JSObject;
   }
 }
 
