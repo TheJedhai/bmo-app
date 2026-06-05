@@ -46,6 +46,7 @@ dependencies:
   flutter_markdown_plus: ^1.0.3
   web_socket_channel: ^3.0.1
   dargon2_flutter: ^3.3.0
+  video_player: ^2.11.1
 
 dev_dependencies:
   flutter_test:
