@@ -1,71 +1,34 @@
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
 /// In-app video viewer for vault items.
 ///
-/// Fetches the full video via [VaultRepository.downloadItem], creates a blob
-/// URL, and embeds a native `<video>` element via [HtmlElementView].
-/// **Zero additional dependencies** — the browser's video player handles all
-/// codecs, controls, seek, and fullscreen natively.
+/// Fetches the full video via [VaultRepository.downloadItem], decrypts it,
+/// creates a blob URL, and plays it with the [video_player] package.
 ///
-/// ## Why native <video> instead of video_player?
-/// video_player is redundant on web — it's just a wrapper around <video>.
-/// Using the element directly:
-/// - Zero dependencies
-/// - Full codec support (whatever Chrome supports: H.264, VP8, VP9, AV1, etc.)
-/// - Native controls, seek, and fullscreen
-/// - Same user experience as any web video
-///
-/// ## Memory / platform view lifecycle
-/// Flutter's [platformViewRegistry] has no `unregisterFactory` — once a factory
-/// is registered for a viewType, it stays in the registry forever.  If the
-/// factory closure captures the `<video>` element directly, that element (and
-/// its decoded frame buffers) can never be GC'd.
-///
-/// **Fix**: the factory captures only a *string key* (the viewType).  Video
-/// elements live in a top-level `_videoElements` map.  On dispose, the element
-/// is removed from the map → the factory can no longer reach it → GC collects
-/// the ~250 MiB of decoded frames.
-///
-/// ViewType IDs use a monotonically-increasing counter so each instance gets a
-/// unique key (avoiding the `registerViewFactory` collision that a static
-/// viewType would cause on the second opening).
+/// ## Why video_player instead of manual <video>
+/// The previous manual approach (HtmlElementView + platformViewRegistry)
+/// leaked ~250 MB per open/close cycle because platformViewRegistry has no
+/// `unregisterViewFactory`.  video_player manages the platform view lifecycle
+/// internally — when the [VideoPlayer] widget is removed from the tree, the
+/// plugin tears down the underlying `<video>` element, releases media buffers,
+/// and the platform view is disposed by the Flutter engine.
 ///
 /// ## Security
 /// - Decrypted content lives only as a blob URL while the viewer is open.
 /// - Blob URL revoked on close; plaintext reference discarded.
 library;
 
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
-
 import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
 import '../../data/vault_models.dart';
 import '../../data/vault_repository.dart';
 import '../../providers/vault_providers.dart';
-
-// ---------------------------------------------------------------------------
-// Global video element registry
-// ---------------------------------------------------------------------------
-
-/// Maps viewType → live `<video>` element so the platform view factory
-/// can look up the element without capturing it in a closure.
-final _videoElements = <String, html.VideoElement>{};
-
-int _nextViewId = 0;
-
-/// Creates a unique viewType for a single viewer instance.
-String _nextVideoViewType() => 'vault-video-${_nextViewId++}';
-
-/// Platform view factory.  Captures only [viewType] (a short string), NOT
-/// the video element.  Looks up the global [_videoElements] map so that
-/// removing the element from the map on dispose severs the last reference.
-html.VideoElement _videoPlatformFactory(int viewId, String viewType) {
-  return _videoElements[viewType]!;
-}
 
 // ============================================================
 // Viewer dialog
@@ -100,20 +63,18 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   String? _error;
   bool _isMemoryError = false;
   String? _blobUrl;
-  late final String _viewType;
-
-  html.VideoElement? _videoElement;
+  VideoPlayerController? _controller;
+  bool _isFullscreenOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _viewType = _nextVideoViewType();
     _load();
   }
 
   Future<void> _load() async {
     // Clean up any state from a previous attempt before starting fresh.
-    _cleanupVideoElement();
+    await _disposeController();
     _cleanupBlobUrl();
     _isMemoryError = false;
 
@@ -153,37 +114,49 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
         return;
       }
 
-      // Create the video element.
-      final video = html.VideoElement()
-        ..src = blobUrl
-        ..controls = true
-        ..style.width = '100%'
-        ..style.height = '100%'
-        ..style.maxHeight = '100%'
-        ..setAttribute('playsinline', 'true');
-
-      _videoElement = video;
-      _videoElements[_viewType] = video;
-
-      // Register the platform view factory.  The closure captures only
-      // [_viewType] (a short string), NOT [video].  The factory looks up
-      // the global [_videoElements] map at call time.  When this viewer
-      // is disposed, the entry is removed from [_videoElements] → the
-      // factory can no longer reach the element → GC collects the frames.
-      // ignore: unnecessary_lambdas
-      ui_web.platformViewRegistry.registerViewFactory(
-        _viewType,
-        (int viewId) => _videoPlatformFactory(viewId, _viewType),
+      // Create video_player controller pointing at the blob URL.
+      // video_player_web creates a <video> element internally and manages
+      // its lifecycle — when this widget is disposed and the platform view
+      // is removed, the plugin tears down the element and releases buffers.
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(blobUrl),
       );
 
+      try {
+        await controller.initialize();
+      } catch (e) {
+        if (!mounted) return;
+        controller.dispose();
+        html.Url.revokeObjectUrl(blobUrl);
+        setState(() {
+          _error = _friendlyError(e);
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (!mounted) {
+        controller.dispose();
+        html.Url.revokeObjectUrl(blobUrl);
+        return;
+      }
+
+      _controller = controller;
+      _blobUrl = blobUrl;
+
+      // Listen for playback state changes to rebuild controls.
+      _controller!.addListener(_onControllerUpdate);
+
       setState(() {
-        _blobUrl = blobUrl;
         _isLoading = false;
       });
+
+      // Start playback immediately.
+      _controller!.play();
     } catch (e) {
       if (!mounted) return;
       // Clean up any partially-created resources on error.
-      _cleanupVideoElement();
+      await _disposeController();
       _cleanupBlobUrl();
 
       final msg = e.toString().toLowerCase();
@@ -207,13 +180,87 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
     }
   }
 
+  void _onControllerUpdate() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
   String _friendlyError(Object e) {
     if (e is VaultApiException) return 'Erro do servidor (${e.statusCode}).';
     return e.toString();
   }
 
-  void _requestFullscreen() {
-    _videoElement?.requestFullscreen();
+  // ---------------------------------------------------------------------------
+  // Playback controls
+  // ---------------------------------------------------------------------------
+
+  void _togglePlayPause() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    if (c.value.isPlaying) {
+      c.pause();
+    } else {
+      c.play();
+    }
+  }
+
+  void _seekTo(double value) {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    c.seekTo(Duration(milliseconds: value.round()));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fullscreen
+  // ---------------------------------------------------------------------------
+
+  void _openFullscreen() {
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    if (_isFullscreenOpen) return;
+
+    // Pause in the inline player; the fullscreen player starts fresh.
+    final wasPlaying = c.value.isPlaying;
+    final position = c.value.position;
+    c.pause();
+
+    _isFullscreenOpen = true;
+    Navigator.of(context)
+        .push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black,
+        barrierDismissible: true,
+        fullscreenDialog: true,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            _VideoFullscreenOverlay(
+          controller: c,
+          fileName: widget.item.fileName,
+          startPosition: position,
+          wasPlaying: wasPlaying,
+        ),
+        transitionsBuilder:
+            (context, animation, secondaryAnimation, child) =>
+                FadeTransition(opacity: animation, child: child),
+      ),
+    )
+        .then((_) {
+      if (mounted) {
+        _isFullscreenOpen = false;
+        // Refresh inline player state after returning from fullscreen.
+        setState(() {});
+      }
+    });
+  }
+
+  /// Closes this viewer — first the fullscreen overlay (if open), then
+  /// the dialog itself. Called when [vaultSessionProvider] becomes `null`
+  /// (vault locked via tab switch, explicit lock, or inactivity timer).
+  void _closeOnLock() {
+    if (_isFullscreenOpen) {
+      Navigator.of(context).pop(); // fullscreen overlay
+    }
+    Navigator.of(context).pop(); // this dialog
   }
 
   // ---------------------------------------------------------------------------
@@ -228,32 +275,14 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
     }
   }
 
-  /// Properly tears down the native `<video>` element so that media buffers
-  /// are released back to the browser:
-  /// 1. Pause playback
-  /// 2. Clear `src` + call `load()` to reset the media pipeline (releases
-  ///    decoded frame buffers held by the element)
-  /// 3. Detach from DOM if still attached
-  /// 4. Remove from the global [_videoElements] map so the platform view
-  ///    factory (still registered in [platformViewRegistry]) no longer
-  ///    reaches this element → GC can collect it
-  void _cleanupVideoElement() {
-    final v = _videoElement;
-    if (v == null) return;
-
-    try {
-      v.pause();
-      v.src = '';
-      v.load();
-      if (v.parentNode != null) {
-        v.remove();
-      }
-    } catch (_) {
-      // Best-effort cleanup — never throw during dispose.
-    }
-
-    _videoElements.remove(_viewType);
-    _videoElement = null;
+  /// Disposes the [VideoPlayerController] — the managed teardown that
+  /// releases the underlying `<video>` element and its decoded frame buffers.
+  Future<void> _disposeController() async {
+    final c = _controller;
+    if (c == null) return;
+    _controller = null;
+    c.removeListener(_onControllerUpdate);
+    await c.dispose();
   }
 
   // ---------------------------------------------------------------------------
@@ -262,12 +291,11 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
 
   @override
   Widget build(BuildContext context) {
+    // Close this viewer when the vault locks (session → null).
+    // Must be called from build, not initState — Riverpod requires
+    // ref.listen to be registered during the build phase.
     ref.listen(vaultSessionProvider, (prev, next) {
-      if (next == null) {
-        _videoElement?.pause();
-        html.document.exitFullscreen();
-        Navigator.of(context).pop();
-      }
+      if (next == null) _closeOnLock();
     });
 
     final effectiveMobile = widget.isMobile;
@@ -294,11 +322,11 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
             _ViewerHeader(
               title: widget.item.fileName,
               actions: [
-                if (!_isLoading && _error == null)
+                if (!_isLoading && _error == null && _controller != null)
                   _HeaderIconButton(
                     icon: Icons.fullscreen,
                     tooltip: 'Tela cheia',
-                    onPressed: _requestFullscreen,
+                    onPressed: _openFullscreen,
                   ),
                 _HeaderIconButton(
                   icon: Icons.close,
@@ -392,20 +420,382 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       );
     }
 
-    if (_blobUrl == null) return const SizedBox.shrink();
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return const SizedBox.shrink();
 
-    // Native browser video player
-    return Container(
-      color: Colors.black,
-      child: HtmlElementView(viewType: _viewType),
+    // Video player with basic controls overlay.
+    return ClipRRect(
+      borderRadius: isMobile
+          ? BorderRadius.zero
+          : const BorderRadius.vertical(bottom: Radius.circular(16)),
+      child: Container(
+        color: Colors.black,
+        child: Stack(
+          children: [
+            // Tappable video area — toggles play/pause.
+            GestureDetector(
+              onTap: _togglePlayPause,
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: c.value.aspectRatio,
+                  child: VideoPlayer(c),
+                ),
+              ),
+            ),
+
+            // Center play/pause indicator (visible when paused).
+            if (!c.value.isPlaying)
+              Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    size: 48,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+            // Bottom controls bar.
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _VideoControlsBar(
+                controller: c,
+                onPlayPause: _togglePlayPause,
+                onSeek: _seekTo,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   @override
   void dispose() {
-    _cleanupVideoElement();
+    // Order matters: dispose controller first (tears down the <video>
+    // element via video_player's managed teardown), then revoke the blob.
+    _disposeController();
     _cleanupBlobUrl();
     super.dispose();
+  }
+}
+
+// ============================================================
+// Bottom controls bar
+// ============================================================
+
+class _VideoControlsBar extends StatelessWidget {
+  final VideoPlayerController controller;
+  final VoidCallback onPlayPause;
+  final ValueChanged<double> onSeek;
+
+  const _VideoControlsBar({
+    required this.controller,
+    required this.onPlayPause,
+    required this.onSeek,
+  });
+
+  String _formatDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = controller.value;
+    final position = value.position;
+    final duration = value.duration;
+    final maxMs = duration.inMilliseconds.toDouble();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.7),
+          ],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Seek slider
+          SliderTheme(
+            data: SliderThemeData(
+              trackHeight: 3,
+              thumbShape:
+                  const RoundSliderThumbShape(enabledThumbRadius: 6),
+              overlayShape:
+                  const RoundSliderOverlayShape(overlayRadius: 12),
+              activeTrackColor: BmoColors.accentGreen,
+              inactiveTrackColor: Colors.white24,
+              thumbColor: BmoColors.accentGreen,
+            ),
+            child: Slider(
+              min: 0,
+              max: maxMs > 0 ? maxMs : 1,
+              value: position.inMilliseconds
+                  .toDouble()
+                  .clamp(0, maxMs > 0 ? maxMs : 1),
+              onChanged: onSeek,
+            ),
+          ),
+
+          // Play/pause + time labels
+          Row(
+            children: [
+              // Play/pause button
+              InkWell(
+                onTap: onPlayPause,
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    value.isPlaying ? Icons.pause : Icons.play_arrow,
+                    size: 24,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Time display
+              Text(
+                '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: Colors.white70,
+                ),
+              ),
+
+              const Spacer(),
+
+              // Buffering indicator
+              if (value.isBuffering)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white54,
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Fullscreen overlay (Stack-based, same pattern as image viewer)
+// ============================================================
+
+class _VideoFullscreenOverlay extends StatefulWidget {
+  final VideoPlayerController controller;
+  final String fileName;
+  final Duration startPosition;
+  final bool wasPlaying;
+
+  const _VideoFullscreenOverlay({
+    required this.controller,
+    required this.fileName,
+    required this.startPosition,
+    required this.wasPlaying,
+  });
+
+  @override
+  State<_VideoFullscreenOverlay> createState() =>
+      _VideoFullscreenOverlayState();
+}
+
+class _VideoFullscreenOverlayState extends State<_VideoFullscreenOverlay> {
+  bool _controlsVisible = true;
+  late VideoPlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = widget.controller;
+
+    // Seek to the position from the inline player.
+    if (_controller.value.isInitialized &&
+        widget.startPosition != Duration.zero) {
+      _controller.seekTo(widget.startPosition);
+    }
+
+    // Resume playback if it was playing before.
+    if (widget.wasPlaying) {
+      _controller.play();
+    }
+
+    // Listen for state changes to rebuild controls.
+    _controller.addListener(_onUpdate);
+
+    // Auto-hide controls after 3 seconds of inactivity.
+    _resetHideTimer();
+  }
+
+  void _onUpdate() {
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  void _resetHideTimer() {
+    _controlsVisible = true;
+    // The auto-hide is handled on each tap — no complex timer needed.
+    setState(() {});
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _controlsVisible = !_controlsVisible;
+    });
+  }
+
+  void _togglePlayPause() {
+    if (_controller.value.isPlaying) {
+      _controller.pause();
+    } else {
+      _controller.play();
+    }
+  }
+
+  void _seekTo(double value) {
+    _controller.seekTo(Duration(milliseconds: value.round()));
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onUpdate);
+    // Don't dispose the controller — it's owned by the parent viewer.
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _controller.value;
+    final isInitialized = value.isInitialized;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: _toggleControls,
+        child: Stack(
+          children: [
+            // Video filling the screen.
+            Positioned.fill(
+              child: isInitialized
+                  ? Center(
+                      child: AspectRatio(
+                        aspectRatio: value.aspectRatio,
+                        child: VideoPlayer(_controller),
+                      ),
+                    )
+                  : const Center(
+                      child: CircularProgressIndicator(
+                          color: BmoColors.accentGreen),
+                    ),
+            ),
+
+            // Center play/pause (visible when paused or controls hidden).
+            if (isInitialized && (!value.isPlaying || !_controlsVisible))
+              Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: Icon(
+                    value.isPlaying ? Icons.pause : Icons.play_arrow,
+                    size: 56,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+            // Top bar with file name + close.
+            if (_controlsVisible)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.only(
+                    top: 48,
+                    bottom: 12,
+                    left: 16,
+                    right: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.7),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.fileName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 14,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        tooltip: 'Fechar',
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // Bottom controls bar.
+            if (_controlsVisible && isInitialized)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: _VideoControlsBar(
+                  controller: _controller,
+                  onPlayPause: _togglePlayPause,
+                  onSeek: _seekTo,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
