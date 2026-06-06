@@ -178,6 +178,9 @@ final class VaultClient {
   /// [encryptionScheme] must be "gcm_single" or "gcm_chunked".
   /// [chunkSize] is required for "gcm_chunked", null for "gcm_single".
   ///
+  /// [thumbnailBlobBase64] and [thumbnailIvBase64] are optional; when both
+  /// are provided they are sent as additional multipart fields.
+  ///
   /// [onProgress] is called with (bytesSent, totalBytes) during upload.
   /// For Flutter web, this fires as the stream is consumed.
   Future<VaultItem> uploadItem({
@@ -187,6 +190,8 @@ final class VaultClient {
     required String metadataIvBase64,
     required String encryptionScheme,
     required int? chunkSize,
+    String? thumbnailBlobBase64,
+    String? thumbnailIvBase64,
     void Function(int sent, int total)? onProgress,
   }) async {
     final uri = Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items');
@@ -208,6 +213,10 @@ final class VaultClient {
     request.fields['encryption_scheme'] = encryptionScheme;
     if (chunkSize != null) {
       request.fields['chunk_size'] = chunkSize.toString();
+    }
+    if (thumbnailBlobBase64 != null && thumbnailIvBase64 != null) {
+      request.fields['thumbnail_blob'] = thumbnailBlobBase64;
+      request.fields['thumbnail_iv'] = thumbnailIvBase64;
     }
 
     final streamedResponse = await _client.send(request);

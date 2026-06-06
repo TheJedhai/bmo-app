@@ -29,6 +29,7 @@ import '../crypto/vault_kdf.dart';
 import '../crypto/argon2_kdf.dart';
 import 'vault_client.dart';
 import 'vault_models.dart';
+import 'vault_thumbnail.dart';
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -272,7 +273,11 @@ final class VaultRepository {
   ///    via AES-GCM single-shot (small, one round-trip).
   /// 2. Splits [fileBytes] into 1 MiB chunks and encrypts each with
   ///    [VaultChunkedCipher].
-  /// 3. Posts the encrypted blob + metadata to the server.
+  /// 3. Generates a JPEG thumbnail from [fileBytes] if the MIME type is
+  ///    image/* or video/* (under 200 MiB). PDFs and other types produce no
+  ///    thumbnail. Encrypts the thumbnail bytes with [VaultCipher] (single-shot
+  ///    GCM, fresh IV).
+  /// 4. Posts the encrypted blob + metadata + optional thumbnail to the server.
   ///
   /// [dek] is the 32-byte data encryption key from unlock.
   /// [fileBytes] is the full plaintext file content.
@@ -283,6 +288,10 @@ final class VaultRepository {
   /// Returns [VaultItemDecrypted] with the server-assigned id and timestamps.
   ///
   /// ## Security: NEVER log [dek], [fileBytes], [fileName], or any plaintext.
+  ///
+  /// ## Thumbnail robustness: any failure in thumbnail generation or encryption
+  /// is silently caught — the content upload always proceeds. Thumbnails are an
+  /// enhancement, not a requirement.
   Future<VaultItemDecrypted> uploadItem(
     String vaultId,
     Uint8List dek,
@@ -316,7 +325,24 @@ final class VaultRepository {
     // 3. Build full blob: header + all encrypted chunks.
     final blob = _concatBlob(header, encryptedChunks);
 
-    // 4. Upload to server.
+    // 4. Generate and encrypt thumbnail (optional — never breaks upload).
+    String? thumbnailBlobBase64;
+    String? thumbnailIvBase64;
+    try {
+      final thumbnailBytes = await generateThumbnail(fileBytes, mimeType);
+      if (thumbnailBytes != null) {
+        const cipher = VaultCipher();
+        final (thumbIv, thumbBlob) = await cipher.encrypt(dek, thumbnailBytes);
+        thumbnailBlobBase64 = base64Encode(thumbBlob);
+        thumbnailIvBase64 = base64Encode(thumbIv);
+      }
+    } catch (_) {
+      // Thumbnail is an enhancement — upload proceeds without it.
+      thumbnailBlobBase64 = null;
+      thumbnailIvBase64 = null;
+    }
+
+    // 5. Upload to server.
     final item = await _client.uploadItem(
       vaultId: vaultId,
       encryptedBlob: blob,
@@ -324,6 +350,8 @@ final class VaultRepository {
       metadataIvBase64: base64Encode(metadataIv),
       encryptionScheme: 'gcm_chunked',
       chunkSize: VaultChunkedCipher.defaultChunkSize,
+      thumbnailBlobBase64: thumbnailBlobBase64,
+      thumbnailIvBase64: thumbnailIvBase64,
       onProgress: onProgress,
     );
 

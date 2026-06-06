@@ -9,13 +9,17 @@
 // 6. mapPlaintextRangeToChunks — range→chunk index mapping
 // 7. Metadata decryption failure → skipped gracefully
 // 8. Cross-chunk plaintext range mapping
+// 9. Thumbnail fields sent for images, absent for non-image types
 //
 // ## Security: This test file NEVER logs DEKs, plaintext, file names, or
 // key material.
 //
 // Run: flutter test --platform=chrome test/vault_item_repository_test.dart
 
+// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+
 import 'dart:convert';
+import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -323,6 +327,102 @@ void main() {
       expect(progressLog.isNotEmpty, isTrue);
       // Last progress call should report all bytes sent.
       expect(progressLog.last.$1, progressLog.last.$2);
+    });
+
+    test('sends thumbnail_blob and thumbnail_iv for image upload', () async {
+      // Create a small valid JPEG using the browser canvas.
+      final canvas = html.CanvasElement()
+        ..width = 4
+        ..height = 4;
+      final ctx = canvas.context2D;
+      ctx.fillStyle = '#ff8844';
+      ctx.fillRect(0, 0, 4, 4);
+
+      final dataUrl = canvas.toDataUrl('image/jpeg', 0.8);
+      final comma = dataUrl.indexOf(',');
+      final jpegBytes = base64Decode(dataUrl.substring(comma + 1));
+
+      String? capturedBody;
+      final uploadMock = MockClient((request) async {
+        if (request.method == 'POST' &&
+            request.url.path == '/api/v1/vaults/1/items') {
+          capturedBody = latin1.decode(request.bodyBytes);
+          return http.Response(
+            jsonEncode(_itemJson(
+              id: '10',
+              vaultId: '1',
+              metadataBlob: Uint8List(16),
+              metadataIv: Uint8List(12),
+              encryptionScheme: 'gcm_chunked',
+              chunkSize: VaultChunkedCipher.defaultChunkSize,
+              sizeBytes: 500,
+            )),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final uploadRepo = VaultRepository(
+        VaultClient(client: uploadMock, baseUrl: 'http://localhost:8089'),
+        kdf: const MockKdf(),
+      );
+
+      await uploadRepo.uploadItem(
+        '1',
+        testDek,
+        jpegBytes,
+        'test.jpg',
+        'image/jpeg',
+      );
+
+      expect(capturedBody, isNotNull);
+      // Multipart body should contain the thumbnail field names.
+      expect(capturedBody!, contains('thumbnail_blob'));
+      expect(capturedBody, contains('thumbnail_iv'));
+    });
+
+    test('does NOT send thumbnail fields for non-image type', () async {
+      String? capturedBody;
+      final uploadMock = MockClient((request) async {
+        if (request.method == 'POST' &&
+            request.url.path == '/api/v1/vaults/1/items') {
+          capturedBody = latin1.decode(request.bodyBytes);
+          return http.Response(
+            jsonEncode(_itemJson(
+              id: '10',
+              vaultId: '1',
+              metadataBlob: Uint8List(16),
+              metadataIv: Uint8List(12),
+              encryptionScheme: 'gcm_chunked',
+              chunkSize: VaultChunkedCipher.defaultChunkSize,
+              sizeBytes: 500,
+            )),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final uploadRepo = VaultRepository(
+        VaultClient(client: uploadMock, baseUrl: 'http://localhost:8089'),
+        kdf: const MockKdf(),
+      );
+
+      final textBytes = Uint8List.fromList('hello vault'.codeUnits);
+      await uploadRepo.uploadItem(
+        '1',
+        testDek,
+        textBytes,
+        'readme.txt',
+        'text/plain',
+      );
+
+      expect(capturedBody, isNotNull);
+      expect(capturedBody!, isNot(contains('thumbnail_blob')));
+      expect(capturedBody, isNot(contains('thumbnail_iv')));
     });
   });
 
