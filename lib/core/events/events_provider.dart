@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
+import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
 import 'events_client.dart';
@@ -64,6 +65,18 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'memory.updated':
     case 'memory.deleted':
       ref.invalidate(memoriesProvider);
+
+    // ---- RSS ----
+    case 'article.created':
+    case 'article.updated':
+    case 'articles.batch_updated':
+      ref.invalidate(articlesProvider);
+    case 'feed.created':
+    case 'feed.updated':
+    case 'feed.deleted':
+      ref.invalidate(feedsProvider);
+      ref.invalidate(articlesProvider);
+
     case 'connected':
       debugPrint('SSE connected');
   }
