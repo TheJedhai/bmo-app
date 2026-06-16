@@ -182,9 +182,10 @@ class Articles extends _$Articles {
   }
 
   /// Request an LLM summary for an article and update it locally.
-  Future<({String summary, bool cached})> summarize(int id) async {
+  /// Pass [force] = true to bypass the cache and regenerate.
+  Future<({String summary, bool cached})> summarize(int id, {bool force = false}) async {
     final repo = ref.read(rssRepositoryProvider);
-    final result = await repo.summarizeArticle(id);
+    final result = await repo.summarizeArticle(id, force: force);
     final current = state.valueOrNull ?? const <Article>[];
     final idx = current.indexWhere((a) => a.id == id);
     if (idx != -1) {

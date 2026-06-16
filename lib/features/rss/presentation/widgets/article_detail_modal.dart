@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -92,7 +93,7 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
     }
   }
 
-  Future<void> _summarize() async {
+  Future<void> _summarize({bool force = false}) async {
     setState(() {
       _summarizing = true;
       _summarizeError = null;
@@ -101,7 +102,7 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
     try {
       await ref
           .read(articlesProvider(widget.filter).notifier)
-          .summarize(widget.article.id);
+          .summarize(widget.article.id, force: force);
     } catch (e) {
       setState(() {
         _summarizeError = _friendlySummarizeError(e);
@@ -154,7 +155,8 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
               summarizeError: _summarizeError,
               contentStatus: _contentStatus,
               contentReason: _contentReason,
-              onSummarize: _summarize,
+              onSummarize: () => _summarize(),
+              onForceSummarize: () => _summarize(force: true),
               onStarToggle: _toggleStar,
               theme: theme,
             )
@@ -165,7 +167,8 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
               summarizeError: _summarizeError,
               contentStatus: _contentStatus,
               contentReason: _contentReason,
-              onSummarize: _summarize,
+              onSummarize: () => _summarize(),
+              onForceSummarize: () => _summarize(force: true),
               onStarToggle: _toggleStar,
               theme: theme,
             ),
@@ -179,12 +182,13 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
 
 class _DesktopDetail extends StatelessWidget {
   final Article article;
-  final dynamic filter; // Type would be verbose; only passed through
+  final dynamic filter;
   final bool summarizing;
   final String? summarizeError;
   final _ContentStatus contentStatus;
   final String? contentReason;
   final VoidCallback onSummarize;
+  final VoidCallback onForceSummarize;
   final VoidCallback onStarToggle;
   final ThemeData theme;
 
@@ -196,6 +200,7 @@ class _DesktopDetail extends StatelessWidget {
     required this.contentStatus,
     required this.contentReason,
     required this.onSummarize,
+    required this.onForceSummarize,
     required this.onStarToggle,
     required this.theme,
   });
@@ -227,6 +232,7 @@ class _DesktopDetail extends StatelessWidget {
                 contentStatus: contentStatus,
                 contentReason: contentReason,
                 onSummarize: onSummarize,
+                onForceSummarize: onForceSummarize,
                 theme: theme,
               ),
             ),
@@ -249,6 +255,7 @@ class _MobileDetail extends StatelessWidget {
   final _ContentStatus contentStatus;
   final String? contentReason;
   final VoidCallback onSummarize;
+  final VoidCallback onForceSummarize;
   final VoidCallback onStarToggle;
   final ThemeData theme;
 
@@ -260,6 +267,7 @@ class _MobileDetail extends StatelessWidget {
     required this.contentStatus,
     required this.contentReason,
     required this.onSummarize,
+    required this.onForceSummarize,
     required this.onStarToggle,
     required this.theme,
   });
@@ -309,6 +317,7 @@ class _MobileDetail extends StatelessWidget {
               contentStatus: contentStatus,
               contentReason: contentReason,
               onSummarize: onSummarize,
+              onForceSummarize: onForceSummarize,
               theme: theme,
             ),
           ],
@@ -370,6 +379,7 @@ class _DetailBody extends ConsumerWidget {
   final _ContentStatus contentStatus;
   final String? contentReason;
   final VoidCallback onSummarize;
+  final VoidCallback onForceSummarize;
   final ThemeData theme;
 
   const _DetailBody({
@@ -380,6 +390,7 @@ class _DetailBody extends ConsumerWidget {
     required this.contentStatus,
     required this.contentReason,
     required this.onSummarize,
+    required this.onForceSummarize,
     required this.theme,
   });
 
@@ -509,7 +520,8 @@ class _DetailBody extends ConsumerWidget {
             currentArticle.summaryLlm!.isNotEmpty) ...[
           _SummaryBlock(
             text: currentArticle.summaryLlm!,
-            cached: true,
+            summarizing: summarizing,
+            onForceSummarize: onForceSummarize,
             theme: theme,
           ),
           const SizedBox(height: 20),
@@ -656,22 +668,44 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ============================================================
-// Summary block (BMO AI)
+// Summary block (BMO AI) — renders markdown, highlights "Contexto do BMO"
 // ============================================================
+
+/// Regex that matches the "Contexto do BMO:" section header.
+/// Handles bold markers, optional colon, and leading whitespace.
+final _contextoRegex = RegExp(
+  r'(?:\n|^)\*{0,2}Contexto do BMO:?\*{0,2}\s*',
+  multiLine: true,
+);
 
 class _SummaryBlock extends StatelessWidget {
   final String text;
-  final bool cached;
+  final bool summarizing;
+  final VoidCallback onForceSummarize;
   final ThemeData theme;
 
   const _SummaryBlock({
     required this.text,
-    required this.cached,
+    required this.summarizing,
+    required this.onForceSummarize,
     required this.theme,
   });
 
   @override
   Widget build(BuildContext context) {
+    final match = _contextoRegex.firstMatch(text);
+
+    final String factualPart;
+    final String? contextoPart;
+
+    if (match != null) {
+      factualPart = text.substring(0, match.start).trimRight();
+      contextoPart = text.substring(match.end).trim();
+    } else {
+      factualPart = text;
+      contextoPart = null;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -685,6 +719,7 @@ class _SummaryBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header row with regenerate button
           Row(
             children: [
               const Icon(Icons.auto_awesome,
@@ -697,38 +732,149 @@ class _SummaryBlock extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              if (cached) ...[
-                const SizedBox(width: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: BmoColors.accentYellow.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'cache',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: BmoColors.accentYellow,
-                      fontSize: 9,
+              const Spacer(),
+              if (!summarizing)
+                GestureDetector(
+                  onTap: onForceSummarize,
+                  child: Tooltip(
+                    message: 'Gerar novo resumo',
+                    child: Icon(
+                      Icons.refresh,
+                      size: 16,
+                      color: BmoColors.textMuted.withValues(alpha: 0.7),
                     ),
                   ),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            text,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: BmoColors.textPrimary,
-              height: 1.5,
+
+          // Factual part
+          if (factualPart.isNotEmpty)
+            MarkdownBody(
+              data: factualPart,
+              selectable: true,
+              styleSheet: _summaryMarkdownStyle(theme),
             ),
+
+          // Contexto do BMO block
+          if (contextoPart != null && contextoPart.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _BmoContextBlock(text: contextoPart, theme: theme),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Renders the "Contexto do BMO" section in a visually distinct block —
+/// a yellow-tinted container with a lightbulb icon to signal that this
+/// is the model's commentary/analysis, not factual reporting from the article.
+class _BmoContextBlock extends StatelessWidget {
+  final String text;
+  final ThemeData theme;
+
+  const _BmoContextBlock({required this.text, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: BmoColors.accentYellow.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(
+            color: BmoColors.accentYellow.withValues(alpha: 0.5),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.lightbulb_outline,
+                size: 15,
+                color: BmoColors.accentYellow.withValues(alpha: 0.9),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Contexto do BMO',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: BmoColors.accentYellow.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          MarkdownBody(
+            data: text,
+            selectable: true,
+            styleSheet: _contextoMarkdownStyle(theme),
           ),
         ],
       ),
     );
   }
+}
+
+MarkdownStyleSheet _summaryMarkdownStyle(ThemeData theme) {
+  final base = theme.textTheme.bodyMedium?.copyWith(
+    color: BmoColors.textPrimary,
+    height: 1.5,
+  );
+  return MarkdownStyleSheet(
+    p: base ?? const TextStyle(color: BmoColors.textPrimary, height: 1.5),
+    strong: (base ?? const TextStyle()).copyWith(fontWeight: FontWeight.w700),
+    listBullet: base,
+    h1: theme.textTheme.bodyLarge?.copyWith(
+      color: BmoColors.textPrimary,
+      fontWeight: FontWeight.w700,
+    ),
+    h2: theme.textTheme.bodyMedium?.copyWith(
+      color: BmoColors.textPrimary,
+      fontWeight: FontWeight.w700,
+    ),
+    h3: theme.textTheme.bodyMedium?.copyWith(
+      color: BmoColors.textPrimary,
+      fontWeight: FontWeight.w600,
+    ),
+  );
+}
+
+MarkdownStyleSheet _contextoMarkdownStyle(ThemeData theme) {
+  final base = theme.textTheme.bodySmall?.copyWith(
+    color: BmoColors.accentYellow.withValues(alpha: 0.9),
+    height: 1.5,
+    fontSize: 12,
+  );
+  return MarkdownStyleSheet(
+    p: base ?? const TextStyle(color: BmoColors.accentYellow, height: 1.5),
+    strong: (base ?? const TextStyle()).copyWith(fontWeight: FontWeight.w700),
+    listBullet: base,
+    h1: theme.textTheme.bodySmall?.copyWith(
+      color: BmoColors.accentYellow,
+      fontWeight: FontWeight.w700,
+      fontSize: 13,
+    ),
+    h2: theme.textTheme.bodySmall?.copyWith(
+      color: BmoColors.accentYellow,
+      fontWeight: FontWeight.w700,
+      fontSize: 12,
+    ),
+    h3: theme.textTheme.bodySmall?.copyWith(
+      color: BmoColors.accentYellow,
+      fontWeight: FontWeight.w600,
+      fontSize: 12,
+    ),
+  );
 }
 
 // ============================================================

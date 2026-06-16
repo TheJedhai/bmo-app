@@ -197,9 +197,11 @@ class RssClient {
     _ensureOk(response);
   }
 
-  Future<({String summary, bool cached})> summarizeArticle(int id) async {
+  Future<({String summary, bool cached})> summarizeArticle(int id, {bool force = false}) async {
+    final uri = Uri.parse('$_baseUrl/api/v1/articles/$id/summarize')
+        .replace(queryParameters: force ? {'force': 'true'} : null);
     final response = await _client.post(
-      Uri.parse('$_baseUrl/api/v1/articles/$id/summarize'),
+      uri,
       headers: {'Content-Type': 'application/json'},
     );
     _ensureOk(response);
