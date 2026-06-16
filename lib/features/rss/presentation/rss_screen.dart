@@ -6,6 +6,7 @@ import '../data/models/feed.dart';
 import '../data/rss_providers.dart';
 import 'selected_view_provider.dart';
 import 'widgets/article_list.dart';
+import 'widgets/feed_form_modal.dart';
 
 const _kMobileBreakpoint = 600.0;
 const _kSidebarWidth = 260.0;
@@ -61,6 +62,14 @@ class _DesktopLayout extends ConsumerWidget {
   }
 }
 
+void _openAddFeedDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black54,
+    builder: (_) => const FeedFormModal(),
+  );
+}
+
 // ============================================================
 // Mobile
 // ============================================================
@@ -112,6 +121,12 @@ class _MobileLayout extends ConsumerWidget {
           ),
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: BmoColors.accentGreen),
+            onPressed: () => _openAddFeedDialog(context),
+          ),
+        ],
       ),
       body: const ArticleList(),
     );
@@ -162,7 +177,7 @@ class RssSidebar extends ConsumerWidget {
   }
 }
 
-class _SidebarContent extends StatelessWidget {
+class _SidebarContent extends ConsumerWidget {
   final List<Feed> feeds;
   final RssView currentView;
   final ValueChanged<RssView> onSelect;
@@ -176,7 +191,7 @@ class _SidebarContent extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
@@ -209,7 +224,18 @@ class _SidebarContent extends StatelessWidget {
             height: 1,
           ),
         ),
-        _SectionHeader(label: 'FEEDS', theme: theme),
+        _SectionHeader(
+          label: 'FEEDS',
+          theme: theme,
+          trailing: GestureDetector(
+            onTap: () => _openFeedForm(context),
+            child: const Icon(
+              Icons.add_circle_outline,
+              size: 18,
+              color: BmoColors.accentGreen,
+            ),
+          ),
+        ),
         if (feeds.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -231,8 +257,26 @@ class _SidebarContent extends StatelessWidget {
               },
               onTap: () => onSelect(FeedView(feed.id)),
               theme: theme,
+              trailing: _FeedMenu(
+                feed: feed,
+                onEdited: () {
+                  // Re-select the feed view to refresh the article list
+                  if (currentView is FeedView &&
+                      (currentView as FeedView).feedId == feed.id) {
+                    onSelect(FeedView(feed.id));
+                  }
+                },
+              ),
             ),
       ],
+    );
+  }
+
+  void _openFeedForm(BuildContext context, {Feed? feed}) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => FeedFormModal(feed: feed),
     );
   }
 }
@@ -247,6 +291,7 @@ class _SidebarItem extends StatefulWidget {
   final bool selected;
   final VoidCallback onTap;
   final ThemeData theme;
+  final Widget? trailing;
 
   const _SidebarItem({
     required this.icon,
@@ -254,6 +299,7 @@ class _SidebarItem extends StatefulWidget {
     required this.selected,
     required this.onTap,
     required this.theme,
+    this.trailing,
   });
 
   @override
@@ -304,6 +350,7 @@ class _SidebarItemState extends State<_SidebarItem> {
                   ),
                 ),
               ),
+              if (widget.trailing != null) widget.trailing!,
             ],
           ),
         ),
@@ -319,22 +366,113 @@ class _SidebarItemState extends State<_SidebarItem> {
 class _SectionHeader extends StatelessWidget {
   final String label;
   final ThemeData theme;
+  final Widget? trailing;
 
-  const _SectionHeader({required this.label, required this.theme});
+  const _SectionHeader({
+    required this.label,
+    required this.theme,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: BmoColors.textMuted,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: BmoColors.textMuted,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          if (trailing != null) ...[
+            const Spacer(),
+            trailing!,
+          ],
+        ],
       ),
     );
+  }
+}
+
+// ============================================================
+// Feed popup menu (edit / delete)
+// ============================================================
+
+class _FeedMenu extends ConsumerWidget {
+  final Feed feed;
+  final VoidCallback onEdited;
+
+  const _FeedMenu({required this.feed, required this.onEdited});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 16, color: BmoColors.textMuted),
+      color: BmoColors.screenBgElevated,
+      onSelected: (value) {
+        switch (value) {
+          case 'edit':
+            showDialog(
+              context: context,
+              barrierColor: Colors.black54,
+              builder: (_) => FeedFormModal(feed: feed),
+            ).then((didSave) {
+              if (didSave == true) onEdited();
+            });
+          case 'delete':
+            _confirmDelete(context, ref);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(value: 'edit', child: Text('Editar')),
+        PopupMenuItem(value: 'delete', child: Text('Remover')),
+      ],
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text(
+          'Remover fonte?',
+          style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+        ),
+        content: Text(
+          "Remover '${feed.title}'? Os artigos dela serão apagados.",
+          style: const TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _doDelete(ref);
+            },
+            child: const Text(
+              'Remover',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doDelete(WidgetRef ref) async {
+    try {
+      await ref.read(feedsProvider.notifier).delete(feed.id);
+    } catch (e) {
+      // Error is surfaced via the provider's AsyncValue
+    }
   }
 }
 
