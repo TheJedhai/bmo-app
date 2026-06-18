@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../features/rss/data/rss_providers.dart';
 import '../navigation/app_tab.dart';
 import '../navigation/tab_provider.dart';
 import '../theme/bmo_theme.dart';
@@ -13,6 +14,11 @@ class BmoDock extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentTab = ref.watch(currentTabProvider);
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+
+    // Unread count for RSS badge — only watched once at the top so the
+    // whole dock rebuilds when it changes.  The badge is specific to the
+    // RSS tab today, but a per-tab Map in the future would slot in here.
+    final unreadCount = ref.watch(unreadCountProvider).valueOrNull ?? 0;
 
     return Container(
       height: isMobile ? 56 : 64,
@@ -34,11 +40,11 @@ class BmoDock extends ConsumerWidget {
                 vertical: isMobile ? 10 : 8,
               ),
               child: isMobile
-                  ? Icon(tab.icon, color: color, size: 24)
+                  ? _buildTabIcon(tab.icon, color, tab, unreadCount)
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(tab.icon, color: color, size: 24),
+                        _buildTabIcon(tab.icon, color, tab, unreadCount),
                         const SizedBox(height: 4),
                         Text(
                           tab.label,
@@ -55,5 +61,33 @@ class BmoDock extends ConsumerWidget {
         }).toList(),
       ),
     );
+  }
+
+  /// Builds the tab icon, optionally wrapped with an unread-count badge
+  /// for the RSS tab.  Extracted so mobile and desktop layouts share the
+  /// same badge logic without duplication.
+  Widget _buildTabIcon(
+    IconData icon,
+    Color color,
+    AppTab tab,
+    int unreadCount,
+  ) {
+    final iconWidget = Icon(icon, color: color, size: 24);
+
+    if (tab == AppTab.rss && unreadCount > 0) {
+      final label =
+          unreadCount > 99 ? '99+' : unreadCount.toString();
+      return Badge(
+        backgroundColor: BmoColors.accentYellow,
+        textColor: BmoColors.screenBg,
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 10, fontFamily: 'Inter'),
+        ),
+        child: iconWidget,
+      );
+    }
+
+    return iconWidget;
   }
 }

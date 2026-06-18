@@ -270,3 +270,13 @@ class Articles extends _$Articles {
     state = AsyncData(newList);
   }
 }
+
+// ============================================================
+// Unread count
+// ============================================================
+
+@riverpod
+Future<int> unreadCount(UnreadCountRef ref) async {
+  final repo = ref.read(rssRepositoryProvider);
+  return repo.countArticles(isRead: false);
+}

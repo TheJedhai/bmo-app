@@ -212,6 +212,20 @@ class RssClient {
     );
   }
 
+  Future<int> countArticles({bool? isRead, int? feedId}) async {
+    final queryParams = <String, String>{};
+    if (isRead != null) queryParams['is_read'] = isRead.toString();
+    if (feedId != null) queryParams['feed_id'] = feedId.toString();
+
+    final uri = Uri.parse('$_baseUrl/api/v1/articles/count')
+        .replace(queryParameters: queryParams.isEmpty ? null : queryParams);
+
+    final response = await _client.get(uri);
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['count'] as int? ?? 0;
+  }
+
   Future<({String? fullContent, bool available, bool cached, String? reason})>
       fetchArticleContent(int id) async {
     final response = await _client.post(

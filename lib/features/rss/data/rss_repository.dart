@@ -95,6 +95,9 @@ class RssRepository {
   Future<({String summary, bool cached})> summarizeArticle(int id, {bool force = false}) =>
       _client.summarizeArticle(id, force: force);
 
+  Future<int> countArticles({bool? isRead, int? feedId}) =>
+      _client.countArticles(isRead: isRead, feedId: feedId);
+
   Future<({String? fullContent, bool available, bool cached, String? reason})>
       fetchArticleContent(int id) => _client.fetchArticleContent(id);
 }

@@ -71,11 +71,15 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'article.updated':
     case 'articles.batch_updated':
       ref.invalidate(articlesProvider);
+      ref.invalidate(unreadCountProvider);
     case 'feed.created':
     case 'feed.updated':
+      ref.invalidate(feedsProvider);
+      ref.invalidate(articlesProvider);
     case 'feed.deleted':
       ref.invalidate(feedsProvider);
       ref.invalidate(articlesProvider);
+      ref.invalidate(unreadCountProvider);
 
     case 'connected':
       debugPrint('SSE connected');

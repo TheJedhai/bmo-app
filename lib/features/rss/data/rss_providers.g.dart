@@ -6,6 +6,23 @@ part of 'rss_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+String _$unreadCountHash() => r'e7d019a0fbc01d9180f49eae714f3280bed3957c';
+
+/// See also [unreadCount].
+@ProviderFor(unreadCount)
+final unreadCountProvider = AutoDisposeFutureProvider<int>.internal(
+  unreadCount,
+  name: r'unreadCountProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$unreadCountHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef UnreadCountRef = AutoDisposeFutureProviderRef<int>;
 String _$feedsHash() => r'232ca6a576d43671f99e8cc008aab02ca80e3c90';
 
 /// See also [Feeds].
