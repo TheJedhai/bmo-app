@@ -65,15 +65,16 @@ List<Widget> renderParagraphs(String text, TextStyle style) {
 }
 
 String _formatAbsolute(DateTime dt) {
+  final local = dt.toLocal();
   final now = DateTime.now();
-  final sameYear = dt.year == now.year;
-  final month = dt.month.toString().padLeft(2, '0');
-  final day = dt.day.toString().padLeft(2, '0');
-  final hour = dt.hour.toString().padLeft(2, '0');
-  final minute = dt.minute.toString().padLeft(2, '0');
+  final sameYear = local.year == now.year;
+  final month = local.month.toString().padLeft(2, '0');
+  final day = local.day.toString().padLeft(2, '0');
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
 
   if (sameYear) {
     return '$day/$month $hour:$minute';
   }
-  return '$day/$month/${dt.year.toString().substring(2)}';
+  return '$day/$month/${local.year.toString().substring(2)}';
 }

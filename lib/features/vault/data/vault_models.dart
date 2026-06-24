@@ -56,9 +56,14 @@ final class Vault {
 /// Parses a datetime from JSON — handles both ISO 8601 strings and Unix
 /// timestamps (seconds as int, multiplied by 1000 for ms).
 DateTime _parseDateTime(dynamic value) {
-  if (value is String) return DateTime.parse(value);
-  if (value is int) {
-    return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+  if (value is String && value.isNotEmpty) {
+    return DateTime.tryParse(value) ?? DateTime.now().toUtc();
+  }
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(
+      (value * 1000).toInt(),
+      isUtc: true,
+    );
   }
   return DateTime.now().toUtc();
 }
