@@ -1,11 +1,11 @@
 {
-    "name": "bmo_app",
-    "short_name": "bmo_app",
+    "name": "BMO",
+    "short_name": "BMO",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#ffffff",
-    "description": "A new Flutter project.",
+    "background_color": "#1E1F23",
+    "theme_color": "#1E1F23",
+    "description": "BMO — your friendly terminal companion",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
