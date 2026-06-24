@@ -57,6 +57,13 @@ class FoldersNotifier extends AsyncNotifier<List<Folder>> {
     ]);
     return updated;
   }
+
+  Future<void> remove(int id) async {
+    final repo = ref.read(missionsRepositoryProvider);
+    await repo.deleteFolder(id);
+    final current = state.valueOrNull ?? const <Folder>[];
+    state = AsyncData(current.where((f) => f.id != id).toList());
+  }
 }
 
 final foldersProvider =

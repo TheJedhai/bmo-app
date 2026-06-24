@@ -17,6 +17,8 @@ class MissionsRepository {
   Future<Folder> updateFolder(int id, {String? name, int? sortOrder}) =>
       _client.updateFolder(id, name: name, sortOrder: sortOrder);
 
+  Future<void> deleteFolder(int id) => _client.deleteFolder(id);
+
   Future<List<Task>> listTasks({
     String? status,
     int? folderId,

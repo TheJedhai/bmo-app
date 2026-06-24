@@ -74,6 +74,13 @@ class MissionsClient {
     return Folder.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  Future<void> deleteFolder(int id) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/api/v1/folders/$id'),
+    );
+    _ensureOk(response);
+  }
+
   // ============================================================
   // Tasks
   // ============================================================
