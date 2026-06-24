@@ -114,6 +114,7 @@ class _FolderListContent extends StatelessWidget {
             },
             onTap: () => onSelect(FolderView(folder.id)),
             theme: theme,
+            trailing: _FolderMenu(folder: folder),
           ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
@@ -134,6 +135,7 @@ class _FolderItem extends StatefulWidget {
   final bool selected;
   final VoidCallback onTap;
   final ThemeData theme;
+  final Widget? trailing;
 
   const _FolderItem({
     required this.icon,
@@ -141,6 +143,7 @@ class _FolderItem extends StatefulWidget {
     required this.selected,
     required this.onTap,
     required this.theme,
+    this.trailing,
   });
 
   @override
@@ -191,11 +194,90 @@ class _FolderItemState extends State<_FolderItem> {
                   ),
                 ),
               ),
+              if (widget.trailing != null) widget.trailing!,
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _FolderMenu extends ConsumerWidget {
+  final Folder folder;
+
+  const _FolderMenu({required this.folder});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 16, color: BmoColors.textMuted),
+      color: BmoColors.screenBgElevated,
+      onSelected: (value) {
+        switch (value) {
+          case 'rename':
+            showDialog(
+              context: context,
+              barrierColor: Colors.black54,
+              builder: (_) => FolderFormModal(folder: folder),
+            );
+          case 'delete':
+            _confirmDelete(context, ref);
+        }
+      },
+      itemBuilder: (_) {
+        final items = <PopupMenuEntry<String>>[
+          const PopupMenuItem(value: 'rename', child: Text('Renomear')),
+        ];
+        if (!folder.isDefault) {
+          items.add(
+            const PopupMenuItem(value: 'delete', child: Text('Excluir')),
+          );
+        }
+        return items;
+      },
+    );
+  }
+
+  void _confirmDelete(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text(
+          'Excluir pasta?',
+          style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+        ),
+        content: Text(
+          "Excluir '${folder.name}'? As tarefas dentro dela também serão removidas.",
+          style: const TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _doDelete(ref);
+            },
+            child: const Text(
+              'Excluir',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doDelete(WidgetRef ref) async {
+    try {
+      await ref.read(foldersProvider.notifier).remove(folder.id);
+    } catch (e) {
+      // Error is surfaced via the provider's AsyncValue
+    }
   }
 }
 
