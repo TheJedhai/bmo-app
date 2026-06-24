@@ -5,6 +5,7 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../data/models/folder.dart';
 import '../../data/missions_providers.dart';
 import '../selected_view_provider.dart';
+import 'folder_form_modal.dart';
 
 class FoldersSidebar extends ConsumerWidget {
   final VoidCallback? onItemTap;
@@ -37,8 +38,10 @@ class FoldersSidebar extends ConsumerWidget {
                   onItemTap?.call();
                 },
                 onNewFolder: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('em breve')),
+                  showDialog(
+                    context: context,
+                    barrierColor: Colors.black54,
+                    builder: (_) => const FolderFormModal(),
                   );
                 },
                 theme: theme,
