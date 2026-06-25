@@ -45,12 +45,24 @@ class ArticleList extends ConsumerWidget {
           }
         }
 
-        return _ArticleGrid(
-          articles: articles,
-          feedMap: feedMap,
-          onTap: (a) => _openDetail(context, ref, a),
-          onStarToggle: (a) =>
-              ref.read(articlesProvider(filter).notifier).toggleStar(a.id),
+        return Column(
+          children: [
+            _ArticleListHeader(
+              view: view,
+              articleIds: articles.map((a) => a.id).toList(),
+            ),
+            Expanded(
+              child: _ArticleGrid(
+                articles: articles,
+                feedMap: feedMap,
+                onTap: (a) => _openDetail(context, ref, a),
+                onStarToggle: (a) =>
+                    ref.read(articlesProvider(filter).notifier).toggleStar(a.id),
+                onReadToggle: (a) =>
+                    ref.read(articlesProvider(filter).notifier).markRead(a.id, read: !a.isRead),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -116,12 +128,14 @@ class _ArticleGrid extends StatelessWidget {
   final Map<int, String> feedMap;
   final void Function(Article) onTap;
   final void Function(Article) onStarToggle;
+  final void Function(Article) onReadToggle;
 
   const _ArticleGrid({
     required this.articles,
     required this.feedMap,
     required this.onTap,
     required this.onStarToggle,
+    required this.onReadToggle,
   });
 
   @override
@@ -169,6 +183,7 @@ class _ArticleGrid extends StatelessWidget {
               feedName: feedName,
               onTap: () => onTap(article),
               onStarToggle: () => onStarToggle(article),
+              onReadToggle: () => onReadToggle(article),
             );
           },
         );
@@ -186,12 +201,14 @@ class _ArticleCard extends ConsumerWidget {
   final String feedName;
   final VoidCallback onTap;
   final VoidCallback onStarToggle;
+  final VoidCallback onReadToggle;
 
   const _ArticleCard({
     required this.article,
     required this.feedName,
     required this.onTap,
     required this.onStarToggle,
+    required this.onReadToggle,
   });
 
   @override
@@ -241,11 +258,15 @@ class _ArticleCard extends ConsumerWidget {
                       imageUrl: article.imageUrl!,
                       isStarred: isStarred,
                       onStarToggle: onStarToggle,
+                      isRead: isRead,
+                      onReadToggle: onReadToggle,
                     )
                   : _CardImagePlaceholder(
                       feedName: feedName,
                       isStarred: isStarred,
                       onStarToggle: onStarToggle,
+                      isRead: isRead,
+                      onReadToggle: onReadToggle,
                     ),
             ),
             // ---- Content ----
@@ -326,11 +347,15 @@ class _CardImage extends StatelessWidget {
   final String imageUrl;
   final bool isStarred;
   final VoidCallback onStarToggle;
+  final bool isRead;
+  final VoidCallback onReadToggle;
 
   const _CardImage({
     required this.imageUrl,
     required this.isStarred,
     required this.onStarToggle,
+    required this.isRead,
+    required this.onReadToggle,
   });
 
   @override
@@ -359,6 +384,15 @@ class _CardImage extends StatelessWidget {
           },
           errorBuilder: (context, error, stackTrace) =>
               _buildPlaceholder(context),
+        ),
+        // Read badge overlay (top-left)
+        Positioned(
+          top: 6,
+          left: 6,
+          child: _ReadBadge(
+            isRead: isRead,
+            onTap: onReadToggle,
+          ),
         ),
         // Star badge overlay
         Positioned(
@@ -397,6 +431,14 @@ class _CardImage extends StatelessWidget {
           ),
           Positioned(
             top: 6,
+            left: 6,
+            child: _ReadBadge(
+              isRead: isRead,
+              onTap: onReadToggle,
+            ),
+          ),
+          Positioned(
+            top: 6,
             right: 6,
             child: _StarBadge(
               isStarred: isStarred,
@@ -417,11 +459,15 @@ class _CardImagePlaceholder extends StatelessWidget {
   final String feedName;
   final bool isStarred;
   final VoidCallback onStarToggle;
+  final bool isRead;
+  final VoidCallback onReadToggle;
 
   const _CardImagePlaceholder({
     required this.feedName,
     required this.isStarred,
     required this.onStarToggle,
+    required this.isRead,
+    required this.onReadToggle,
   });
 
   @override
@@ -462,6 +508,15 @@ class _CardImagePlaceholder extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                     fontSize: 10,
                   ),
+            ),
+          ),
+          // Read badge top-left
+          Positioned(
+            top: 6,
+            left: 6,
+            child: _ReadBadge(
+              isRead: isRead,
+              onTap: onReadToggle,
             ),
           ),
           // Star badge top-right
@@ -509,6 +564,142 @@ class _StarBadge extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ============================================================
+// Read badge
+// ============================================================
+
+class _ReadBadge extends StatelessWidget {
+  final bool isRead;
+  final VoidCallback onTap;
+
+  const _ReadBadge({required this.isRead, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: BmoColors.screenBg.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(
+          isRead ? Icons.markunread : Icons.drafts,
+          size: 16,
+          color: isRead
+              ? BmoColors.textMuted.withValues(alpha: 0.6)
+              : BmoColors.accentGreen,
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Article list header (overflow menu)
+// ============================================================
+
+class _ArticleListHeader extends ConsumerWidget {
+  final RssView view;
+  final List<int> articleIds;
+
+  const _ArticleListHeader({
+    required this.view,
+    required this.articleIds,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ArticleList._viewToFilter(view);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          PopupMenuButton<String>(
+            icon: const Icon(
+              Icons.more_vert,
+              size: 16,
+              color: BmoColors.textMuted,
+            ),
+            color: BmoColors.screenBgElevated,
+            onSelected: (value) {
+              switch (value) {
+                case 'mark_all_read':
+                  _confirmMarkAllRead(context, ref, filter);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'mark_all_read',
+                child: Text('Marcar todas como lidas'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmMarkAllRead(
+    BuildContext context,
+    WidgetRef ref,
+    ArticlesFilter filter,
+  ) {
+    final isFeedView = view is FeedView;
+    final message = isFeedView
+        ? 'Marcar todos os artigos deste feed como lidos?'
+        : 'Marcar todos os artigos visíveis como lidos?';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text(
+          'Marcar todas como lidas?',
+          style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _doMarkAllRead(ref, filter);
+            },
+            child: const Text(
+              'Marcar todas',
+              style: TextStyle(color: BmoColors.accentGreen),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doMarkAllRead(
+    WidgetRef ref,
+    ArticlesFilter filter,
+  ) async {
+    final notifier = ref.read(articlesProvider(filter).notifier);
+    final feedView = view as FeedView?;
+    if (feedView != null) {
+      await notifier.markMultipleRead(feedId: feedView.feedId);
+    } else {
+      await notifier.markMultipleRead(articleIds: articleIds);
+    }
   }
 }
 
