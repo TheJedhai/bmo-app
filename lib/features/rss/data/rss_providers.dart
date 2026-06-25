@@ -159,13 +159,19 @@ class Articles extends _$Articles {
   }
 
   /// Mark multiple articles as read (batch).
+  ///
+  /// When [feedId] is provided, it takes precedence and marks ALL articles
+  /// in the feed on the server (including those not loaded locally).
+  /// When [articleIds] is provided instead, only those articles are marked.
+  /// [feedId] defaults to [filter.feedId] when neither is explicitly set.
   Future<void> markMultipleRead({
     List<int>? articleIds,
+    int? feedId,
   }) async {
     final repo = ref.read(rssRepositoryProvider);
     await repo.markArticlesRead(
       articleIds: articleIds,
-      feedId: filter.feedId,
+      feedId: feedId ?? filter.feedId,
     );
     await refresh();
   }
