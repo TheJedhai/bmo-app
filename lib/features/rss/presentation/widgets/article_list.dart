@@ -694,11 +694,11 @@ class _ArticleListHeader extends ConsumerWidget {
     ArticlesFilter filter,
   ) async {
     final notifier = ref.read(articlesProvider(filter).notifier);
-    final feedView = view as FeedView?;
-    if (feedView != null) {
-      await notifier.markMultipleRead(feedId: feedView.feedId);
-    } else {
-      await notifier.markMultipleRead(articleIds: articleIds);
+    switch (view) {
+      case FeedView(:final feedId):
+        await notifier.markMultipleRead(feedId: feedId);
+      default:
+        await notifier.markMultipleRead(articleIds: articleIds);
     }
   }
 }
