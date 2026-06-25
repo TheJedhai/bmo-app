@@ -60,6 +60,8 @@ class ArticleList extends ConsumerWidget {
                     ref.read(articlesProvider(filter).notifier).toggleStar(a.id),
                 onReadToggle: (a) =>
                     ref.read(articlesProvider(filter).notifier).markRead(a.id, read: !a.isRead),
+                onLoadMore: () => articlesNotifier.loadMore(),
+                hasMore: articlesNotifier.hasMore,
               ),
             ),
           ],
@@ -123,12 +125,14 @@ class ArticleList extends ConsumerWidget {
 // Responsive grid
 // ============================================================
 
-class _ArticleGrid extends StatelessWidget {
+class _ArticleGrid extends StatefulWidget {
   final List<Article> articles;
   final Map<int, String> feedMap;
   final void Function(Article) onTap;
   final void Function(Article) onStarToggle;
   final void Function(Article) onReadToggle;
+  final Future<void> Function() onLoadMore;
+  final bool hasMore;
 
   const _ArticleGrid({
     required this.articles,
@@ -136,7 +140,48 @@ class _ArticleGrid extends StatelessWidget {
     required this.onTap,
     required this.onStarToggle,
     required this.onReadToggle,
+    required this.onLoadMore,
+    required this.hasMore,
   });
+
+  @override
+  State<_ArticleGrid> createState() => _ArticleGridState();
+}
+
+class _ArticleGridState extends State<_ArticleGrid> {
+  late final ScrollController _scrollController;
+  bool _loadingMore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_loadingMore || !widget.hasMore) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent * 0.8) {
+      _loadMore();
+    }
+  }
+
+  Future<void> _loadMore() async {
+    setState(() => _loadingMore = true);
+    try {
+      await widget.onLoadMore();
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,27 +210,62 @@ class _ArticleGrid extends StatelessWidget {
         const targetCardHeight = 300.0;
         final childAspectRatio = cardWidth / targetCardHeight;
 
-        return GridView.builder(
-          padding: const EdgeInsets.fromLTRB(8, 8, 8, 80),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: crossAxisSpacing,
-            crossAxisSpacing: crossAxisSpacing,
-            childAspectRatio: childAspectRatio,
-          ),
-          itemCount: articles.length,
-          itemBuilder: (context, index) {
-            final article = articles[index];
-            final feedName =
-                feedMap[article.feedId] ?? 'Feed #${article.feedId}';
-            return _ArticleCard(
-              article: article,
-              feedName: feedName,
-              onTap: () => onTap(article),
-              onStarToggle: () => onStarToggle(article),
-              onReadToggle: () => onReadToggle(article),
-            );
-          },
+        return Column(
+          children: [
+            Expanded(
+              child: GridView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: crossAxisSpacing,
+                  crossAxisSpacing: crossAxisSpacing,
+                  childAspectRatio: childAspectRatio,
+                ),
+                itemCount: widget.articles.length,
+                itemBuilder: (context, index) {
+                  final article = widget.articles[index];
+                  final feedName =
+                      widget.feedMap[article.feedId] ?? 'Feed #${article.feedId}';
+                  return _ArticleCard(
+                    article: article,
+                    feedName: feedName,
+                    onTap: () => widget.onTap(article),
+                    onStarToggle: () => widget.onStarToggle(article),
+                    onReadToggle: () => widget.onReadToggle(article),
+                  );
+                },
+              ),
+            ),
+            // Loading / end-of-list footer
+            if (_loadingMore)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(0, 0, 0, 12),
+                child: Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                ),
+              )
+            else if (!widget.hasMore && widget.articles.isNotEmpty)
+              const Padding(
+                padding: EdgeInsets.fromLTRB(0, 0, 0, 16),
+                child: Center(
+                  child: Text(
+                    'fim das notícias',
+                    style: TextStyle(
+                      color: BmoColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
