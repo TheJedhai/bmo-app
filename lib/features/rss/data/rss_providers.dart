@@ -120,28 +120,83 @@ typedef ArticlesFilter = ({
 
 @riverpod
 class Articles extends _$Articles {
+  static const _kPageSize = 30;
+
+  int _currentOffset = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  Object? _loadMoreError;
+
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _hasMore;
+  Object? get loadMoreError => _loadMoreError;
+
   @override
   Future<List<Article>> build(ArticlesFilter filter) async {
+    _currentOffset = 0;
+    _hasMore = true;
+    _isLoadingMore = false;
+    _loadMoreError = null;
     final repo = ref.read(rssRepositoryProvider);
-    return repo.listArticles(
+    final page = await repo.listArticles(
       feedId: filter.feedId,
       isRead: filter.isRead,
       isStarred: filter.isStarred,
       titleContains: filter.titleContains,
-      limit: 50,
+      limit: _kPageSize,
     );
+    _currentOffset = page.length;
+    _hasMore = page.length == _kPageSize;
+    return page;
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
+    _currentOffset = 0;
+    _hasMore = true;
+    _isLoadingMore = false;
+    _loadMoreError = null;
     final repo = ref.read(rssRepositoryProvider);
     state = await AsyncValue.guard(() => repo.listArticles(
           feedId: filter.feedId,
           isRead: filter.isRead,
           isStarred: filter.isStarred,
           titleContains: filter.titleContains,
-          limit: 50,
+          limit: _kPageSize,
         ));
+    final page = state.valueOrNull ?? const <Article>[];
+    _currentOffset = page.length;
+    _hasMore = page.length == _kPageSize;
+  }
+
+  /// Load the next page of articles and append to the current list.
+  ///
+  /// Guards against concurrent calls via [_isLoadingMore] and stops when
+  /// [_hasMore] is false. Errors are captured in [_loadMoreError] without
+  /// replacing the visible list with an AsyncError.
+  Future<void> loadMore() async {
+    if (_isLoadingMore || !_hasMore) return;
+    _isLoadingMore = true;
+    _loadMoreError = null;
+    try {
+      final repo = ref.read(rssRepositoryProvider);
+      final page = await repo.listArticles(
+        feedId: filter.feedId,
+        isRead: filter.isRead,
+        isStarred: filter.isStarred,
+        titleContains: filter.titleContains,
+        limit: _kPageSize,
+        offset: _currentOffset,
+      );
+      final current = state.valueOrNull ?? const <Article>[];
+      _currentOffset += page.length;
+      _hasMore = page.length == _kPageSize;
+      state = AsyncData([...current, ...page]);
+    } catch (e) {
+      _loadMoreError = e;
+    } finally {
+      _isLoadingMore = false;
+    }
   }
 
   /// Mark a single article as read (or unread).
