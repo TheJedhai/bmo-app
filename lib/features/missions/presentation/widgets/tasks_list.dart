@@ -638,6 +638,19 @@ class _TaskItem extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // Drag handle (FolderView only, root tasks only)
+          if (isFolderView && !isSubtask)
+            ReorderableDragStartListener(
+              index: dragIndex,
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  Icons.drag_handle,
+                  size: 18,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ),
           // Checkbox
           SizedBox(
             width: 30,
