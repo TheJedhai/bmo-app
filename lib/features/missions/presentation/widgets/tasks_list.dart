@@ -354,7 +354,8 @@ class _TasksListState extends ConsumerState<TasksList> {
 
     final reordered = List<Task>.from(groupTasks);
     final item = reordered.removeAt(oldIndex);
-    reordered.insert(newIndex, item);
+    final adjustedIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    reordered.insert(adjustedIndex, item);
 
     final orderedIds = reordered.map((t) => t.id).toList();
 
