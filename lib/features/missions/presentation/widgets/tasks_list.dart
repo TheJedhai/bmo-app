@@ -119,12 +119,14 @@ class _TasksListState extends ConsumerState<TasksList> {
                     groups: visibleGroups,
                     theme: theme,
                     expandedSubtasks: _expandedSubtasks,
+                    isFolderView: currentView is FolderView,
                     onTaskTap: _openEditModal,
                     onTaskComplete: _completeTask,
                     onTaskEdit: _openEditModal,
                     onTaskMove: _moveTask,
                     onTaskDelete: _deleteTask,
                     onToggleSubtasks: _toggleSubtasks,
+                    onGroupReorder: _onGroupReorder,
                   );
                 },
               ),
@@ -306,6 +308,66 @@ class _TasksListState extends ConsumerState<TasksList> {
       _expandedSubtasks[taskId] = !(_expandedSubtasks[taskId] ?? false);
     });
   }
+
+  Future<void> _onGroupReorder(
+    _DueGroup group,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    final folderId = _folderIdFromView;
+    final filter = (
+      status: _showCompleted ? null : 'pending',
+      folderId: folderId,
+      parentId: 0,
+      includeSubtasks: true,
+    );
+
+    final tasksAsync = ref.read(tasksProvider(filter));
+    final tasks = tasksAsync.valueOrNull;
+    if (tasks == null) return;
+
+    var displayTasks = _showCompleted
+        ? tasks.where((t) => t.status != TaskStatus.cancelled).toList()
+        : tasks;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final currentView = ref.read(currentViewProvider);
+    displayTasks = switch (currentView) {
+      TodayTasks() => displayTasks
+          .where((t) {
+            if (t.dueDate == null) return false;
+            final dueDay = DateTime(
+              t.dueDate!.year,
+              t.dueDate!.month,
+              t.dueDate!.day,
+            );
+            return !dueDay.isAfter(today);
+          })
+          .toList(),
+      _ => displayTasks,
+    };
+
+    final groups = _groupAndSort(displayTasks);
+    final groupTasks = groups[group]!;
+
+    final reordered = List<Task>.from(groupTasks);
+    final item = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, item);
+
+    final orderedIds = reordered.map((t) => t.id).toList();
+
+    final notifier = ref.read(tasksProvider(filter).notifier);
+    try {
+      await notifier.reorder(orderedIds);
+    } on MissionsApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
+  }
 }
 
 // ============================================================
@@ -361,28 +423,38 @@ class _GroupedTaskList extends StatelessWidget {
   final Map<_DueGroup, List<Task>> groups;
   final ThemeData theme;
   final Map<int, bool> expandedSubtasks;
+  final bool isFolderView;
   final _TaskAction onTaskTap;
   final _TaskAction onTaskComplete;
   final _TaskAction onTaskEdit;
   final _TaskAction onTaskMove;
   final _TaskAction onTaskDelete;
   final _TaskToggleExpand onToggleSubtasks;
+  final Future<void> Function(_DueGroup group, int oldIndex, int newIndex)?
+      onGroupReorder;
 
   const _GroupedTaskList({
     required this.groups,
     required this.theme,
     required this.expandedSubtasks,
+    this.isFolderView = false,
     required this.onTaskTap,
     required this.onTaskComplete,
     required this.onTaskEdit,
     required this.onTaskMove,
     required this.onTaskDelete,
     required this.onToggleSubtasks,
+    this.onGroupReorder,
   });
 
   @override
   Widget build(BuildContext context) {
     final entries = groups.entries.where((e) => e.value.isNotEmpty).toList();
+
+    if (isFolderView) {
+      return _buildReorderableGroups(entries);
+    }
+
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 80),
       itemCount: entries.fold<int>(
@@ -399,43 +471,91 @@ class _GroupedTaskList extends StatelessWidget {
           final taskIndex = index - cursor;
           if (taskIndex < entry.value.length) {
             final task = entry.value[taskIndex];
-            final isExpanded = expandedSubtasks[task.id] ?? false;
-            final hasSubtasks =
-                task.subtasks != null && task.subtasks!.isNotEmpty;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TaskItem(
-                  task: task,
-                  theme: theme,
-                  onTap: () => onTaskTap(task),
-                  onComplete: () => onTaskComplete(task),
-                  onEdit: () => onTaskEdit(task),
-                  onMove: () => onTaskMove(task),
-                  onDelete: () => onTaskDelete(task),
-                  hasSubtasks: hasSubtasks,
-                  isExpanded: isExpanded,
-                  onToggleExpand: () => onToggleSubtasks(task.id),
-                ),
-                if (hasSubtasks && isExpanded)
-                  ...task.subtasks!.map((sub) => _TaskItem(
-                        task: sub,
-                        theme: theme,
-                        isSubtask: true,
-                        onTap: () => onTaskTap(sub),
-                        onComplete: () => onTaskComplete(sub),
-                        onEdit: () => onTaskEdit(sub),
-                        onDelete: () => onTaskDelete(sub),
-                        hasSubtasks: false,
-                        isExpanded: false,
-                      )),
-              ],
-            );
+            return _buildTaskBlock(task);
           }
           cursor += entry.value.length;
         }
         return const SizedBox.shrink();
       },
+    );
+  }
+
+  Widget _buildReorderableGroups(
+    List<MapEntry<_DueGroup, List<Task>>> entries,
+  ) {
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 80),
+      children: [
+        for (final entry in entries) ...[
+          _GroupHeader(group: entry.key, theme: theme),
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, child) => Material(
+                  color: Colors.transparent,
+                  elevation: 4,
+                  child: child,
+                ),
+                child: child,
+              );
+            },
+            onReorder: (oldIndex, newIndex) =>
+                onGroupReorder?.call(entry.key, oldIndex, newIndex),
+            children: [
+              for (var i = 0; i < entry.value.length; i++)
+                _buildTaskBlock(
+                  entry.value[i],
+                  dragIndex: i,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTaskBlock(
+    Task task, {
+    int dragIndex = 0,
+  }) {
+    final isExpanded = expandedSubtasks[task.id] ?? false;
+    final hasSubtasks = task.subtasks != null && task.subtasks!.isNotEmpty;
+    return Column(
+      key: ValueKey(task.id),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TaskItem(
+          task: task,
+          theme: theme,
+          isFolderView: isFolderView,
+          dragIndex: dragIndex,
+          onTap: () => onTaskTap(task),
+          onComplete: () => onTaskComplete(task),
+          onEdit: () => onTaskEdit(task),
+          onMove: () => onTaskMove(task),
+          onDelete: () => onTaskDelete(task),
+          hasSubtasks: hasSubtasks,
+          isExpanded: isExpanded,
+          onToggleExpand: () => onToggleSubtasks(task.id),
+        ),
+        if (hasSubtasks && isExpanded)
+          ...task.subtasks!.map((sub) => _TaskItem(
+                task: sub,
+                theme: theme,
+                isSubtask: true,
+                onTap: () => onTaskTap(sub),
+                onComplete: () => onTaskComplete(sub),
+                onEdit: () => onTaskEdit(sub),
+                onDelete: () => onTaskDelete(sub),
+                hasSubtasks: false,
+                isExpanded: false,
+              )),
+      ],
     );
   }
 }
@@ -479,6 +599,8 @@ class _TaskItem extends StatelessWidget {
   final bool isSubtask;
   final bool hasSubtasks;
   final bool isExpanded;
+  final bool isFolderView;
+  final int dragIndex;
   final VoidCallback? onToggleExpand;
   final VoidCallback? onTap;
   final VoidCallback? onComplete;
@@ -492,6 +614,8 @@ class _TaskItem extends StatelessWidget {
     this.isSubtask = false,
     this.hasSubtasks = false,
     this.isExpanded = false,
+    this.isFolderView = false,
+    this.dragIndex = 0,
     this.onToggleExpand,
     this.onTap,
     this.onComplete,
