@@ -776,9 +776,6 @@ _DueGroup _dueGroupFor(DateTime? dueDate, DateTime todayDate) {
 }
 
 int _taskSort(Task a, Task b) {
-  // priority desc
-  final p = b.priority.compareTo(a.priority);
-  if (p != 0) return p;
   // sortOrder asc
   final s = a.sortOrder.compareTo(b.sortOrder);
   if (s != 0) return s;
