@@ -5,26 +5,13 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../providers/devices_providers.dart';
-import '../providers/ui_providers.dart';
-import 'floorplan_view.dart';
 
 class HomeDevicesScreen extends ConsumerWidget {
   const HomeDevicesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final viewMode = ref.watch(viewModeProvider);
-
-    return Column(
-      children: [
-        _Header(),
-        Expanded(
-          child: viewMode == HomeViewMode.planta
-              ? const FloorplanView()
-              : _DeviceList(),
-        ),
-      ],
-    );
+    return const _DeviceList();
   }
 }
 
@@ -57,97 +44,6 @@ class _DeviceList extends ConsumerWidget {
           },
         );
       },
-    );
-  }
-}
-
-class _Header extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final viewMode = ref.watch(viewModeProvider);
-    final editMode = ref.watch(editModeProvider);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 16, 12),
-      child: Row(
-        children: [
-          Text(
-            'Casa',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const Spacer(),
-          if (viewMode == HomeViewMode.planta)
-            IconButton(
-              onPressed: () =>
-                  ref.read(editModeProvider.notifier).update((e) => !e),
-              icon: Icon(
-                editMode ? Icons.edit : Icons.edit_outlined,
-                size: 20,
-              ),
-              color: editMode ? BmoColors.accentGreen : BmoColors.textMuted,
-              tooltip: editMode ? 'Sair da edição' : 'Editar posições',
-            ),
-          _ViewToggle(
-            label: 'Lista',
-            icon: Icons.view_list,
-            isActive: viewMode == HomeViewMode.lista,
-            onTap: () {
-              ref.read(viewModeProvider.notifier).state = HomeViewMode.lista;
-              ref.read(editModeProvider.notifier).state = false;
-            },
-          ),
-          const SizedBox(width: 8),
-          _ViewToggle(
-            label: 'Planta',
-            icon: Icons.weekend_outlined,
-            isActive: viewMode == HomeViewMode.planta,
-            onTap: () {
-              ref.read(viewModeProvider.notifier).state = HomeViewMode.planta;
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ViewToggle extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback? onTap;
-
-  const _ViewToggle({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isActive ? BmoColors.accentGreen : BmoColors.textMuted;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
