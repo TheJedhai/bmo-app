@@ -258,6 +258,15 @@ class MissionsClient {
     );
   }
 
+  Future<void> reorderTasks(List<int> taskIds) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/tasks/reorder'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'task_ids': taskIds}),
+    );
+    _ensureOk(response);
+  }
+
   // ============================================================
   // Helpers
   // ============================================================

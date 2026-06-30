@@ -111,4 +111,7 @@ class MissionsRepository {
 
   Future<({int deletedId, int cascadedSubtasks})> deleteTask(int id) =>
       _client.deleteTask(id);
+
+  Future<void> reorderTasks(List<int> taskIds) =>
+      _client.reorderTasks(taskIds);
 }

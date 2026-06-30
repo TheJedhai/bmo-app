@@ -213,6 +213,14 @@ class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
     return result;
   }
 
+  /// Sends the new task order to the backend.
+  /// No optimistic mutation — the SSE handler invalidates and refetches
+  /// so the list stays consistent with the server state.
+  Future<void> reorder(List<int> taskIds) async {
+    final repo = ref.read(missionsRepositoryProvider);
+    await repo.reorderTasks(taskIds);
+  }
+
   bool _matchesFilter(Task task) {
     if (arg.status != null && arg.status != task.status.name) return false;
     if (arg.folderId != null && arg.folderId != task.folderId) return false;
