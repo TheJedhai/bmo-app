@@ -49,18 +49,21 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
   if (type == null) return;
 
   switch (type) {
+    // ---- Tasks ----
     case 'task.created':
     case 'task.updated':
     case 'task.deleted':
     case 'task.completed':
-      ref.invalidate(tasksProvider);
+      _invalidateAllFamilyInstances(ref, tasksProvider);
     case 'folder.created':
     case 'folder.updated':
     case 'folder.deleted':
       ref.invalidate(foldersProvider);
-      ref.invalidate(tasksProvider);
+      _invalidateAllFamilyInstances(ref, tasksProvider);
     case 'tasks.batch_updated':
-      ref.invalidate(tasksProvider);
+      _invalidateAllFamilyInstances(ref, tasksProvider);
+
+    // ---- Memories ----
     case 'memory.created':
     case 'memory.updated':
     case 'memory.deleted':
@@ -70,18 +73,35 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'article.created':
     case 'article.updated':
     case 'articles.batch_updated':
-      ref.invalidate(articlesProvider);
+      _invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
     case 'feed.created':
     case 'feed.updated':
       ref.invalidate(feedsProvider);
-      ref.invalidate(articlesProvider);
+      _invalidateAllFamilyInstances(ref, articlesProvider);
     case 'feed.deleted':
       ref.invalidate(feedsProvider);
-      ref.invalidate(articlesProvider);
+      _invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
 
     case 'connected':
       debugPrint('SSE connected');
+  }
+}
+
+/// Invalida todas as instâncias ativas de um provider `.family`.
+///
+/// Diferente de [Ref.invalidate] chamado diretamente na família — que pode não
+/// forçar o rebuild de todas as instâncias vivas, especialmente com
+/// `keepAlive: true` em [IndexedStack].
+///
+/// Percorre [ProviderContainer.getAllProviderElements] e invalida cada
+/// instância cujo `origin.from` seja a família recebida, garantindo refetch
+/// do backend em todos os widgets que a consomem.
+void _invalidateAllFamilyInstances(Ref ref, Object family) {
+  for (final element in ref.container.getAllProviderElements()) {
+    if (element.origin.from == family) {
+      ref.invalidate(element.origin);
+    }
   }
 }
