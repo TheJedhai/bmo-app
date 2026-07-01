@@ -49,7 +49,6 @@ class ArticleList extends ConsumerWidget {
           children: [
             _ArticleListHeader(
               view: view,
-              articleIds: articles.map((a) => a.id).toList(),
             ),
             Expanded(
               child: _ArticleGrid(
@@ -686,11 +685,9 @@ class _ReadBadge extends StatelessWidget {
 
 class _ArticleListHeader extends ConsumerWidget {
   final RssView view;
-  final List<int> articleIds;
 
   const _ArticleListHeader({
     required this.view,
-    required this.articleIds,
   });
 
   @override
@@ -777,8 +774,15 @@ class _ArticleListHeader extends ConsumerWidget {
     switch (view) {
       case FeedView(:final feedId):
         await notifier.markMultipleRead(feedId: feedId);
-      default:
-        await notifier.markMultipleRead(articleIds: articleIds);
+      case AllArticles():
+        // "Mark all as read" in the All view means marking every
+        // unread article as read — pass isRead:false explicitly
+        // so the backend does a bulk UPDATE on matching rows.
+        await notifier.markMultipleRead(isRead: false);
+      case UnreadArticles():
+        await notifier.markMultipleRead(isRead: false);
+      case StarredArticles():
+        await notifier.markMultipleRead(isStarred: true);
     }
   }
 }
