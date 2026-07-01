@@ -576,22 +576,15 @@ class _DetailBody extends ConsumerWidget {
           const SizedBox(height: 16),
         ],
 
-        // Full content (available)
+        // Full content (available) — rendered as markdown
         if (contentStatus == _ContentStatus.available &&
             currentArticle.fullContent != null &&
-            currentArticle.fullContent!.isNotEmpty) ...[
-          ...renderParagraphs(
-            currentArticle.fullContent!,
-            theme.textTheme.bodyMedium?.copyWith(
-                  color: BmoColors.textPrimary,
-                  height: 1.6,
-                ) ??
-                TextStyle(
-                  color: BmoColors.textPrimary,
-                  height: 1.6,
-                ),
+            currentArticle.fullContent!.isNotEmpty)
+          MarkdownBody(
+            data: currentArticle.fullContent!,
+            selectable: true,
+            styleSheet: _articleBodyMarkdownStyle(theme),
           ),
-        ],
 
         // Fallback content (unavailable or idle with body text)
         if ((contentStatus == _ContentStatus.unavailable ||
@@ -1132,6 +1125,75 @@ MarkdownStyleSheet _contextoMarkdownStyle(ThemeData theme) {
       color: BmoColors.accentYellow,
       fontWeight: FontWeight.w600,
       fontSize: 12,
+    ),
+  );
+}
+
+/// Markdown stylesheet for the full article body (trafilatura output).
+/// Uses primary text color with comfortable line-height and proportional
+/// heading sizes — matches the BMO visual identity without the accent
+/// colours used in the summary block.
+MarkdownStyleSheet _articleBodyMarkdownStyle(ThemeData theme) {
+  final base = theme.textTheme.bodyMedium?.copyWith(
+    color: BmoColors.textPrimary,
+    height: 1.6,
+  );
+  final baseStyle =
+      base ?? const TextStyle(color: BmoColors.textPrimary, height: 1.6);
+  final baseFontSize = baseStyle.fontSize ?? 14;
+  return MarkdownStyleSheet(
+    p: baseStyle,
+    strong: baseStyle.copyWith(fontWeight: FontWeight.w700),
+    em: baseStyle.copyWith(fontStyle: FontStyle.italic),
+    listBullet: baseStyle,
+    h1: baseStyle.copyWith(
+      fontSize: baseFontSize * 1.5,
+      fontWeight: FontWeight.w700,
+    ),
+    h2: baseStyle.copyWith(
+      fontSize: baseFontSize * 1.3,
+      fontWeight: FontWeight.w700,
+    ),
+    h3: baseStyle.copyWith(
+      fontSize: baseFontSize * 1.15,
+      fontWeight: FontWeight.w600,
+    ),
+    h4: baseStyle.copyWith(
+      fontSize: baseFontSize * 1.05,
+      fontWeight: FontWeight.w600,
+    ),
+    h5: baseStyle.copyWith(fontWeight: FontWeight.w600),
+    h6: baseStyle.copyWith(fontWeight: FontWeight.w600),
+    blockquoteDecoration: BoxDecoration(
+      border: Border(
+        left: BorderSide(
+          color: BmoColors.textMuted.withValues(alpha: 0.3),
+          width: 3,
+        ),
+      ),
+      color: BmoColors.textMuted.withValues(alpha: 0.05),
+    ),
+    code: TextStyle(
+      color: BmoColors.textPrimary.withValues(alpha: 0.9),
+      backgroundColor: BmoColors.screenBgElevated,
+      fontSize: baseFontSize * 0.9,
+      fontFamily: 'monospace',
+    ),
+    codeblockDecoration: BoxDecoration(
+      color: BmoColors.screenBgElevated,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    horizontalRuleDecoration: BoxDecoration(
+      border: Border(
+        top: BorderSide(
+          color: BmoColors.textMuted.withValues(alpha: 0.2),
+          width: 1,
+        ),
+      ),
+    ),
+    a: baseStyle.copyWith(
+      color: BmoColors.accentGreen.withValues(alpha: 0.9),
+      decoration: TextDecoration.underline,
     ),
   );
 }

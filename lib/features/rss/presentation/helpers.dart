@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 /// Strip HTML tags and decode common HTML entities.
 /// Used to clean RSS summary/content for plain-text display.
 String stripHtml(String html) {
@@ -47,21 +45,6 @@ String formatRelativeDate(DateTime dateTime) {
   if (diff.inDays < 7) return 'há ${diff.inDays}d';
 
   return _formatAbsolute(dateTime);
-}
-
-/// Split plain text by double newlines into paragraph widgets.
-///
-/// Used to render fullContent from trafilatura (plain text with \n\n
-/// paragraph separators) as proper text blocks.
-List<Widget> renderParagraphs(String text, TextStyle style) {
-  return text
-      .split(RegExp(r'\n\n+'))
-      .where((p) => p.trim().isNotEmpty)
-      .map((p) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(p.trim(), style: style),
-          ))
-      .toList();
 }
 
 String _formatAbsolute(DateTime dt) {
