@@ -5,13 +5,47 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../providers/devices_providers.dart';
+import 'alarms_list_modal.dart';
 
 class HomeDevicesScreen extends ConsumerWidget {
   const HomeDevicesScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return const _DeviceList();
+    return Column(
+      children: [
+        _HeaderBar(
+          onAlarmsTap: () => showDialog(
+            context: context,
+            builder: (_) => const AlarmsListModal(),
+          ),
+        ),
+        const Expanded(child: _DeviceList()),
+      ],
+    );
+  }
+}
+
+class _HeaderBar extends StatelessWidget {
+  final VoidCallback onAlarmsTap;
+
+  const _HeaderBar({required this.onAlarmsTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          const Spacer(),
+          IconButton(
+            onPressed: onAlarmsTap,
+            icon: const Icon(Icons.alarm, color: BmoColors.accentYellow),
+            tooltip: 'Alarmes',
+          ),
+        ],
+      ),
+    );
   }
 }
 

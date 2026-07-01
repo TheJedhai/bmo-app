@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
 import '../../features/rss/data/rss_providers.dart';
@@ -83,6 +84,12 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
       ref.invalidate(feedsProvider);
       _invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
+
+    // ---- Alarms ----
+    case 'alarm.created':
+    case 'alarm.updated':
+    case 'alarm.deleted':
+      ref.invalidate(alarmsProvider);
 
     case 'connected':
       debugPrint('SSE connected');
