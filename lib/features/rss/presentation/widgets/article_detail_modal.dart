@@ -615,6 +615,44 @@ class _DetailBody extends ConsumerWidget {
               fontStyle: FontStyle.italic,
             ),
           ),
+
+        // Tags
+        if (currentArticle.tags.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          Text(
+            'Tags',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: BmoColors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: currentArticle.tags.map((tag) {
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: BmoColors.screenBgElevated,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: BmoColors.accentGreen.withValues(alpha: 0.15),
+                  ),
+                ),
+                child: Text(
+                  tag,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: BmoColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ],
     );
   }
