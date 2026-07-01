@@ -97,8 +97,20 @@ class RssRepository {
   }) =>
       _client.updateArticle(id, isRead: isRead, isStarred: isStarred);
 
-  Future<void> markArticlesRead({List<int>? articleIds, int? feedId}) =>
-      _client.markArticlesRead(articleIds: articleIds, feedId: feedId);
+  Future<void> markArticlesRead({
+    List<int>? articleIds,
+    int? feedId,
+    bool? isRead,
+    bool? isStarred,
+    String? titleContains,
+  }) =>
+      _client.markArticlesRead(
+        articleIds: articleIds,
+        feedId: feedId,
+        isRead: isRead,
+        isStarred: isStarred,
+        titleContains: titleContains,
+      );
 
   Future<({String summary, bool cached})> summarizeArticle(int id, {bool force = false}) =>
       _client.summarizeArticle(id, force: force);

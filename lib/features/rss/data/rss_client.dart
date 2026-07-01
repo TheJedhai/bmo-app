@@ -192,10 +192,16 @@ class RssClient {
   Future<void> markArticlesRead({
     List<int>? articleIds,
     int? feedId,
+    bool? isRead,
+    bool? isStarred,
+    String? titleContains,
   }) async {
     final body = <String, dynamic>{};
     if (articleIds != null) body['article_ids'] = articleIds;
     if (feedId != null) body['feed_id'] = feedId;
+    if (isRead != null) body['is_read'] = isRead;
+    if (isStarred != null) body['is_starred'] = isStarred;
+    if (titleContains != null) body['title_contains'] = titleContains;
 
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/articles/mark-read'),
