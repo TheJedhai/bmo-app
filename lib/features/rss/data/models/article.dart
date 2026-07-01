@@ -15,6 +15,7 @@ final class Article {
   final String? imageUrl;
   final String? fullContent;
   final DateTime? fullContentFetchedAt;
+  final List<String> tags;
   final DateTime createdAt;
 
   const Article({
@@ -34,6 +35,7 @@ final class Article {
     this.imageUrl,
     this.fullContent,
     this.fullContentFetchedAt,
+    this.tags = const [],
     required this.createdAt,
   });
 
@@ -61,6 +63,7 @@ final class Article {
       fullContentFetchedAt: json['full_content_fetched_at'] is String
           ? DateTime.tryParse(json['full_content_fetched_at'] as String)
           : null,
+      tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? [],
       createdAt: _parseDateTime(json['created_at']),
     );
   }
@@ -84,6 +87,7 @@ final class Article {
       if (fullContent != null) 'full_content': fullContent,
       if (fullContentFetchedAt != null)
         'full_content_fetched_at': _formatDateTime(fullContentFetchedAt!),
+      if (tags.isNotEmpty) 'tags': tags,
       'created_at': _formatDateTime(createdAt),
     };
   }
