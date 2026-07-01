@@ -48,6 +48,8 @@ class Feeds extends _$Feeds {
     String? siteUrl,
     int? fetchIntervalMinutes,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) async {
     final repo = ref.read(rssRepositoryProvider);
     final feed = await repo.createFeed(
@@ -56,6 +58,8 @@ class Feeds extends _$Feeds {
       siteUrl: siteUrl,
       fetchIntervalMinutes: fetchIntervalMinutes,
       sortOrder: sortOrder,
+      tagFilterMode: tagFilterMode,
+      tagFilter: tagFilter,
     );
     final current = state.valueOrNull ?? const <Feed>[];
     state = AsyncData([...current, feed]);
@@ -71,6 +75,8 @@ class Feeds extends _$Feeds {
     int? fetchIntervalMinutes,
     bool? isActive,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) async {
     final repo = ref.read(rssRepositoryProvider);
     final updated = await repo.updateFeed(
@@ -82,6 +88,8 @@ class Feeds extends _$Feeds {
       fetchIntervalMinutes: fetchIntervalMinutes,
       isActive: isActive,
       sortOrder: sortOrder,
+      tagFilterMode: tagFilterMode,
+      tagFilter: tagFilter,
     );
     final current = state.valueOrNull ?? const <Feed>[];
     state = AsyncData([

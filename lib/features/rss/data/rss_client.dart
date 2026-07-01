@@ -49,6 +49,8 @@ class RssClient {
     String? siteUrl,
     int? fetchIntervalMinutes,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) async {
     final body = <String, dynamic>{
       'title': title,
@@ -59,6 +61,8 @@ class RssClient {
       body['fetch_interval_minutes'] = fetchIntervalMinutes;
     }
     if (sortOrder != null) body['sort_order'] = sortOrder;
+    if (tagFilterMode != null) body['tag_filter_mode'] = tagFilterMode;
+    if (tagFilter != null) body['tag_filter'] = tagFilter;
 
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/feeds'),
@@ -78,6 +82,8 @@ class RssClient {
     int? fetchIntervalMinutes,
     bool? isActive,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
@@ -89,6 +95,8 @@ class RssClient {
     }
     if (isActive != null) body['is_active'] = isActive;
     if (sortOrder != null) body['sort_order'] = sortOrder;
+    if (tagFilterMode != null) body['tag_filter_mode'] = tagFilterMode;
+    if (tagFilter != null) body['tag_filter'] = tagFilter;
 
     final response = await _client.patch(
       Uri.parse('$_baseUrl/api/v1/feeds/$id'),

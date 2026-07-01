@@ -9,6 +9,8 @@ final class Feed {
   final String? lastError;
   final bool isActive;
   final int sortOrder;
+  final String tagFilterMode;
+  final List<String> tagFilter;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,6 +25,8 @@ final class Feed {
     this.lastError,
     required this.isActive,
     required this.sortOrder,
+    this.tagFilterMode = 'off',
+    this.tagFilter = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -41,6 +45,11 @@ final class Feed {
       lastError: json['last_error'] as String?,
       isActive: json['is_active'] as bool? ?? true,
       sortOrder: json['sort_order'] as int? ?? 0,
+      tagFilterMode: json['tag_filter_mode'] as String? ?? 'off',
+      tagFilter: (json['tag_filter'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       createdAt: _parseDateTime(json['created_at']),
       updatedAt: _parseDateTime(json['updated_at']),
     );
@@ -58,6 +67,8 @@ final class Feed {
       if (lastError != null) 'last_error': lastError,
       'is_active': isActive,
       'sort_order': sortOrder,
+      'tag_filter_mode': tagFilterMode,
+      'tag_filter': tagFilter,
       'created_at': _formatDateTime(createdAt),
       'updated_at': _formatDateTime(updatedAt),
     };

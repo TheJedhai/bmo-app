@@ -21,6 +21,8 @@ class RssRepository {
     String? siteUrl,
     int? fetchIntervalMinutes,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) =>
       _client.createFeed(
         title: title,
@@ -28,6 +30,8 @@ class RssRepository {
         siteUrl: siteUrl,
         fetchIntervalMinutes: fetchIntervalMinutes,
         sortOrder: sortOrder,
+        tagFilterMode: tagFilterMode,
+        tagFilter: tagFilter,
       );
 
   Future<Feed> updateFeed(
@@ -39,6 +43,8 @@ class RssRepository {
     int? fetchIntervalMinutes,
     bool? isActive,
     int? sortOrder,
+    String? tagFilterMode,
+    List<String>? tagFilter,
   }) =>
       _client.updateFeed(
         id,
@@ -49,6 +55,8 @@ class RssRepository {
         fetchIntervalMinutes: fetchIntervalMinutes,
         isActive: isActive,
         sortOrder: sortOrder,
+        tagFilterMode: tagFilterMode,
+        tagFilter: tagFilter,
       );
 
   Future<void> deleteFeed(int id) => _client.deleteFeed(id);
