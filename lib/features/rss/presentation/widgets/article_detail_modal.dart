@@ -6,8 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/image_proxy.dart';
 import '../../data/models/article.dart';
+import '../../data/models/feed.dart';
+import '../../data/rss_client.dart';
 import '../../data/rss_providers.dart';
 import '../helpers.dart';
+import 'feed_form_modal.dart';
 
 enum _ContentStatus { idle, loading, available, unavailable }
 
@@ -421,15 +424,18 @@ class _DetailBody extends ConsumerWidget {
         : currentArticle.summaryRaw;
     final bodyText = bodyHtml != null ? stripHtml(bodyHtml) : '';
 
-    // Resolve feed name
+    // Resolve feed name + feed object (for tag blocking)
     final feedsAsync = ref.watch(feedsProvider);
     String feedName = 'Feed';
+    Feed? feed;
     if (feedsAsync.hasValue) {
-      feedName = feedsAsync.value!
-              .where((f) => f.id == currentArticle.feedId)
-              .firstOrNull
-              ?.title ??
-          'Feed';
+      final match = feedsAsync.value!
+          .where((f) => f.id == currentArticle.feedId)
+          .firstOrNull;
+      if (match != null) {
+        feedName = match.title;
+        feed = match;
+      }
     }
 
     return Column(
@@ -632,28 +638,243 @@ class _DetailBody extends ConsumerWidget {
             spacing: 6,
             runSpacing: 6,
             children: currentArticle.tags.map((tag) {
-              return Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: BmoColors.screenBgElevated,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: BmoColors.accentGreen.withValues(alpha: 0.15),
-                  ),
-                ),
-                child: Text(
+              final normalizedTag = tag.toLowerCase().trim();
+              final isBlocked = feed != null &&
+                  feed.tagFilterMode == 'block' &&
+                  feed.tagFilter.any(
+                      (t) => t.toLowerCase().trim() == normalizedTag);
+              final isAllowMode =
+                  feed != null && feed.tagFilterMode == 'allow';
+
+              if (isBlocked) {
+                return _BlockedTagChip(tag: tag, theme: theme);
+              }
+              return _ClickableTagChip(
+                tag: tag,
+                theme: theme,
+                onTap: () => _showBlockTagDialog(
+                  context, ref, feed, tag, isAllowMode),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ==========================================================
+  // Tag chip helpers
+  // ==========================================================
+
+  void _showBlockTagDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Feed? feed,
+    String tag,
+    bool isAllowMode,
+  ) {
+    if (feed == null) return;
+
+    if (isAllowMode) {
+      _showAllowModeDialog(context, feed);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text(
+          'Bloquear tag?',
+          style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+        ),
+        content: Text(
+          'Novos artigos com a tag "$tag" deixarão de ser baixados neste feed.',
+          style: const TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _blockTag(ref, feed, tag, context);
+            },
+            child: const Text(
+              'Bloquear',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAllowModeDialog(BuildContext context, Feed feed) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text(
+          'Feed em modo de permissão',
+          style: TextStyle(color: BmoColors.textPrimary, fontSize: 14),
+        ),
+        content: const Text(
+          'Este feed está configurado para baixar apenas artigos com as tags '
+          'permitidas. Para bloquear esta tag, altere o filtro do feed.',
+          style: TextStyle(color: BmoColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Fechar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              showDialog(
+                context: context,
+                barrierColor: Colors.black54,
+                builder: (_) => FeedFormModal(feed: feed),
+              );
+            },
+            child: const Text(
+              'Editar feed',
+              style: TextStyle(color: BmoColors.accentGreen),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _blockTag(
+    WidgetRef ref,
+    Feed feed,
+    String tag,
+    BuildContext context,
+  ) async {
+    final normalizedTag = tag.toLowerCase().trim();
+    final currentFilter =
+        feed.tagFilter.map((t) => t.toLowerCase().trim()).toList();
+    if (currentFilter.contains(normalizedTag)) return;
+
+    final newTagFilter = [...feed.tagFilter, normalizedTag];
+    try {
+      await ref.read(feedsProvider.notifier).edit(
+            feed.id,
+            tagFilterMode: 'block',
+            tagFilter: newTagFilter,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tag bloqueada neste feed')),
+        );
+      }
+    } on RssApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
+  }
+}
+
+// ============================================================
+// Tag chip widgets
+// ============================================================
+
+class _BlockedTagChip extends StatelessWidget {
+  final String tag;
+  final ThemeData theme;
+
+  const _BlockedTagChip({required this.tag, required this.theme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: 0.5,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: BmoColors.screenBgElevated,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: BmoColors.textMuted.withValues(alpha: 0.15),
+          ),
+        ),
+        child: Text(
+          tag,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: BmoColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClickableTagChip extends StatelessWidget {
+  final String tag;
+  final ThemeData theme;
+  final VoidCallback onTap;
+
+  const _ClickableTagChip({
+    required this.tag,
+    required this.theme,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Bloquear tag neste feed',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          mouseCursor: SystemMouseCursors.click,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: BmoColors.screenBgElevated,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: BmoColors.accentGreen.withValues(alpha: 0.25),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
                   tag,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: BmoColors.textSecondary,
                     fontSize: 11,
                   ),
                 ),
-              );
-            }).toList(),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.lock_outline,
+                  size: 10,
+                  color: BmoColors.textMuted.withValues(alpha: 0.6),
+                ),
+              ],
+            ),
           ),
-        ],
-      ],
+        ),
+      ),
     );
   }
 }
