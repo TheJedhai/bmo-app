@@ -21,6 +21,10 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _urlCtrl;
   late final TextEditingController _intervalCtrl;
+  late final TextEditingController _tagInputCtrl;
+  late final FocusNode _tagInputFocus;
+  String _tagFilterMode = 'off';
+  List<String> _tagFilter = [];
   bool _showAdvanced = false;
   bool _saving = false;
 
@@ -33,9 +37,18 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
     _intervalCtrl = TextEditingController(
       text: (feed?.fetchIntervalMinutes ?? 60).toString(),
     );
-    // Show advanced section if editing a feed with non-default interval
-    if (feed != null && feed.fetchIntervalMinutes != 60) {
-      _showAdvanced = true;
+    _tagInputCtrl = TextEditingController();
+    _tagInputFocus = FocusNode();
+    if (feed != null) {
+      _tagFilterMode = feed.tagFilterMode;
+      _tagFilter = List<String>.from(feed.tagFilter);
+    }
+    // Show advanced section if editing a feed with non-default settings
+    if (feed != null) {
+      if (feed.fetchIntervalMinutes != 60) _showAdvanced = true;
+      if (feed.tagFilterMode != 'off' || feed.tagFilter.isNotEmpty) {
+        _showAdvanced = true;
+      }
     }
   }
 
@@ -44,11 +57,51 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
     _titleCtrl.dispose();
     _urlCtrl.dispose();
     _intervalCtrl.dispose();
+    _tagInputCtrl.dispose();
+    _tagInputFocus.dispose();
     super.dispose();
   }
 
   bool get _canSave {
     return _urlCtrl.text.trim().isNotEmpty;
+  }
+
+  String get _tagFilterHelpText {
+    return switch (_tagFilterMode) {
+      'allow' => 'Traz apenas artigos que tenham ao menos uma das tags abaixo',
+      'block' => 'Descarta artigos que tenham qualquer uma das tags abaixo',
+      _ => 'Nenhum filtro de tags aplicado',
+    };
+  }
+
+  void _addTag() {
+    final raw = _tagInputCtrl.text.trim();
+    if (raw.isEmpty) return;
+
+    // Split by comma and process each tag
+    final tags = raw
+        .split(',')
+        .map((t) => t.trim().toLowerCase())
+        .where((t) => t.isNotEmpty);
+
+    var added = false;
+    for (final tag in tags) {
+      if (!_tagFilter.contains(tag)) {
+        _tagFilter = [..._tagFilter, tag];
+        added = true;
+      }
+    }
+
+    if (added) {
+      _tagInputCtrl.clear();
+      setState(() {});
+    }
+  }
+
+  void _removeTag(String tag) {
+    setState(() {
+      _tagFilter = _tagFilter.where((t) => t != tag).toList();
+    });
   }
 
   Future<void> _save() async {
@@ -71,6 +124,8 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
           title: title,
           url: url,
           fetchIntervalMinutes: _showAdvanced ? interval : null,
+          tagFilterMode: _tagFilterMode,
+          tagFilter: _tagFilterMode == 'off' ? const [] : _tagFilter,
         );
 
         if (!mounted) return;
@@ -82,6 +137,8 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
           title: title ?? url,
           url: url,
           fetchIntervalMinutes: _showAdvanced ? interval : null,
+          tagFilterMode: _tagFilterMode,
+          tagFilter: _tagFilterMode == 'off' ? const [] : _tagFilter,
         );
 
         if (!mounted) return;
@@ -218,6 +275,111 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
                           isDense: true,
                         ),
                       ),
+                      const SizedBox(height: 14),
+                      // Tag filter mode
+                      _Label(text: 'Filtro de tags', theme: theme),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          for (final mode in const [
+                            ('off', 'Desligado'),
+                            ('allow', 'Permitir'),
+                            ('block', 'Bloquear'),
+                          ])
+                            ChoiceChip(
+                              label: Text(
+                                mode.$2,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: _tagFilterMode == mode.$1
+                                      ? BmoColors.accentGreen
+                                      : BmoColors.textSecondary,
+                                ),
+                              ),
+                              selected: _tagFilterMode == mode.$1,
+                              onSelected: (selected) {
+                                if (selected) {
+                                  setState(() => _tagFilterMode = mode.$1);
+                                }
+                              },
+                              selectedColor:
+                                  BmoColors.accentGreen.withValues(alpha: 0.15),
+                              backgroundColor: BmoColors.screenBgElevated,
+                              side: BorderSide(
+                                color: _tagFilterMode == mode.$1
+                                    ? BmoColors.accentGreen
+                                    : BmoColors.textMuted.withValues(alpha: 0.3),
+                              ),
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _tagFilterHelpText,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: BmoColors.textMuted,
+                          fontSize: 10,
+                        ),
+                      ),
+                      if (_tagFilterMode != 'off') ...[
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _tagInputCtrl,
+                          focusNode: _tagInputFocus,
+                          style: theme.textTheme.bodySmall,
+                          decoration: const InputDecoration(
+                            hintText: 'Digite uma tag e pressione Enter',
+                            hintStyle: TextStyle(
+                              color: BmoColors.textMuted,
+                              fontSize: 12,
+                            ),
+                            isDense: true,
+                          ),
+                          onSubmitted: (_) => _addTag(),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                        if (_tagFilter.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: _tagFilter.map((tag) {
+                              return InputChip(
+                                label: Text(
+                                  tag,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                onDeleted: () => _removeTag(tag),
+                                backgroundColor: BmoColors.screenBgElevated,
+                                side: BorderSide(
+                                  color: BmoColors.accentGreen.withValues(alpha: 0.3),
+                                ),
+                                labelStyle: const TextStyle(
+                                  color: BmoColors.textPrimary,
+                                  fontSize: 11,
+                                ),
+                                deleteIconColor: BmoColors.textMuted,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 0,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ],
                     ],
                     const SizedBox(height: 8),
                   ],
