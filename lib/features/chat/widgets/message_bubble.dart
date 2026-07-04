@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import '../data/bmo_rich_parser.dart';
+import '../data/bmo_rich_registry.dart';
 import '../data/chat_message.dart';
 import 'chat_avatar.dart';
 import 'reasoning_box.dart';
@@ -78,7 +80,7 @@ class MessageBubble extends StatelessWidget {
       ));
     }
 
-    children.add(_buildBody(theme, isUser));
+    children.addAll(_buildBody(theme, isUser));
 
     if (message.status == ChatMessageStatus.cancelled) {
       children.add(Padding(
@@ -106,21 +108,47 @@ class MessageBubble extends StatelessWidget {
     return children;
   }
 
-  Widget _buildBody(ThemeData theme, bool isUser) {
+  List<Widget> _buildBody(ThemeData theme, bool isUser) {
     if (isUser) {
-      return SelectableText(
-        message.text,
-        style: theme.textTheme.bodyMedium?.copyWith(
-          color: const Color(0xFF0F1115),
+      return [
+        SelectableText(
+          message.text,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: const Color(0xFF0F1115),
+          ),
         ),
-      );
+      ];
     }
 
-    return MarkdownBody(
-      data: message.text,
-      selectable: true,
-      styleSheet: _buildMarkdownStyle(theme),
-    );
+    // Parse rich content blocks from the accumulated message text.
+    // Re-parses on every rebuild — cheap for typical chat message lengths.
+    final extraction = BmoRichParser.extract(message.text);
+
+    // Fast path: no rich blocks — use a single MarkdownBody wrapping the
+    // full message text (identical behaviour to the pre-rich-content era).
+    if (extraction.segments.length == 1 &&
+        extraction.segments.first is TextSegment) {
+      return [
+        MarkdownBody(
+          data: message.text,
+          selectable: true,
+          styleSheet: _buildMarkdownStyle(theme),
+        ),
+      ];
+    }
+
+    // Build interleaved widgets: MarkdownBody for text, registered widget
+    // for each rich block, preserving original order.
+    return extraction.segments.map((segment) {
+      return switch (segment) {
+        TextSegment(:final text) => MarkdownBody(
+            data: text,
+            selectable: true,
+            styleSheet: _buildMarkdownStyle(theme),
+          ),
+        RichBlockSegment(:final block) => BmoRichRegistry.build(block),
+      };
+    }).toList();
   }
 
   MarkdownStyleSheet _buildMarkdownStyle(ThemeData theme) {
