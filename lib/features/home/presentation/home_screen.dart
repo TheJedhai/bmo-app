@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../gallery/widgets/gallery_modal.dart';
+import '../../settings/widgets/settings_modal.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -18,6 +19,15 @@ class HomeScreen extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Settings gear (top-right)
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                icon: const Icon(Icons.settings, color: BmoColors.textSecondary),
+                tooltip: 'Configurações',
+                onPressed: () => showSettingsModal(context),
+              ),
+            ),
             // BMO greeting / icon
             Icon(
               Icons.face,
