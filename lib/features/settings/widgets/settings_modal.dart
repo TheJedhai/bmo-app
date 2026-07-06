@@ -125,12 +125,6 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
                       ref.read(settingsProvider.notifier).refresh(),
                 ),
                 data: (settings) {
-                  if (settings.isEmpty) {
-                    return _SettingsEmptyState(
-                      onRefresh: () =>
-                          ref.read(settingsProvider.notifier).refresh(),
-                    );
-                  }
                   final section = _findSection(selectedId);
                   return _buildLayout(
                     isMobile: isMobile,
@@ -655,46 +649,3 @@ class _SettingsErrorState extends StatelessWidget {
   }
 }
 
-// ============================================================
-// Empty state
-// ============================================================
-
-class _SettingsEmptyState extends StatelessWidget {
-  final VoidCallback onRefresh;
-
-  const _SettingsEmptyState({required this.onRefresh});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.settings_outlined,
-              size: 48,
-              color: BmoColors.textMuted,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Nenhuma configuração disponível',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                color: BmoColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: onRefresh,
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
