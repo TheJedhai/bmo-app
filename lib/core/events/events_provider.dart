@@ -8,6 +8,7 @@ import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
 import 'events_client.dart';
+import 'rich_blocks_provider.dart';
 
 final eventsClientProvider = Provider<EventsClient>((ref) {
   return EventsClient(
@@ -15,6 +16,10 @@ final eventsClientProvider = Provider<EventsClient>((ref) {
     baseUrl: Env.bmoServerUrl,
   );
 });
+
+/// Incremented on each SSE `connected` event so cards can detect reconnect
+/// and re-sync any ephemeral state lost during the disconnection.
+final sseGenerationProvider = StateProvider<int>((ref) => 0);
 
 final eventsStreamProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final client = ref.read(eventsClientProvider);
@@ -91,8 +96,17 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'alarm.deleted':
       ref.invalidate(alarmsProvider);
 
+    // ---- Rich blocks (in-place patch, not invalidate) ----
+    case 'rich.update':
+      final blockId = event['block_id'] as String?;
+      final patch = event['patch'] as Map<String, dynamic>?;
+      if (blockId != null && patch != null) {
+        ref.read(richBlocksProvider.notifier).applyPatch(blockId, patch);
+      }
+
     case 'connected':
       debugPrint('SSE connected');
+      ref.read(sseGenerationProvider.notifier).state++;
   }
 }
 

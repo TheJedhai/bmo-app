@@ -30,6 +30,19 @@ class RichBlockSegment extends BmoRichSegment {
   String toString() => 'RichBlockSegment(type=${block.type}, id=${block.blockId})';
 }
 
+/// A segment representing an **incomplete** ```bmo:rich fence during streaming.
+///
+/// Emitted when the opening ```bmo:rich has arrived but the closing ``` has
+/// not yet. The raw JSON body is **discarded** — never rendered as visible
+/// text — and the UI should show a placeholder (spinner / cursor) until the
+/// block closes and becomes a [RichBlockSegment].
+class PendingRichSegment extends BmoRichSegment {
+  const PendingRichSegment();
+
+  @override
+  String toString() => 'PendingRichSegment';
+}
+
 /// Result of [BmoRichParser.extract].
 class BmoRichExtraction {
   final List<BmoRichSegment> segments;
@@ -62,6 +75,14 @@ class BmoRichParser {
     r'(.+?)'
     r'\n```',
     dotAll: true,
+  );
+
+  /// Matches an **opening** ```bmo:rich fence (no closing ``` required).
+  ///
+  /// Used to detect incomplete blocks during streaming so the raw JSON body
+  /// can be hidden behind a placeholder instead of flickering as visible text.
+  static final RegExp _openFenceRegex = RegExp(
+    r'```bmo:rich\s*\n',
   );
 
   /// Extracts rich blocks from [text] and returns a list of segments.
@@ -119,9 +140,26 @@ class BmoRichParser {
       lastEnd = match.end;
     }
 
-    // Trailing text after the last match
+    // Trailing text after the last match.
+    // If it contains an open ```bmo:rich fence without a closing ```,
+    // hide the raw JSON behind a PendingRichSegment placeholder to
+    // prevent flicker during streaming.
     if (lastEnd < text.length) {
-      segments.add(TextSegment(text: text.substring(lastEnd)));
+      final trailing = text.substring(lastEnd);
+      final openMatch = _openFenceRegex.firstMatch(trailing);
+
+      if (openMatch != null) {
+        // Text before the open fence (if any)
+        if (openMatch.start > 0) {
+          segments.add(
+            TextSegment(text: trailing.substring(0, openMatch.start)),
+          );
+        }
+        // Placeholder — raw JSON from here on is discarded
+        segments.add(const PendingRichSegment());
+      } else {
+        segments.add(TextSegment(text: trailing));
+      }
     }
 
     // If no matches at all, wrap the whole string as text

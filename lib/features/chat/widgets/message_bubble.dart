@@ -138,7 +138,7 @@ class MessageBubble extends StatelessWidget {
     }
 
     // Build interleaved widgets: MarkdownBody for text, registered widget
-    // for each rich block, preserving original order.
+    // for each rich block, placeholder for incomplete blocks during streaming.
     return extraction.segments.map((segment) {
       return switch (segment) {
         TextSegment(:final text) => MarkdownBody(
@@ -147,8 +147,38 @@ class MessageBubble extends StatelessWidget {
             styleSheet: _buildMarkdownStyle(theme),
           ),
         RichBlockSegment(:final block) => BmoRichRegistry.build(block),
+        PendingRichSegment() => _buildPendingPlaceholder(theme),
       };
     }).toList();
+  }
+
+  /// Placeholder shown while a ```bmo:rich block is still being streamed
+  /// (opening fence arrived, closing fence not yet).
+  ///
+  /// Renders a small spinner in a subtle card — the raw JSON body is never
+  /// shown to the user.
+  Widget _buildPendingPlaceholder(ThemeData theme) {
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: BmoColors.textMuted.withValues(alpha: 0.3),
+        ),
+      ),
+      child: const Center(
+        child: SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: BmoColors.accentGreen,
+          ),
+        ),
+      ),
+    );
   }
 
   MarkdownStyleSheet _buildMarkdownStyle(ThemeData theme) {
