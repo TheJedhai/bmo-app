@@ -6,6 +6,7 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
 import 'gallery_image_detail.dart';
+import 'img2img_form_modal.dart';
 
 const _kMobileBreakpoint = 600.0;
 
@@ -164,6 +165,17 @@ class _GalleryHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const Spacer(),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: BmoColors.accentGreen.withValues(alpha: 0.15),
+              foregroundColor: BmoColors.accentGreen,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            ),
+            onPressed: () => showImg2ImgFormModal(context),
+            icon: const Icon(Icons.auto_fix_high, size: 16),
+            label: const Text('Criar'),
+          ),
+          const SizedBox(width: 4),
           IconButton(
             icon: Icon(Icons.close, color: BmoColors.textSecondary),
             tooltip: 'Fechar',
