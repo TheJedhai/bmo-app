@@ -102,7 +102,7 @@ class ImagesClient {
     }
 
     request.files.add(http.MultipartFile.fromBytes(
-      'file',
+      'source',
       sourceBytes,
       filename: fileName,
     ));
