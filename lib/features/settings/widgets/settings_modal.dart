@@ -526,12 +526,12 @@ class _ImageSettingsSection extends ConsumerWidget {
             // Resolve effective model: use the saved setting if it matches a
             // known model, otherwise fall back to the factory default.
             final effectiveModel =
-                models.any((m) => m.id == currentModel)
+                models.any((m) => m.name == currentModel)
                     ? currentModel!
                     : models.firstWhere(
                         (m) => m.isDefault,
                         orElse: () => models.first,
-                      ).id;
+                      ).name;
 
             return _ModelDropdown(
               models: models,
@@ -584,7 +584,7 @@ class _ModelDropdown extends StatelessWidget {
         icon: const Icon(Icons.expand_more, color: BmoColors.textSecondary),
         items: models.map(
           (model) => DropdownMenuItem<String>(
-            value: model.id,
+            value: model.name,
             child: Text(model.name),
           ),
         ).toList(),
