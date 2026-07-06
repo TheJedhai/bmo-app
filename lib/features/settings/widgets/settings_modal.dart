@@ -522,11 +522,23 @@ class _ImageSettingsSection extends ConsumerWidget {
               color: Colors.redAccent,
             ),
           ),
-          data: (models) => _ModelDropdown(
-            models: models,
-            currentModel: currentModel,
-            onChanged: onModelChanged,
-          ),
+          data: (models) {
+            // Resolve effective model: use the saved setting if it matches a
+            // known model, otherwise fall back to the factory default.
+            final effectiveModel =
+                models.any((m) => m.id == currentModel)
+                    ? currentModel!
+                    : models.firstWhere(
+                        (m) => m.isDefault,
+                        orElse: () => models.first,
+                      ).id;
+
+            return _ModelDropdown(
+              models: models,
+              currentModel: effectiveModel,
+              onChanged: onModelChanged,
+            );
+          },
         ),
       ],
     );
@@ -539,7 +551,7 @@ class _ImageSettingsSection extends ConsumerWidget {
 
 class _ModelDropdown extends StatelessWidget {
   final List<FluxModel> models;
-  final String? currentModel;
+  final String currentModel;
   final ValueChanged<String> onChanged;
 
   const _ModelDropdown({
@@ -550,14 +562,6 @@ class _ModelDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // '' sentinel = "padrão do sistema"
-    final selectedValue = currentModel ?? '';
-
-    final effectiveValue = models.any((m) => m.id == selectedValue) ||
-            selectedValue.isEmpty
-        ? selectedValue
-        : '';
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -568,7 +572,7 @@ class _ModelDropdown extends StatelessWidget {
         ),
       ),
       child: DropdownButton<String>(
-        value: effectiveValue,
+        value: currentModel,
         isExpanded: true,
         underline: const SizedBox.shrink(),
         dropdownColor: BmoColors.screenBgElevated,
@@ -578,20 +582,14 @@ class _ModelDropdown extends StatelessWidget {
           color: BmoColors.textPrimary,
         ),
         icon: const Icon(Icons.expand_more, color: BmoColors.textSecondary),
-        items: [
-          const DropdownMenuItem<String>(
-            value: '',
-            child: Text('padrão do sistema'),
+        items: models.map(
+          (model) => DropdownMenuItem<String>(
+            value: model.id,
+            child: Text(model.name),
           ),
-          ...models.map(
-            (model) => DropdownMenuItem<String>(
-              value: model.id,
-              child: Text(model.name),
-            ),
-          ),
-        ],
+        ).toList(),
         onChanged: (value) {
-          if (value != null && value != selectedValue) {
+          if (value != null && value != currentModel) {
             onChanged(value);
           }
         },
