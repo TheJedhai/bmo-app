@@ -27,5 +27,5 @@ http.Client createHttpClient({String? userId}) {
 /// (clients, repositories, notifiers) rebuildam automaticamente.
 final httpClientProvider = Provider<http.Client>((ref) {
   final userId = ref.watch(currentUserIdProvider);
-  return createHttpClient(userId: userId);
+  return createHttpClient(userId: userId?.toString());
 });

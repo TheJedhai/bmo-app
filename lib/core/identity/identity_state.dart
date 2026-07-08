@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Modificado exclusivamente pelo [CurrentUser] notifier — widgets não
 /// devem escrever neste provider diretamente. Usado por [BmoHttpClient]
 /// para injetar o header X-User-Id.
-final currentUserIdProvider = StateProvider<String?>((ref) => null);
+final currentUserIdProvider = StateProvider<int?>((ref) => null);
 
 /// Conjunto de keys de features opt-in retornadas por /api/v1/me.
 ///

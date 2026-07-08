@@ -134,9 +134,9 @@ class CurrentUser extends _$CurrentUser {
   @override
   Future<UserProfile?> build() async {
     final prefs = ref.read(sharedPreferencesProvider);
-    final savedId = prefs.getString(_kUserIdKey);
+    final savedId = prefs.getInt(_kUserIdKey);
 
-    if (savedId == null || savedId.isEmpty) {
+    if (savedId == null) {
       // Primeira abertura — sem perfil salvo.
       return null;
     }
@@ -144,7 +144,7 @@ class CurrentUser extends _$CurrentUser {
     // Valida o perfil salvo no servidor.
     final client = ref.read(meClientProvider);
     try {
-      final me = await client.getMe(savedId);
+      final me = await client.getMe(savedId.toString());
       // Perfil válido — espelha no provider síncrono e nas features.
       ref.read(currentUserIdProvider.notifier).state = savedId;
       ref.read(enabledFeaturesProvider.notifier).state =
@@ -158,20 +158,20 @@ class CurrentUser extends _$CurrentUser {
       // Erro de rede ou servidor — mantém o perfil salvo mas não
       // bloqueia o app. Retorna um perfil mínimo com o id que temos.
       ref.read(currentUserIdProvider.notifier).state = savedId;
-      return UserProfile(id: savedId, name: savedId);
+      return UserProfile(id: savedId, name: savedId.toString());
     }
   }
 
   /// Seleciona um perfil, persiste, e atualiza o estado global.
-  Future<void> setUser(String userId) async {
+  Future<void> setUser(int userId) async {
     final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.setString(_kUserIdKey, userId);
+    await prefs.setInt(_kUserIdKey, userId);
     ref.read(currentUserIdProvider.notifier).state = userId;
 
     // Valida e popula features.
     final client = ref.read(meClientProvider);
     try {
-      final me = await client.getMe(userId);
+      final me = await client.getMe(userId.toString());
       ref.read(enabledFeaturesProvider.notifier).state =
           me.features.toSet();
       state = AsyncData(me.user);
@@ -183,7 +183,7 @@ class CurrentUser extends _$CurrentUser {
       state = const AsyncData(null);
     } catch (_) {
       // Rede falhou — usa fallback mínimo.
-      state = AsyncData(UserProfile(id: userId, name: userId));
+      state = AsyncData(UserProfile(id: userId, name: userId.toString()));
     }
   }
 

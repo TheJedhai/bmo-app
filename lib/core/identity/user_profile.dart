@@ -3,15 +3,17 @@
 /// Sem autenticação — identidade de navegação apenas. O servidor usa o
 /// header X-User-Id para associar conversas, preferências e features.
 class UserProfile {
-  final String id;
+  final int id;
   final String name;
 
   const UserProfile({required this.id, required this.name});
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'];
+    final id = rawId is int ? rawId : int.parse(rawId.toString());
     return UserProfile(
-      id: json['id'] as String,
-      name: json['name'] as String? ?? json['id'] as String,
+      id: id,
+      name: json['name'] as String? ?? id.toString(),
     );
   }
 
