@@ -11,6 +11,19 @@ import 'speech_bubble.dart';
 
 const _kMobileBreakpoint = 600.0;
 
+/// Remove o prefixo de contexto "[contexto: ...]\n\n" de mensagens de
+/// usuário para exibição. O texto original armazenado/enviado nunca é
+/// alterado — a filtragem ocorre apenas na renderização.
+String _displayText(ChatMessage message) {
+  if (message.role != ChatRole.user) return message.text;
+  final text = message.text;
+  if (text.startsWith('[contexto:') && text.contains('\n\n')) {
+    final endIndex = text.indexOf('\n\n');
+    return text.substring(endIndex + 2);
+  }
+  return text;
+}
+
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
 
@@ -112,7 +125,7 @@ class MessageBubble extends StatelessWidget {
     if (isUser) {
       return [
         SelectableText(
-          message.text,
+          _displayText(message),
           style: theme.textTheme.bodyMedium?.copyWith(
             color: const Color(0xFF0F1115),
           ),
