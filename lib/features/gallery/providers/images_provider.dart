@@ -15,7 +15,7 @@ part 'images_provider.g.dart';
 
 final imagesClientProvider = Provider<ImagesClient>((ref) {
   return ImagesClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

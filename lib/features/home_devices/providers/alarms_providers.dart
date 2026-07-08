@@ -14,7 +14,7 @@ part 'alarms_providers.g.dart';
 
 final alarmsClientProvider = Provider<AlarmsClient>((ref) {
   return AlarmsClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

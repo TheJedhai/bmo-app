@@ -23,7 +23,7 @@ final unreadCountProvider = AutoDisposeFutureProvider<int>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UnreadCountRef = AutoDisposeFutureProviderRef<int>;
-String _$feedsHash() => r'232ca6a576d43671f99e8cc008aab02ca80e3c90';
+String _$feedsHash() => r'7411b1d8d8d3244788704db6f58493e68c3c3f48';
 
 /// See also [Feeds].
 @ProviderFor(Feeds)
@@ -39,7 +39,7 @@ final feedsProvider =
     );
 
 typedef _$Feeds = AutoDisposeAsyncNotifier<List<Feed>>;
-String _$articlesHash() => r'1bac91f8c1726fb838d9af2d4fb59bc5344b7094';
+String _$articlesHash() => r'fc32e4165b7a638b91a1fbef2574121837961700';
 
 /// Copied from Dart SDK
 class _SystemHash {

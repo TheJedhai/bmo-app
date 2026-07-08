@@ -15,7 +15,7 @@ part 'rss_providers.g.dart';
 
 final rssClientProvider = Provider<RssClient>((ref) {
   return RssClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

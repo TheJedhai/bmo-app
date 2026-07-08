@@ -13,7 +13,7 @@ import 'models/task.dart';
 
 final missionsClientProvider = Provider<MissionsClient>((ref) {
   return MissionsClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

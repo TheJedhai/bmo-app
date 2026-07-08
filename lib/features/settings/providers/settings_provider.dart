@@ -14,7 +14,7 @@ part 'settings_provider.g.dart';
 
 final settingsClientProvider = Provider<SettingsClient>((ref) {
   return SettingsClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

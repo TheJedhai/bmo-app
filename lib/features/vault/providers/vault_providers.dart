@@ -34,7 +34,7 @@ import '../data/vault_repository.dart';
 /// Provides the [VaultClient] for HTTP communication with bmo-server.
 final vaultClientProvider = Provider<VaultClient>((ref) {
   return VaultClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

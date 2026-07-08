@@ -3,7 +3,6 @@ import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
@@ -29,9 +28,9 @@ String _generateSessionId() {
 // Infraestrutura HTTP
 // ============================================================
 
-final httpClientProvider = Provider<http.Client>((ref) {
-  return createHttpClient();
-});
+// httpClientProvider is now in core/http/client_factory.dart —
+// it watches currentUserIdProvider and automatically wraps with
+// BmoHttpClient to add the X-User-Id header.
 
 final bmoChatClientProvider = Provider<BmoChatClient>((ref) {
   return BmoChatClient(

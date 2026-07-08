@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
+import '../../features/gallery/providers/images_provider.dart';
 import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
@@ -12,7 +13,7 @@ import 'rich_blocks_provider.dart';
 
 final eventsClientProvider = Provider<EventsClient>((ref) {
   return EventsClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });
@@ -89,6 +90,13 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
       ref.invalidate(feedsProvider);
       _invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
+
+    // ---- Images ----
+    case 'image.created':
+    case 'image.updated':
+    case 'image.completed':
+    case 'image.failed':
+      ref.invalidate(imagesProvider);
 
     // ---- Alarms ----
     case 'alarm.created':

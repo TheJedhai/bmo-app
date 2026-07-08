@@ -14,7 +14,7 @@ part 'memories_provider.g.dart';
 
 final memoriesClientProvider = Provider<MemoriesClient>((ref) {
   return MemoriesClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

@@ -16,7 +16,7 @@ part 'devices_providers.g.dart';
 
 final devicesClientProvider = Provider<DevicesClient>((ref) {
   return DevicesClient(
-    client: createHttpClient(),
+    client: ref.watch(httpClientProvider),
     baseUrl: Env.bmoServerUrl,
   );
 });

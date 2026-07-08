@@ -23,7 +23,7 @@ final scenesProvider = AutoDisposeFutureProvider<List<Scene>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ScenesRef = AutoDisposeFutureProviderRef<List<Scene>>;
-String _$alarmsNotifierHash() => r'ad600ecdf695c60fb4534aa92e1638542335b5c7';
+String _$alarmsNotifierHash() => r'dbf716c263c1ec2ee1d79a52475e2c3de64a5530';
 
 /// See also [AlarmsNotifier].
 @ProviderFor(AlarmsNotifier)
