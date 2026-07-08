@@ -20,6 +20,18 @@ class BmoDock extends ConsumerWidget {
     // RSS tab today, but a per-tab Map in the future would slot in here.
     final unreadCount = ref.watch(unreadCountProvider).valueOrNull ?? 0;
 
+    // --- Feature gates ---
+    //
+    // Itens do dock podem ser condicionados a keys retornadas por
+    // GET /api/v1/me (campo "features"). Exemplo:
+    //
+    //   import '../identity/identity_state.dart';
+    //   final features = ref.watch(enabledFeaturesProvider);
+    //   if (!features.contains('rss')) return const SizedBox.shrink();
+    //
+    // Nenhuma feature atual usa — mecanismo pronto para quando o
+    // servidor começar a expor features opt-in.
+
     return Container(
       height: isMobile ? 56 : 64,
       padding: EdgeInsets.symmetric(

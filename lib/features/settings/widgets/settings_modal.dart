@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/identity/identity_provider.dart';
+import '../../../core/identity/identity_state.dart';
+import '../../../core/identity/user_profile.dart';
+import '../../../core/identity/widgets/profile_avatar.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/flux_model.dart';
 import '../providers/settings_provider.dart';
@@ -66,6 +70,12 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
   // --- Section list (extensible — add entries here for new sections) ---
 
   static final _sections = <_SettingsSection>[
+    _SettingsSection(
+      id: 'profile',
+      title: 'Perfil',
+      icon: Icons.person_outline,
+      builder: _buildProfileSection,
+    ),
     _SettingsSection(
       id: 'image',
       title: 'Imagem',
@@ -166,6 +176,34 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
       onSectionChanged: (id) =>
           ref.read(_selectedSectionId.notifier).state = id,
       content: section.builder(context, ref, settings),
+    );
+  }
+
+  // ==========================================================
+  // Profile section builder
+  // ==========================================================
+
+  static Widget _buildProfileSection(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, String> settings,
+  ) {
+    final userAsync = ref.watch(currentUserProvider);
+    final features = ref.watch(enabledFeaturesProvider);
+
+    return userAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ProfileError(
+        error: e.toString(),
+        onRetry: () => ref.read(currentUserProvider.notifier),
+      ),
+      data: (user) => _ProfileContent(
+        user: user,
+        features: features,
+        onChangeProfile: () {
+          ref.read(currentUserProvider.notifier).clearUser();
+        },
+      ),
     );
   }
 
@@ -630,6 +668,185 @@ class _SettingsErrorState extends StatelessWidget {
               '$error',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
+                color: BmoColors.textMuted,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onRetry,
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Profile section widgets
+// ============================================================
+
+class _ProfileContent extends StatelessWidget {
+  final UserProfile? user;
+  final Set<String> features;
+  final VoidCallback onChangeProfile;
+
+  const _ProfileContent({
+    required this.user,
+    required this.features,
+    required this.onChangeProfile,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Perfil atual',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: BmoColors.textPrimary,
+              ),
+        ),
+        const SizedBox(height: 16),
+        // Avatar + nome
+        Row(
+          children: [
+            if (user != null)
+              ProfileAvatar(profile: user!, radius: 28)
+            else
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: BmoColors.textMuted.withValues(alpha: 0.2),
+                child: const Icon(Icons.person, color: BmoColors.textMuted),
+              ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    user?.name ?? 'Sem perfil',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    user != null ? 'ID: ${user!.id}' : 'Selecione um perfil',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        // Botão trocar perfil
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: onChangeProfile,
+            icon: const Icon(Icons.swap_horiz, size: 18),
+            label: const Text('Trocar perfil'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: BmoColors.accentGreen,
+              side: const BorderSide(color: BmoColors.accentGreen),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Isso limpa o perfil salvo e volta à tela de seleção.',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12,
+            color: BmoColors.textMuted,
+          ),
+        ),
+        // Feature keys info
+        if (features.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          Text(
+            'Features habilitadas',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: BmoColors.textPrimary,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: features.map((key) {
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: BmoColors.accentGreen.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  key,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    color: BmoColors.accentGreen,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProfileError extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+
+  const _ProfileError({required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.redAccent, size: 32),
+            const SizedBox(height: 8),
+            const Text(
+              'Falha ao carregar perfil',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                color: Colors.redAccent,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
                 color: BmoColors.textMuted,
               ),
               maxLines: 3,
