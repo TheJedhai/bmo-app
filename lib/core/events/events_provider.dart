@@ -8,6 +8,7 @@ import '../../features/gallery/providers/images_provider.dart';
 import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
+import '../identity/identity_state.dart';
 import 'events_client.dart';
 import 'rich_blocks_provider.dart';
 
@@ -23,7 +24,10 @@ final eventsClientProvider = Provider<EventsClient>((ref) {
 final sseGenerationProvider = StateProvider<int>((ref) => 0);
 
 final eventsStreamProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
-  final client = ref.read(eventsClientProvider);
+  // Watch userId so the stream is invalidated and reconnects with the
+  // new identity when the user switches profiles.
+  ref.watch(currentUserIdProvider);
+  final client = ref.watch(eventsClientProvider);
   var backoff = const Duration(seconds: 1);
   const maxBackoff = Duration(seconds: 30);
 
@@ -42,6 +46,10 @@ final eventsStreamProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
 });
 
 final eventsListenerProvider = Provider<void>((ref) {
+  // Watch userId so the listener is rebuilt on identity changes, ensuring
+  // the old stream subscription is cleaned up before a new one is created.
+  ref.watch(currentUserIdProvider);
+
   ref.listen(eventsStreamProvider, (prev, next) {
     next.when(
       data: (event) => _handleEvent(ref, event),
