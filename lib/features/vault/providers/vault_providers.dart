@@ -41,7 +41,7 @@ final vaultClientProvider = Provider<VaultClient>((ref) {
 
 /// Provides the [VaultRepository] that orchestrates crypto + HTTP.
 final vaultRepositoryProvider = Provider<VaultRepository>((ref) {
-  return VaultRepository(ref.read(vaultClientProvider));
+  return VaultRepository(ref.watch(vaultClientProvider));
 });
 
 // ============================================================

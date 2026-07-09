@@ -3,6 +3,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/images_client.dart';
 import '../data/images_repository.dart';
 import '../data/image_model.dart';
@@ -21,7 +22,7 @@ final imagesClientProvider = Provider<ImagesClient>((ref) {
 });
 
 final imagesRepositoryProvider = Provider<ImagesRepository>((ref) {
-  return ImagesRepository(ref.read(imagesClientProvider));
+  return ImagesRepository(ref.watch(imagesClientProvider));
 });
 
 // ============================================================
@@ -40,8 +41,10 @@ final imageModeFilterProvider = StateProvider<String?>((ref) => null);
 class Images extends _$Images {
   @override
   Future<List<GalleryImage>> build() async {
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
     final mode = ref.watch(imageModeFilterProvider);
-    final repo = ref.read(imagesRepositoryProvider);
+    final repo = ref.watch(imagesRepositoryProvider);
     return repo.list(mode: mode);
   }
 

@@ -24,7 +24,7 @@ final usersClientProvider = Provider<UsersClient>((ref) {
 });
 
 final usersRepositoryProvider = Provider<UsersRepository>((ref) {
-  return UsersRepository(ref.read(usersClientProvider));
+  return UsersRepository(ref.watch(usersClientProvider));
 });
 
 // ============================================================

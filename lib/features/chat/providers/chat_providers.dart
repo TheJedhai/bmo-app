@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/bmo_chat_client.dart';
 import '../data/chat_event.dart';
 import '../data/chat_message.dart';
@@ -46,7 +47,9 @@ final bmoChatClientProvider = Provider<BmoChatClient>((ref) {
 class ConversationsNotifier extends AsyncNotifier<List<Conversation>> {
   @override
   Future<List<Conversation>> build() async {
-    final client = ref.read(bmoChatClientProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final client = ref.watch(bmoChatClientProvider);
     final raw = await client.listChats();
     final convs = raw.map(Conversation.fromJson).toList();
     convs.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -120,6 +123,9 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
 
   @override
   List<ChatMessage> build(String arg) {
+    ref.watch(currentUserIdProvider);
+    _resetStreamState();
+    _historyLoaded = false;
     ref.onDispose(() {
       _subscription?.cancel();
     });

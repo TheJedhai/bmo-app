@@ -4,6 +4,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../data/devices_ws_client.dart';
@@ -63,7 +64,9 @@ final devicesWsStreamProvider =
 class Devices extends _$Devices {
   @override
   Future<Map<String, LightDevice>> build() async {
-    final client = ref.read(devicesClientProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const {};
+    final client = ref.watch(devicesClientProvider);
     final lights = await client.listLights();
     final map = <String, LightDevice>{
       for (final l in lights) l['name'] as String: LightDevice.fromJson(l),

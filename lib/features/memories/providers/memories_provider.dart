@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/memories_client.dart';
 import '../data/memories_repository.dart';
 import '../data/memory_model.dart';
@@ -20,7 +21,7 @@ final memoriesClientProvider = Provider<MemoriesClient>((ref) {
 });
 
 final memoriesRepositoryProvider = Provider<MemoriesRepository>((ref) {
-  return MemoriesRepository(ref.read(memoriesClientProvider));
+  return MemoriesRepository(ref.watch(memoriesClientProvider));
 });
 
 // ============================================================
@@ -31,7 +32,9 @@ final memoriesRepositoryProvider = Provider<MemoriesRepository>((ref) {
 class Memories extends _$Memories {
   @override
   Future<List<Memory>> build() async {
-    final repo = ref.read(memoriesRepositoryProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final repo = ref.watch(memoriesRepositoryProvider);
     return repo.list();
   }
 

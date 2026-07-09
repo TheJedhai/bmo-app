@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/alarms_client.dart';
 import '../data/device_alarm.dart';
 import '../data/scene.dart';
@@ -25,7 +26,9 @@ final alarmsClientProvider = Provider<AlarmsClient>((ref) {
 
 @riverpod
 Future<List<Scene>> scenes(ScenesRef ref) async {
-  final client = ref.read(alarmsClientProvider);
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return const [];
+  final client = ref.watch(alarmsClientProvider);
   return client.listScenes();
 }
 
@@ -40,7 +43,9 @@ final alarmsProvider = alarmsNotifierProvider;
 class AlarmsNotifier extends _$AlarmsNotifier {
   @override
   Future<List<DeviceAlarm>> build() async {
-    final client = ref.read(alarmsClientProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final client = ref.watch(alarmsClientProvider);
     return client.list();
   }
 

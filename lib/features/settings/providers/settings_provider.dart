@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import '../data/flux_model.dart';
 import '../data/settings_client.dart';
 import '../data/settings_repository.dart';
@@ -20,7 +21,7 @@ final settingsClientProvider = Provider<SettingsClient>((ref) {
 });
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
-  return SettingsRepository(ref.read(settingsClientProvider));
+  return SettingsRepository(ref.watch(settingsClientProvider));
 });
 
 // ============================================================
@@ -28,7 +29,9 @@ final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
 // ============================================================
 
 final imageModelsProvider = FutureProvider<List<FluxModel>>((ref) {
-  return ref.read(settingsRepositoryProvider).getImageModels();
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return const [];
+  return ref.watch(settingsRepositoryProvider).getImageModels();
 });
 
 // ============================================================
@@ -39,7 +42,9 @@ final imageModelsProvider = FutureProvider<List<FluxModel>>((ref) {
 class Settings extends _$Settings {
   @override
   Future<Map<String, String>> build() async {
-    return ref.read(settingsRepositoryProvider).getAll();
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const {};
+    return ref.watch(settingsRepositoryProvider).getAll();
   }
 
   /// Patch a single setting key and replace local state with server response.

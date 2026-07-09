@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import 'missions_client.dart';
 import 'missions_repository.dart';
 import 'models/folder.dart';
@@ -29,7 +30,9 @@ final missionsRepositoryProvider = Provider<MissionsRepository>((ref) {
 class FoldersNotifier extends AsyncNotifier<List<Folder>> {
   @override
   Future<List<Folder>> build() async {
-    final repo = ref.read(missionsRepositoryProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final repo = ref.watch(missionsRepositoryProvider);
     return repo.listFolders();
   }
 
@@ -85,7 +88,9 @@ typedef TasksFilter = ({
 class TasksNotifier extends FamilyAsyncNotifier<List<Task>, TasksFilter> {
   @override
   Future<List<Task>> build(TasksFilter arg) async {
-    final repo = ref.read(missionsRepositoryProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final repo = ref.watch(missionsRepositoryProvider);
     return repo.listTasks(
       status: arg.status,
       folderId: arg.folderId,

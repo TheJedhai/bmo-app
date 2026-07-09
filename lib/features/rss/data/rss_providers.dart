@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_state.dart';
 import 'models/article.dart';
 import 'models/feed.dart';
 import 'rss_client.dart';
@@ -32,7 +33,9 @@ final rssRepositoryProvider = Provider<RssRepository>((ref) {
 class Feeds extends _$Feeds {
   @override
   Future<List<Feed>> build() async {
-    final repo = ref.read(rssRepositoryProvider);
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final repo = ref.watch(rssRepositoryProvider);
     return repo.listFeeds();
   }
 
@@ -141,11 +144,13 @@ class Articles extends _$Articles {
 
   @override
   Future<List<Article>> build(ArticlesFilter filter) async {
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
     _currentOffset = 0;
     _hasMore = true;
     _isLoadingMore = false;
     _loadMoreError = null;
-    final repo = ref.read(rssRepositoryProvider);
+    final repo = ref.watch(rssRepositoryProvider);
     final page = await repo.listArticles(
       feedId: filter.feedId,
       isRead: filter.isRead,
@@ -351,6 +356,8 @@ class Articles extends _$Articles {
 
 @riverpod
 Future<int> unreadCount(UnreadCountRef ref) async {
-  final repo = ref.read(rssRepositoryProvider);
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return 0;
+  final repo = ref.watch(rssRepositoryProvider);
   return repo.countArticles(isRead: false);
 }
