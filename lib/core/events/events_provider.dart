@@ -23,29 +23,44 @@ final eventsClientProvider = Provider<EventsClient>((ref) {
 /// and re-sync any ephemeral state lost during the disconnection.
 final sseGenerationProvider = StateProvider<int>((ref) => 0);
 
-final eventsStreamProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
+final eventsStreamProvider =
+    StreamProvider.autoDispose<Map<String, dynamic>>((ref) async* {
   // Watch userId so the stream is invalidated and reconnects with the
   // new identity when the user switches profiles.
-  ref.watch(currentUserIdProvider);
+  final userId = ref.watch(currentUserIdProvider);
+
+  // Guard: without an identity the SSE would 400 in a loop forever.
+  // Return an empty stream — the provider is autoDispose, so it will be
+  // recreated when _BmoMainShell mounts with a valid profile.
+  if (userId == null) return;
+
   final client = ref.watch(eventsClientProvider);
   var backoff = const Duration(seconds: 1);
   const maxBackoff = Duration(seconds: 30);
 
-  while (true) {
+  // Cancellation flag so the while(true) loop dies when the provider is
+  // invalidated/disposed — never leave an orphan generator with backoff
+  // running after a profile switch.
+  var cancelled = false;
+  ref.onDispose(() => cancelled = true);
+
+  while (!cancelled) {
     try {
       yield* client.connect();
       // Clean disconnect — reset backoff and reconnect immediately.
       backoff = const Duration(seconds: 1);
     } catch (e) {
+      if (cancelled) break;
       debugPrint('SSE error: $e. Reconnecting in ${backoff.inSeconds}s...');
       await Future.delayed(backoff);
+      if (cancelled) break;
       backoff = backoff * 2;
       if (backoff > maxBackoff) backoff = maxBackoff;
     }
   }
 });
 
-final eventsListenerProvider = Provider<void>((ref) {
+final eventsListenerProvider = Provider.autoDispose<void>((ref) {
   // Watch userId so the listener is rebuilt on identity changes, ensuring
   // the old stream subscription is cleaned up before a new one is created.
   ref.watch(currentUserIdProvider);
