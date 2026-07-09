@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/identity/identity_state.dart';
 import '../../core/theme/bmo_theme.dart';
 import 'data/chat_message.dart';
 import 'providers/chat_providers.dart';
@@ -19,6 +20,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    // Quando o perfil muda, reseta a conversa selecionada para que o
+    // auto-select abaixo escolha uma conversa do perfil correto.
+    ref.listenManual(currentUserIdProvider, (prev, next) {
+      ref.read(selectedConversationIdProvider.notifier).state = null;
+    });
+
     // Auto-seleciona a conversa mais recente assim que a lista carrega.
     ref.listenManual(conversationsProvider, (prev, next) {
       next.whenData((convs) {
