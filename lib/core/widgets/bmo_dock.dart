@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/rss/data/rss_providers.dart';
+import '../identity/identity_provider.dart';
+import '../identity/widgets/profile_avatar.dart';
 import '../navigation/app_tab.dart';
 import '../navigation/tab_provider.dart';
 import '../theme/bmo_theme.dart';
@@ -32,45 +34,68 @@ class BmoDock extends ConsumerWidget {
     // Nenhuma feature atual usa — mecanismo pronto para quando o
     // servidor começar a expor features opt-in.
 
+    final userAsync = ref.watch(currentUserProvider);
+
     return Container(
       height: isMobile ? 56 : 64,
       padding: EdgeInsets.symmetric(
         horizontal: isMobile ? 8 : 32,
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: AppTab.values.map((tab) {
-          final isActive = tab == currentTab;
-          final color = isActive ? BmoColors.accentGreen : BmoColors.textMuted;
+        children: [
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: AppTab.values.map((tab) {
+                final isActive = tab == currentTab;
+                final color =
+                    isActive ? BmoColors.accentGreen : BmoColors.textMuted;
 
-          return InkWell(
-            onTap: () => ref.read(currentTabProvider.notifier).setTab(tab),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: isMobile ? 12 : 16,
-                vertical: isMobile ? 10 : 8,
-              ),
-              child: isMobile
-                  ? _buildTabIcon(tab.icon, color, tab, unreadCount)
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildTabIcon(tab.icon, color, tab, unreadCount),
-                        const SizedBox(height: 4),
-                        Text(
-                          tab.label,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 12,
-                            fontFamily: 'Inter',
-                          ),
-                        ),
-                      ],
+                return InkWell(
+                  onTap: () =>
+                      ref.read(currentTabProvider.notifier).setTab(tab),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isMobile ? 12 : 16,
+                      vertical: isMobile ? 10 : 8,
                     ),
+                    child: isMobile
+                        ? _buildTabIcon(tab.icon, color, tab, unreadCount)
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _buildTabIcon(
+                                  tab.icon, color, tab, unreadCount),
+                              const SizedBox(height: 4),
+                              Text(
+                                tab.label,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 12,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
+          ),
+          // Profile avatar — tap to switch profile
+          userAsync.whenOrNull(
+            data: (user) {
+              if (user == null) return const SizedBox.shrink();
+              return GestureDetector(
+                onTap: () =>
+                    ref.read(currentUserProvider.notifier).clearUser(),
+                child: ProfileAvatar(profile: user, radius: 16),
+              );
+            },
+          ) ??
+              const SizedBox.shrink(),
+        ],
       ),
     );
   }
