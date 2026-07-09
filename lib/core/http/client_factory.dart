@@ -25,7 +25,16 @@ http.Client createHttpClient({String? userId}) {
 /// Reage a [currentUserIdProvider]: quando o perfil muda, o client é
 /// reconstruído com o novo X-User-Id, e todos os providers dependentes
 /// (clients, repositories, notifiers) rebuildam automaticamente.
+///
+/// O [UserIdGetter] lê [currentUserIdProvider] a cada [BmoHttpClient.send],
+/// não no momento da construção do client. Isso garante que mesmo providers
+/// que cacheiam uma referência antiga ao [BmoHttpClient] (ex.: repository
+/// providers que usavam ref.read) ainda enviem o X-User-Id correto —
+/// a identidade é sempre resolvida no momento do request.
 final httpClientProvider = Provider<http.Client>((ref) {
-  final userId = ref.watch(currentUserIdProvider);
-  return createHttpClient(userId: userId?.toString());
+  ref.watch(currentUserIdProvider); // mantém reatividade para side-effects (SSE etc)
+  return BmoHttpClient(impl.createHttpClient(), () {
+    final uid = ref.read(currentUserIdProvider);
+    return uid?.toString() ?? '';
+  });
 });

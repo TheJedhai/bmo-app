@@ -19,7 +19,7 @@ final missionsClientProvider = Provider<MissionsClient>((ref) {
 });
 
 final missionsRepositoryProvider = Provider<MissionsRepository>((ref) {
-  return MissionsRepository(ref.read(missionsClientProvider));
+  return MissionsRepository(ref.watch(missionsClientProvider));
 });
 
 // ============================================================

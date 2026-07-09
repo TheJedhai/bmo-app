@@ -21,7 +21,7 @@ final rssClientProvider = Provider<RssClient>((ref) {
 });
 
 final rssRepositoryProvider = Provider<RssRepository>((ref) {
-  return RssRepository(ref.read(rssClientProvider));
+  return RssRepository(ref.watch(rssClientProvider));
 });
 
 // ============================================================
