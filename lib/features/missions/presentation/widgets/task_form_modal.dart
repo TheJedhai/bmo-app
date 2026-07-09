@@ -785,8 +785,10 @@ class _FolderSelector extends StatelessWidget {
         return DropdownMenuItem<int>(
           value: f.id,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
+              Flexible(
+                fit: FlexFit.loose,
                 child: Text(
                   f.name,
                   style: theme.textTheme.bodySmall?.copyWith(

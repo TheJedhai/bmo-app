@@ -230,7 +230,8 @@ class _TasksListState extends ConsumerState<TasksList> {
           ...folders.map((f) => ListTile(
                 title: Row(
                   children: [
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.loose,
                       child: Text(f.name,
                           style: const TextStyle(color: BmoColors.textPrimary)),
                     ),
