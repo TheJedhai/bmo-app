@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/identity/identity_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/chat_message.dart';
 
-class ChatAvatar extends StatelessWidget {
+class ChatAvatar extends ConsumerWidget {
   final ChatRole role;
   final double size;
 
   const ChatAvatar({super.key, required this.role, this.size = 36});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (role == ChatRole.assistant) {
       return ClipOval(
         child: Image.asset(
@@ -22,7 +24,7 @@ class ChatAvatar extends StatelessWidget {
         ),
       );
     }
-    return _buildUserPlaceholder();
+    return _buildUserPlaceholder(ref);
   }
 
   Widget _buildBmoFallback() {
@@ -45,7 +47,10 @@ class ChatAvatar extends StatelessWidget {
     );
   }
 
-  Widget _buildUserPlaceholder() {
+  Widget _buildUserPlaceholder(WidgetRef ref) {
+    final currentUser = ref.watch(currentUserProvider).valueOrNull;
+    final initial = currentUser?.initial ?? '?';
+
     return Container(
       width: size,
       height: size,
@@ -56,7 +61,7 @@ class ChatAvatar extends StatelessWidget {
         border: Border.all(color: BmoColors.textMuted, width: 1),
       ),
       child: Text(
-        'J',
+        initial,
         style: TextStyle(
           fontFamily: 'PressStart2P',
           color: BmoColors.textPrimary,
