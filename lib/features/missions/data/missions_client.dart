@@ -46,11 +46,16 @@ class MissionsClient {
   Future<Folder> createFolder({
     required String name,
     int sortOrder = 0,
+    bool personal = false,
   }) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/folders'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'sort_order': sortOrder}),
+      body: jsonEncode({
+        'name': name,
+        'sort_order': sortOrder,
+        'personal': personal,
+      }),
     );
     _ensureOk(response);
     return Folder.fromJson(jsonDecode(response.body) as Map<String, dynamic>);

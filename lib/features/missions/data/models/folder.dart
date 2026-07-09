@@ -4,6 +4,7 @@ final class Folder {
   final int sortOrder;
   final bool isDefault;
   final DateTime createdAt;
+  final int? userId;
 
   const Folder({
     required this.id,
@@ -11,7 +12,12 @@ final class Folder {
     required this.sortOrder,
     required this.isDefault,
     required this.createdAt,
+    this.userId,
   });
+
+  /// `true` quando a pasta pertence a um usuário específico (pessoal).
+  /// `false` quando é compartilhada (userId == null).
+  bool get isPersonal => userId != null;
 
   factory Folder.fromJson(Map<String, dynamic> json) {
     return Folder(
@@ -20,6 +26,7 @@ final class Folder {
       sortOrder: json['sort_order'] as int? ?? 0,
       isDefault: json['is_default'] as bool? ?? false,
       createdAt: _parseDateTime(json['created_at']),
+      userId: json['user_id'] as int?,
     );
   }
 
@@ -30,11 +37,12 @@ final class Folder {
       'sort_order': sortOrder,
       'is_default': isDefault,
       'created_at': _formatDateTime(createdAt),
+      if (userId != null) 'user_id': userId,
     };
   }
 
   @override
-  String toString() => 'Folder(id=$id, name="$name")';
+  String toString() => 'Folder(id=$id, name="$name", isPersonal=$isPersonal)';
 }
 
 DateTime _parseDateTime(dynamic value) {

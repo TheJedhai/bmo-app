@@ -11,8 +11,8 @@ class MissionsRepository {
 
   Future<List<Folder>> listFolders() => _client.listFolders();
 
-  Future<Folder> createFolder({required String name, int sortOrder = 0}) =>
-      _client.createFolder(name: name, sortOrder: sortOrder);
+  Future<Folder> createFolder({required String name, int sortOrder = 0, bool personal = false}) =>
+      _client.createFolder(name: name, sortOrder: sortOrder, personal: personal);
 
   Future<Folder> updateFolder(int id, {String? name, int? sortOrder}) =>
       _client.updateFolder(id, name: name, sortOrder: sortOrder);

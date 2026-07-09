@@ -20,6 +20,7 @@ class FolderFormModal extends ConsumerStatefulWidget {
 class _FolderFormModalState extends ConsumerState<FolderFormModal> {
   late final TextEditingController _nameCtrl;
   bool _saving = false;
+  bool _personal = false;
 
   @override
   void initState() {
@@ -47,7 +48,7 @@ class _FolderFormModalState extends ConsumerState<FolderFormModal> {
       if (widget.isEditing) {
         await folders.edit(widget.folder!.id, name: name);
       } else {
-        await folders.create(name);
+        await folders.create(name, personal: _personal);
       }
 
       if (!mounted) return;
@@ -123,6 +124,13 @@ class _FolderFormModalState extends ConsumerState<FolderFormModal> {
                       onSubmitted: (_) => _save(),
                     ),
                     const SizedBox(height: 8),
+                    // Toggle "Pessoal" — só aparece na criação
+                    if (!widget.isEditing)
+                      _PersonalToggle(
+                        value: _personal,
+                        onChanged: (v) => setState(() => _personal = v),
+                        theme: theme,
+                      ),
                   ],
                 ),
               ),
@@ -168,6 +176,47 @@ class _FolderFormModalState extends ConsumerState<FolderFormModal> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PersonalToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final ThemeData theme;
+
+  const _PersonalToggle({
+    required this.value,
+    required this.onChanged,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          Icons.person_outline,
+          size: 16,
+          color: value ? BmoColors.accentGreen : BmoColors.textMuted,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Pessoal',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: value ? BmoColors.accentGreen : BmoColors.textSecondary,
+          ),
+        ),
+        const Spacer(),
+        Transform.scale(
+          scale: 0.8,
+          child: Switch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: BmoColors.accentGreen,
+          ),
+        ),
+      ],
     );
   }
 }

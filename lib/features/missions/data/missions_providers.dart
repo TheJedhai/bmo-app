@@ -39,9 +39,9 @@ class FoldersNotifier extends AsyncNotifier<List<Folder>> {
     state = await AsyncValue.guard(() => repo.listFolders());
   }
 
-  Future<Folder> create(String name, {int sortOrder = 0}) async {
+  Future<Folder> create(String name, {int sortOrder = 0, bool personal = false}) async {
     final repo = ref.read(missionsRepositoryProvider);
-    final folder = await repo.createFolder(name: name, sortOrder: sortOrder);
+    final folder = await repo.createFolder(name: name, sortOrder: sortOrder, personal: personal);
     final current = state.valueOrNull ?? const <Folder>[];
     state = AsyncData([...current, folder]);
     return folder;

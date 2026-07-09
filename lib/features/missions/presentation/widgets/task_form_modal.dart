@@ -784,11 +784,26 @@ class _FolderSelector extends StatelessWidget {
       items: folders.map((f) {
         return DropdownMenuItem<int>(
           value: f.id,
-          child: Text(
-            f.name,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: BmoColors.textPrimary,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  f.name,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: BmoColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (f.isPersonal)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    Icons.person_outline,
+                    size: 14,
+                    color: BmoColors.textMuted,
+                  ),
+                ),
+            ],
           ),
         );
       }).toList(),

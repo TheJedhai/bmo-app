@@ -108,6 +108,7 @@ class _FolderListContent extends StatelessWidget {
           _FolderItem(
             icon: Icons.folder_outlined,
             label: folder.name,
+            isPersonal: folder.isPersonal,
             selected: switch (currentView) {
               FolderView(:final folderId) => folderId == folder.id,
               _ => false,
@@ -136,6 +137,7 @@ class _FolderItem extends StatefulWidget {
   final VoidCallback onTap;
   final ThemeData theme;
   final Widget? trailing;
+  final bool isPersonal;
 
   const _FolderItem({
     required this.icon,
@@ -144,6 +146,7 @@ class _FolderItem extends StatefulWidget {
     required this.onTap,
     required this.theme,
     this.trailing,
+    this.isPersonal = false,
   });
 
   @override
@@ -179,6 +182,16 @@ class _FolderItemState extends State<_FolderItem> {
                     ? BmoColors.accentGreen
                     : BmoColors.textSecondary,
               ),
+              if (widget.isPersonal) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.person_outline,
+                  size: 14,
+                  color: widget.selected
+                      ? BmoColors.accentGreen
+                      : BmoColors.textMuted,
+                ),
+              ],
               const SizedBox(width: 10),
               Expanded(
                 child: Text(

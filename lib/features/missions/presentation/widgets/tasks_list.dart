@@ -228,8 +228,17 @@ class _TasksListState extends ConsumerState<TasksList> {
             ),
           ),
           ...folders.map((f) => ListTile(
-                title: Text(f.name,
-                    style: const TextStyle(color: BmoColors.textPrimary)),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(f.name,
+                          style: const TextStyle(color: BmoColors.textPrimary)),
+                    ),
+                    if (f.isPersonal)
+                      const Icon(Icons.person_outline,
+                          size: 14, color: BmoColors.textMuted),
+                  ],
+                ),
                 onTap: () => Navigator.of(ctx).pop(f.id),
               )),
           const SizedBox(height: 8),
