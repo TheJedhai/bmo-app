@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -121,8 +122,13 @@ final meClientProvider = Provider<MeClient>((ref) {
 ///
 /// O app depende dele para carregar/salvar o userId. Widgets que precisam
 /// de SharedPreferences devem usar este provider.
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('Setado em main.dart antes do runApp');
+///
+/// É nullable: em ambientes sem secure context (ex.: HTTP sobre IP puro),
+/// SharedPreferences.getInstance() lança exceção e o provider fica null.
+/// O [CurrentUser] trata isso graciosamente — leitura retorna null
+/// (seletor de perfil aparece) e gravação é no-op.
+final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) {
+  return null;
 });
 
 // ============================================================
@@ -134,7 +140,15 @@ class CurrentUser extends _$CurrentUser {
   @override
   Future<UserProfile?> build() async {
     final prefs = ref.read(sharedPreferencesProvider);
-    final savedId = prefs.getInt(_kUserIdKey);
+
+    int? savedId;
+    if (prefs != null) {
+      try {
+        savedId = prefs.getInt(_kUserIdKey);
+      } catch (e) {
+        debugPrint('SharedPreferences leitura falhou: $e');
+      }
+    }
 
     if (savedId == null) {
       // Primeira abertura — sem perfil salvo.
@@ -152,7 +166,13 @@ class CurrentUser extends _$CurrentUser {
       return me.user;
     } on MeUnknownUserException {
       // Perfil salvo não existe mais no servidor — limpa.
-      await prefs.remove(_kUserIdKey);
+      if (prefs != null) {
+        try {
+          await prefs.remove(_kUserIdKey);
+        } catch (e) {
+          debugPrint('SharedPreferences remove falhou: $e');
+        }
+      }
       return null;
     } catch (_) {
       // Erro de rede ou servidor — mantém o perfil salvo mas não
@@ -165,7 +185,13 @@ class CurrentUser extends _$CurrentUser {
   /// Seleciona um perfil, persiste, e atualiza o estado global.
   Future<void> setUser(int userId) async {
     final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.setInt(_kUserIdKey, userId);
+    if (prefs != null) {
+      try {
+        await prefs.setInt(_kUserIdKey, userId);
+      } catch (e) {
+        debugPrint('SharedPreferences setInt falhou: $e');
+      }
+    }
     ref.read(currentUserIdProvider.notifier).state = userId;
 
     // Valida e popula features.
@@ -178,7 +204,13 @@ class CurrentUser extends _$CurrentUser {
     } on MeUnknownUserException {
       // Não deveria acontecer logo após selecionar da lista, mas
       // trata limpando.
-      await prefs.remove(_kUserIdKey);
+      if (prefs != null) {
+        try {
+          await prefs.remove(_kUserIdKey);
+        } catch (e) {
+          debugPrint('SharedPreferences remove falhou: $e');
+        }
+      }
       ref.read(currentUserIdProvider.notifier).state = null;
       state = const AsyncData(null);
     } catch (_) {
@@ -190,7 +222,13 @@ class CurrentUser extends _$CurrentUser {
   /// Remove o perfil salvo e volta ao estado "sem perfil".
   Future<void> clearUser() async {
     final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.remove(_kUserIdKey);
+    if (prefs != null) {
+      try {
+        await prefs.remove(_kUserIdKey);
+      } catch (e) {
+        debugPrint('SharedPreferences remove falhou: $e');
+      }
+    }
     ref.read(currentUserIdProvider.notifier).state = null;
     ref.read(enabledFeaturesProvider.notifier).state = const {};
     state = const AsyncData(null);

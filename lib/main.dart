@@ -12,7 +12,16 @@ void main() async {
 
   // Carrega SharedPreferences antes do app iniciar — o identity provider
   // depende dele para persistir/carregar o userId escolhido.
-  final prefs = await SharedPreferences.getInstance();
+  //
+  // Em ambientes sem secure context (ex.: HTTP sobre IP puro), getInstance() lança
+  // exceção. O app inicializa sem storage nesse caso — o seletor de perfil
+  // aparece e o fluxo segue normalmente.
+  SharedPreferences? prefs;
+  try {
+    prefs = await SharedPreferences.getInstance();
+  } catch (e) {
+    debugPrint('SharedPreferences indisponível: $e');
+  }
 
   BmoRichRegistry.register('image', (block) => BmoRichImageCard(block: block));
   runApp(
