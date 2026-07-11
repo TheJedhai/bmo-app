@@ -8,6 +8,15 @@ enum RichBlockStatus {
 
   /// Content generation failed; see [RichBlockState.error].
   failed,
+
+  /// Question block: awaiting user choice.
+  pending,
+
+  /// Question block: user has chosen an option.
+  answered,
+
+  /// Question block: interaction was cancelled / timed out.
+  cancelled,
 }
 
 /// Immutable snapshot of a single rich block's live state.
@@ -19,12 +28,14 @@ class RichBlockState {
   final int progress; // 0–100 (meaningful when status == generating)
   final int? imageId;
   final String? error;
+  final String? chosenValue; // value of the chosen option (question blocks)
 
   const RichBlockState({
     required this.status,
     this.progress = 0,
     this.imageId,
     this.error,
+    this.chosenValue,
   });
 
   /// Builds state from a `rich.update` patch (or a GET /images/{id} body).
@@ -33,6 +44,9 @@ class RichBlockState {
   ///   {"status":"generating","progress":50}
   ///   {"status":"done","image_id":21}
   ///   {"status":"failed","error":"…"}
+  ///   {"status":"pending"}
+  ///   {"status":"answered","chosen_value":"opt_a"}
+  ///   {"status":"cancelled"}
   ///
   /// [existingImageId] is carried forward from a previous state (SSE patches
   /// don't always include `image_id`).
@@ -44,6 +58,9 @@ class RichBlockState {
     final status = switch (statusStr) {
       'done' => RichBlockStatus.done,
       'failed' => RichBlockStatus.failed,
+      'pending' => RichBlockStatus.pending,
+      'answered' => RichBlockStatus.answered,
+      'cancelled' => RichBlockStatus.cancelled,
       _ => RichBlockStatus.generating,
     };
     return RichBlockState(
@@ -51,6 +68,7 @@ class RichBlockState {
       progress: _parseInt(patch['progress'], 0),
       imageId: _parseInt(patch['image_id'], existingImageId ?? 0),
       error: patch['error'] as String?,
+      chosenValue: patch['chosen_value'] as String?,
     );
   }
 

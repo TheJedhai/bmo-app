@@ -6,7 +6,7 @@ part of 'rich_blocks_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$richBlocksHash() => r'd896551bedf6e66a88a9e3de8216e51f19be4798';
+String _$richBlocksHash() => r'3129e75fcf847da2e961ec3e9aaee9bac6776c24';
 
 /// Notifier that holds live state for every rich block currently on screen.
 ///

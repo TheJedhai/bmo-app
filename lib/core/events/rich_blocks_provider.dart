@@ -37,6 +37,8 @@ class RichBlocks extends _$RichBlocks {
     final mergedImageId = newState.imageId != null && newState.imageId! > 0
         ? newState.imageId
         : existing?.imageId;
+    // Carry forward chosen_value when SSE doesn't include it.
+    final mergedChosenValue = newState.chosenValue ?? existing?.chosenValue;
     state = {
       ...current,
       blockId: RichBlockState(
@@ -44,6 +46,7 @@ class RichBlocks extends _$RichBlocks {
         progress: newState.progress,
         imageId: mergedImageId,
         error: newState.error,
+        chosenValue: mergedChosenValue,
       ),
     };
   }
@@ -71,6 +74,31 @@ class RichBlocks extends _$RichBlocks {
     } catch (_) {
       // Best-effort — if the GET fails (network, etc.) the card still has the
       // last known SSE state or its static fallback.
+    }
+  }
+
+  /// One-shot sync of a question block from the REST API.
+  ///
+  /// GETs `/api/v1/questions/{questionId}` and upserts the result into the
+  /// map under [blockId].  The response fields (`status`, `chosen_value`) are
+  /// parsed by [RichBlockState.fromPatch].
+  Future<void> syncQuestionBlock(String blockId, int questionId) async {
+    final client = ref.read(httpClientProvider);
+    try {
+      final url = Uri.parse(
+        '${Env.bmoServerUrl}/api/v1/questions/$questionId',
+      );
+      final response = await client.get(url);
+      if (response.statusCode != 200) return;
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final current = Map<String, RichBlockState>.from(state);
+      state = {
+        ...current,
+        blockId: RichBlockState.fromPatch(json),
+      };
+    } catch (_) {
+      // Best-effort — same as syncImageBlock.
     }
   }
 }

@@ -132,6 +132,12 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
 
       case RichBlockStatus.failed:
         return _buildError(live.error);
+
+      // Question-only statuses — not applicable to image blocks.
+      case RichBlockStatus.pending:
+      case RichBlockStatus.answered:
+      case RichBlockStatus.cancelled:
+        return _buildStatic();
     }
   }
 
