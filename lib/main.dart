@@ -6,6 +6,7 @@ import 'app.dart';
 import 'core/identity/identity_provider.dart';
 import 'features/chat/data/bmo_rich_registry.dart';
 import 'features/chat/widgets/bmo_rich_image_card.dart';
+import 'features/chat/widgets/bmo_rich_question_card.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,7 @@ void main() async {
   }
 
   BmoRichRegistry.register('image', (block) => BmoRichImageCard(block: block));
+  BmoRichRegistry.register('question', (block) => BmoRichQuestionCard(block: block));
   runApp(
     ProviderScope(
       overrides: [
