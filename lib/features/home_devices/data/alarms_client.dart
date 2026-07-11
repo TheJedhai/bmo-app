@@ -140,7 +140,7 @@ class AlarmsClient {
 
   Future<List<Scene>> listScenes() async {
     final response = await _client.get(
-      Uri.parse('$_baseUrl/scenes'),
+      Uri.parse('$_baseUrl/api/v1/scenes'),
     );
     _ensureOk(response);
     final list = jsonDecode(response.body) as List<dynamic>;
