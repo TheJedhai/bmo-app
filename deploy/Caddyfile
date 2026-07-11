@@ -1,0 +1,15 @@
+jedhais-mac-mini.taild5baed.ts.net {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8089 {
+			flush_interval -1
+		}
+	}
+	handle /scenes* {
+		reverse_proxy 127.0.0.1:8089
+	}
+	handle {
+		root * /opt/homebrew/var/www/bmo
+		try_files {path} /index.html
+		file_server
+	}
+}
