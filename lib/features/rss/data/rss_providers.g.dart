@@ -6,7 +6,7 @@ part of 'rss_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$unreadCountHash() => r'e7d019a0fbc01d9180f49eae714f3280bed3957c';
+String _$unreadCountHash() => r'c4119b68b48a144bda6798b6630d9fe7e4b5725f';
 
 /// See also [unreadCount].
 @ProviderFor(unreadCount)
@@ -23,7 +23,7 @@ final unreadCountProvider = AutoDisposeFutureProvider<int>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UnreadCountRef = AutoDisposeFutureProviderRef<int>;
-String _$feedsHash() => r'7411b1d8d8d3244788704db6f58493e68c3c3f48';
+String _$feedsHash() => r'0b462212878cae6622d8cdefd70575d9c59736cc';
 
 /// See also [Feeds].
 @ProviderFor(Feeds)
@@ -39,7 +39,7 @@ final feedsProvider =
     );
 
 typedef _$Feeds = AutoDisposeAsyncNotifier<List<Feed>>;
-String _$articlesHash() => r'fc32e4165b7a638b91a1fbef2574121837961700';
+String _$articlesHash() => r'78061988a030b08c424b8b884332ff081980b5a2';
 
 /// Copied from Dart SDK
 class _SystemHash {

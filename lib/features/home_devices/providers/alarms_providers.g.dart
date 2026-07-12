@@ -6,7 +6,7 @@ part of 'alarms_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$scenesHash() => r'dd92c3d4fc46872557679555b44adf97b0f0264c';
+String _$scenesHash() => r'2ec4cd467221656bce11082508b796cd33fad24a';
 
 /// See also [scenes].
 @ProviderFor(scenes)
@@ -23,7 +23,7 @@ final scenesProvider = AutoDisposeFutureProvider<List<Scene>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ScenesRef = AutoDisposeFutureProviderRef<List<Scene>>;
-String _$alarmsNotifierHash() => r'dbf716c263c1ec2ee1d79a52475e2c3de64a5530';
+String _$alarmsNotifierHash() => r'5dd079b7a8a1a848445a92f934e0143efa34de12';
 
 /// See also [AlarmsNotifier].
 @ProviderFor(AlarmsNotifier)
