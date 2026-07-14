@@ -10,7 +10,7 @@ import 'core/widgets/tab_page.dart';
 import 'core/navigation/tab_provider.dart';
 import 'core/events/events_provider.dart';
 import 'features/chat/chat_screen.dart';
-import 'features/home/presentation/home_screen.dart';
+import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/home_devices/presentation/home_devices_screen.dart';
 import 'features/missions/presentation/missions_screen.dart';
 import 'features/rss/presentation/rss_screen.dart';
@@ -82,7 +82,7 @@ class _BmoMainShell extends ConsumerWidget {
           child: IndexedStack(
             index: currentTab.index,
             children: const [
-              TabPage(keepAlive: false, child: HomeScreen()),
+              TabPage(keepAlive: false, child: DashboardScreen()),
               TabPage(keepAlive: true, child: ChatScreen()),
               TabPage(keepAlive: true, child: MissionsScreen()),
               TabPage(keepAlive: true, child: HomeDevicesScreen()),
