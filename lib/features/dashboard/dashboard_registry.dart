@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'widgets/clock_card.dart';
+import 'widgets/gallery_card.dart';
 import 'widgets/lights_card.dart';
 import 'widgets/missions_card.dart';
 import 'widgets/rss_card.dart';
@@ -62,6 +63,12 @@ final List<DashWidgetSpec> dashboardWidgets = [
     mainAxisCellCount: 1,
     builder: _lightsCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'Galeria',
+    crossAxisCellCount: 2,
+    mainAxisCellCount: 1,
+    builder: _galleryCardBuilder,
+  ),
 ];
 
 Widget _clockCardBuilder(BuildContext context) {
@@ -78,4 +85,8 @@ Widget _rssCardBuilder(BuildContext context) {
 
 Widget _lightsCardBuilder(BuildContext context) {
   return const LightsCard();
+}
+
+Widget _galleryCardBuilder(BuildContext context) {
+  return const GalleryCard();
 }
