@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'widgets/clock_card.dart';
+
 /// Especificação de um widget da dashboard.
 ///
 /// [featureKey] null = visível para todos os usuários.
@@ -28,5 +30,14 @@ class DashWidgetSpec {
 ///
 /// Adicione novas specs aqui para registrar widgets na dashboard.
 final List<DashWidgetSpec> dashboardWidgets = [
-  // Widgets serão adicionados nos commits seguintes.
+  const DashWidgetSpec(
+    id: 'Relógio',
+    crossAxisCellCount: 2,
+    mainAxisCellCount: 1,
+    builder: _clockCardBuilder,
+  ),
 ];
+
+Widget _clockCardBuilder(BuildContext context) {
+  return const ClockCard();
+}
