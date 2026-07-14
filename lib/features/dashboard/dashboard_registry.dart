@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'widgets/clock_card.dart';
 import 'widgets/missions_card.dart';
+import 'widgets/rss_card.dart';
 
 /// Especificação de um widget da dashboard.
 ///
@@ -48,6 +49,12 @@ final List<DashWidgetSpec> dashboardWidgets = [
     mainAxisCellCount: 2,
     builder: _missionsCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'Notícias',
+    crossAxisCellCount: 2,
+    mainAxisCellCount: 2,
+    builder: _rssCardBuilder,
+  ),
 ];
 
 Widget _clockCardBuilder(BuildContext context) {
@@ -56,4 +63,8 @@ Widget _clockCardBuilder(BuildContext context) {
 
 Widget _missionsCardBuilder(BuildContext context) {
   return const MissionsCard();
+}
+
+Widget _rssCardBuilder(BuildContext context) {
+  return const RssCard();
 }
