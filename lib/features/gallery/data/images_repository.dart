@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:bmo_app/features/settings/data/flux_model.dart';
 
 import 'image_model.dart';
@@ -14,6 +16,9 @@ class ImagesRepository {
       _client.list(mode: mode);
 
   Future<void> delete(int id) => _client.delete(id);
+
+  Future<Uint8List> fetchImageBytes(int id) =>
+      _client.fetchImageBytes(id);
 
   Future<List<FluxModel>> getModels() => _client.getModels();
 

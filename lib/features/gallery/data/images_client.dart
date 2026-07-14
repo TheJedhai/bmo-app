@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -113,6 +114,18 @@ class ImagesClient {
     return GalleryImage.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
+  }
+
+  /// GET /api/v1/images/{id}/file
+  ///
+  /// Returns the raw image bytes. The client already injects X-User-Id
+  /// via [BmoHttpClient], so this route works with identity-gated galleries.
+  Future<Uint8List> fetchImageBytes(int id) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/api/v1/images/$id/file'),
+    );
+    _ensureOk(response);
+    return response.bodyBytes;
   }
 
   /// DELETE /api/v1/images/{id}

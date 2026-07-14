@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/config/env.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../gallery/data/image_model.dart';
 import '../../gallery/providers/images_provider.dart';
@@ -48,8 +47,6 @@ class _GalleryContent extends ConsumerWidget {
         );
   }
 
-  String _imageUrl(int id) => '${Env.bmoServerUrl}/api/v1/images/$id/file';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recent = _mostRecent;
@@ -69,7 +66,10 @@ class _GalleryContent extends ConsumerWidget {
       );
     }
 
-    // Thumbnail como fundo com overlay gradiente escuro.
+    // Thumbnail como fundo com overlay gradiente escuro,
+    // fetched via ImagesClient (que injeta X-User-Id).
+    final bytesAsync = ref.watch(imageBytesProvider(recent.id));
+
     return InkWell(
       onTap: () => showGalleryModal(context),
       borderRadius: BorderRadius.circular(12),
@@ -78,26 +78,25 @@ class _GalleryContent extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              _imageUrl(recent.id),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const Center(
+            bytesAsync.when(
+              loading: () => const Center(
+                child: Icon(
+                  Icons.image_outlined,
+                  size: 40,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+              error: (_, _) => const Center(
                 child: Icon(
                   Icons.broken_image_outlined,
                   size: 40,
                   color: BmoColors.textMuted,
                 ),
               ),
-              loadingBuilder: (_, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const Center(
-                  child: Icon(
-                    Icons.image_outlined,
-                    size: 40,
-                    color: BmoColors.textMuted,
-                  ),
-                );
-              },
+              data: (bytes) => Image.memory(
+                bytes,
+                fit: BoxFit.cover,
+              ),
             ),
             // Overlay gradiente escuro para legibilidade.
             Positioned(
@@ -142,13 +141,10 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Center(
-      child: Text(
-        '—',
-        style: TextStyle(
-          fontFamily: 'PressStart2P',
-          fontSize: 20,
-          color: BmoColors.textMuted,
-        ),
+      child: Icon(
+        Icons.broken_image_outlined,
+        size: 40,
+        color: BmoColors.textMuted,
       ),
     );
   }

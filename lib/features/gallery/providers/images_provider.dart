@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -32,6 +34,16 @@ final imagesRepositoryProvider = Provider<ImagesRepository>((ref) {
 /// Modo selecionado no SegmentedButton da galeria.
 /// `null` ou vazio = todos os modos.
 final imageModeFilterProvider = StateProvider<String?>((ref) => null);
+
+/// Raw image bytes for a given image [id], fetched from
+/// GET /api/v1/images/{id}/file with X-User-Id header.
+///
+/// Family keyed by image id — Riverpod caches each result while at least
+/// one watcher is active, so the thumbnail survives dashboard rebuilds.
+final imageBytesProvider = FutureProvider.family<Uint8List, int>((ref, id) {
+  final repo = ref.watch(imagesRepositoryProvider);
+  return repo.fetchImageBytes(id);
+});
 
 // ============================================================
 // Lista de imagens
