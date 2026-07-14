@@ -87,9 +87,9 @@ class _RssContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final recent = articles.take(3).toList();
 
-    return GestureDetector(
+    return InkWell(
       onTap: () => ref.read(currentTabProvider.notifier).setTab(AppTab.rss),
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

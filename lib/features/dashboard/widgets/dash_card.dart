@@ -11,8 +11,12 @@ import '../../../core/theme/bmo_theme.dart';
 /// Header opcional: título em PressStart2P tamanho ~10, cor textMuted,
 /// uppercase.
 ///
-/// Parâmetro [onTap] opcional: se presente, envolve em InkWell e mostra
-/// chevron discreto no header.
+/// Parâmetro [onTap] opcional: se presente, o [Material] + [InkWell]
+/// internos proveem o ripple visual e navegação. Sem [onTap], o card
+/// não responde a toques.
+///
+/// Estrutura: Container (decoration) → Material (transparent) →
+/// InkWell (onTap, borderRadius) → Column (header + Padding + child).
 class DashCard extends StatelessWidget {
   const DashCard({
     super.key,
@@ -27,7 +31,7 @@ class DashCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
+    return Container(
       decoration: BoxDecoration(
         color: BmoColors.screenBgElevated,
         borderRadius: BorderRadius.circular(12),
@@ -41,27 +45,29 @@ class DashCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null) _DashCardHeader(title: title!, showChevron: onTap != null),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: child,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title != null)
+                _DashCardHeader(
+                  title: title!,
+                  showChevron: onTap != null,
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: child,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
-
-    if (onTap != null) {
-      return InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: card,
-      );
-    }
-
-    return card;
   }
 }
 

@@ -49,10 +49,10 @@ class _MissionsContent extends ConsumerWidget {
       ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
     final upcoming = withDue.take(3).toList();
 
-    return GestureDetector(
+    return InkWell(
       onTap: () =>
           ref.read(currentTabProvider.notifier).setTab(AppTab.missions),
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

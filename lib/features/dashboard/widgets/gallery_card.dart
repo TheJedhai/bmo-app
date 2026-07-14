@@ -56,9 +56,9 @@ class _GalleryContent extends ConsumerWidget {
 
     if (recent == null) {
       // Nenhuma imagem — placeholder com ícone.
-      return GestureDetector(
+      return InkWell(
         onTap: () => showGalleryModal(context),
-        behavior: HitTestBehavior.opaque,
+        borderRadius: BorderRadius.circular(12),
         child: const Center(
           child: Icon(
             Icons.image_outlined,
@@ -70,9 +70,9 @@ class _GalleryContent extends ConsumerWidget {
     }
 
     // Thumbnail como fundo com overlay gradiente escuro.
-    return GestureDetector(
+    return InkWell(
       onTap: () => showGalleryModal(context),
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Stack(

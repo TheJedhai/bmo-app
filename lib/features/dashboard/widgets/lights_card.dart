@@ -38,10 +38,10 @@ class _LightsContent extends ConsumerWidget {
     final onCount =
         devices.values.where((d) => d.state == LightState.on).length;
 
-    return GestureDetector(
+    return InkWell(
       onTap: () =>
           ref.read(currentTabProvider.notifier).setTab(AppTab.homeDevices),
-      behavior: HitTestBehavior.opaque,
+      borderRadius: BorderRadius.circular(12),
       child: Row(
         children: [
           // Ícone de lâmpada
