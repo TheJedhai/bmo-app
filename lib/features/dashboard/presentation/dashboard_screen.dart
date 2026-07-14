@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
@@ -16,7 +15,6 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
-    final crossAxisCount = isMobile ? 2 : 4;
     final features = ref.watch(enabledFeaturesProvider);
 
     final visibleWidgets = dashboardWidgets.where((spec) {
@@ -27,28 +25,36 @@ class DashboardScreen extends ConsumerWidget {
     return Stack(
       children: [
         SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: StaggeredGrid.count(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: visibleWidgets.map((spec) {
-              final clampedCross = isMobile
-                  ? spec.crossAxisCellCount.clamp(1, 2)
-                  : spec.crossAxisCellCount;
-              return StaggeredGridTile.count(
-                crossAxisCellCount: clampedCross,
-                mainAxisCellCount: spec.mainAxisCellCount,
-                child: DashCard(
-                  title: spec.id,
-                  onTap: spec.onTap,
-                  child: spec.builder(context),
-                ),
+          padding: const EdgeInsets.all(28),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+
+              return Wrap(
+                spacing: 28,
+                runSpacing: 28,
+                alignment: WrapAlignment.center,
+                children: visibleWidgets.map((spec) {
+                  final cardWidth =
+                      isMobile ? availableWidth : spec.width;
+
+                  return SizedBox(
+                    width: cardWidth,
+                    height: spec.height,
+                    child: DashCard(
+                      title: spec.title,
+                      accent: spec.accent,
+                      pulseDelay: spec.pulseDelay,
+                      onTap: spec.onTap,
+                      child: spec.builder(context, spec.accent),
+                    ),
+                  );
+                }).toList(),
               );
-            }).toList(),
+            },
           ),
         ),
-        // Settings gear — fora do grid, canto superior direito.
+        // Settings gear — fora do Wrap, canto superior direito.
         Positioned(
           top: 8,
           right: 8,

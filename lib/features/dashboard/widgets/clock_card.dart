@@ -13,7 +13,9 @@ import '../../../core/theme/bmo_theme.dart';
 /// a data por extenso em pt-BR com saudação por período do dia + nome do
 /// usuário atual.
 class ClockCard extends ConsumerStatefulWidget {
-  const ClockCard({super.key});
+  const ClockCard({super.key, required this.accent});
+
+  final Color accent;
 
   @override
   ConsumerState<ClockCard> createState() => _ClockCardState();

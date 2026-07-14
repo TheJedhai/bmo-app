@@ -10,6 +10,8 @@ class BmoColors {
   static const textMuted = Color(0xFF6A6A6A);         // labels/timestamps
   static const accentGreen = Color(0xFFB8E0C2);       // ativo (cursor, online)
   static const accentYellow = Color(0xFFE8D8A0);      // detalhes
+  static const accentBlue = Color(0xFF8FB8E8);        // accents dos cards da
+  static const accentRed = Color(0xFFE8938A);         // dashboard (botões coloridos do BMO)
 }
 
 class BmoTheme {

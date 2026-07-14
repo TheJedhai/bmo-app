@@ -6,7 +6,6 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
 import 'gallery_image_detail.dart';
-import 'img2img_form_modal.dart';
 
 const _kMobileBreakpoint = 600.0;
 
@@ -81,7 +80,6 @@ class _GalleryModalState extends ConsumerState<_GalleryModal> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
     final imagesAsync = ref.watch(imagesProvider);
-    final currentMode = ref.watch(imageModeFilterProvider);
 
     return Dialog(
       backgroundColor: BmoColors.screenBgElevated,
@@ -104,12 +102,6 @@ class _GalleryModalState extends ConsumerState<_GalleryModal> {
             _GalleryHeader(
               onClose: () => Navigator.of(context).pop(),
             ),
-            // Mode filter
-            _ModeFilter(
-              currentMode: currentMode,
-              onChanged: (mode) =>
-                  ref.read(imagesProvider.notifier).setMode(mode),
-            ),
             // Content
             Flexible(
               child: imagesAsync.when(
@@ -122,7 +114,7 @@ class _GalleryModalState extends ConsumerState<_GalleryModal> {
                 ),
                 data: (images) {
                   if (images.isEmpty) {
-                    return _GalleryEmptyState(hasFilter: currentMode != null);
+                    return const _GalleryEmptyState();
                   }
                   return RefreshIndicator(
                     color: BmoColors.accentGreen,
@@ -165,88 +157,12 @@ class _GalleryHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const Spacer(),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: BmoColors.accentGreen.withValues(alpha: 0.15),
-              foregroundColor: BmoColors.accentGreen,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            ),
-            onPressed: () => showImg2ImgFormModal(context),
-            icon: const Icon(Icons.auto_fix_high, size: 16),
-            label: const Text('Criar'),
-          ),
-          const SizedBox(width: 4),
           IconButton(
             icon: Icon(Icons.close, color: BmoColors.textSecondary),
             tooltip: 'Fechar',
             onPressed: onClose,
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Mode filter
-// ============================================================
-
-class _ModeFilter extends StatelessWidget {
-  final String? currentMode;
-  final ValueChanged<String?> onChanged;
-
-  const _ModeFilter({
-    required this.currentMode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-      child: SegmentedButton<String?>(
-        segments: const [
-          ButtonSegment<String?>(
-            value: null,
-            label: Text('Todos'),
-            icon: Icon(Icons.photo_library_outlined, size: 16),
-          ),
-          ButtonSegment<String?>(
-            value: 'txt2img',
-            label: Text('txt2img'),
-            icon: Icon(Icons.text_fields, size: 16),
-          ),
-          ButtonSegment<String?>(
-            value: 'img2img',
-            label: Text('img2img'),
-            icon: Icon(Icons.transform, size: 16),
-          ),
-        ],
-        selected: {currentMode},
-        onSelectionChanged: (selected) => onChanged(selected.first),
-        style: ButtonStyle(
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return BmoColors.accentGreen.withValues(alpha: 0.2);
-            }
-            return BmoColors.screenBg;
-          }),
-          foregroundColor: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return BmoColors.accentGreen;
-            }
-            return BmoColors.textSecondary;
-          }),
-          side: WidgetStateProperty.resolveWith((states) {
-            if (states.contains(WidgetState.selected)) {
-              return const BorderSide(color: BmoColors.accentGreen, width: 1);
-            }
-            return BorderSide(
-              color: BmoColors.textMuted.withValues(alpha: 0.3),
-              width: 1,
-            );
-          }),
-        ),
       ),
     );
   }
@@ -453,15 +369,13 @@ class _ImageThumbnail extends StatelessWidget {
 // ============================================================
 
 class _GalleryEmptyState extends StatelessWidget {
-  final bool hasFilter;
-
-  const _GalleryEmptyState({required this.hasFilter});
+  const _GalleryEmptyState();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -470,9 +384,9 @@ class _GalleryEmptyState extends StatelessWidget {
               size: 48,
               color: BmoColors.textMuted,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Text(
-              hasFilter ? 'Nenhuma imagem neste modo' : 'Nenhuma imagem ainda',
+              'Nenhuma imagem ainda',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Inter',
@@ -480,11 +394,9 @@ class _GalleryEmptyState extends StatelessWidget {
                 color: BmoColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
-              hasFilter
-                  ? 'Tente selecionar "Todos" ou gere imagens neste modo.'
-                  : 'Gere imagens pelo chat para vê-las aqui.',
+              'Gere imagens pelo chat para vê-las aqui.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontFamily: 'Inter',

@@ -15,6 +15,9 @@ import '../../../core/theme/bmo_theme.dart';
 /// internos proveem o ripple visual e navegação. Sem [onTap], o card
 /// não responde a toques.
 ///
+/// [accent] define a cor de destaque do card (borda, glow, header).
+/// [pulseDelay] atraso inicial da animação de glow pulsante.
+///
 /// Estrutura: Container (decoration) → Material (transparent) →
 /// InkWell (onTap, borderRadius) → Column (header + Padding + child).
 class DashCard extends StatelessWidget {
@@ -22,11 +25,15 @@ class DashCard extends StatelessWidget {
     super.key,
     this.title,
     this.onTap,
+    required this.accent,
+    this.pulseDelay = Duration.zero,
     required this.child,
   });
 
   final String? title;
-  final VoidCallback? onTap;
+  final void Function(BuildContext)? onTap;
+  final Color accent;
+  final Duration pulseDelay;
   final Widget child;
 
   @override
@@ -49,7 +56,7 @@ class DashCard extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          onTap: onTap,
+          onTap: onTap != null ? () => onTap!(context) : null,
           borderRadius: BorderRadius.circular(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,9 +66,11 @@ class DashCard extends StatelessWidget {
                   title: title!,
                   showChevron: onTap != null,
                 ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: child,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: child,
+                ),
               ),
             ],
           ),

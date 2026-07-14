@@ -14,7 +14,9 @@ import '../../rss/data/rss_providers.dart';
 /// 3 artigos não lidos mais recentes, com nome do feed. Toque navega
 /// para a aba Notícias.
 class RssCard extends ConsumerWidget {
-  const RssCard({super.key});
+  const RssCard({super.key, required this.accent});
+
+  final Color accent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

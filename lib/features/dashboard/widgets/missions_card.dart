@@ -12,7 +12,9 @@ import '../../missions/data/missions_providers.dart';
 /// Mostra a contagem de tarefas pendentes em destaque e as próximas 3
 /// tarefas com prazo mais próximo. Toque navega para a aba Missões.
 class MissionsCard extends ConsumerWidget {
-  const MissionsCard({super.key});
+  const MissionsCard({super.key, required this.accent});
+
+  final Color accent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

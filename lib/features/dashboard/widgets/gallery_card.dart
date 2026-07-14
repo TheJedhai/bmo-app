@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../gallery/data/image_model.dart';
 import '../../gallery/providers/images_provider.dart';
-import '../../gallery/widgets/gallery_modal.dart';
 
 /// Card da galeria — span 2×1.
 ///
@@ -13,16 +12,27 @@ import '../../gallery/widgets/gallery_modal.dart';
 /// image_outlined centralizado. Toque abre a galeria (showGalleryModal),
 /// preservando o comportamento da Home antiga.
 class GalleryCard extends ConsumerWidget {
-  const GalleryCard({super.key});
+  const GalleryCard({super.key, required this.accent});
+
+  final Color accent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final imagesAsync = ref.watch(imagesProvider);
 
     return imagesAsync.when(
-      loading: () => const _LoadingState(),
-      error: (_, _) => const _ErrorState(),
-      data: (images) => _GalleryContent(images: images),
+      loading: () {
+        debugPrint('[GalleryCard] state=loading');
+        return const _LoadingState();
+      },
+      error: (e, st) {
+        debugPrint('[GalleryCard] state=error — $e\n$st');
+        return const _ErrorState();
+      },
+      data: (images) {
+        debugPrint('[GalleryCard] state=data — ${images.length} imagens');
+        return _GalleryContent(images: images);
+      },
     );
   }
 }
@@ -53,15 +63,12 @@ class _GalleryContent extends ConsumerWidget {
 
     if (recent == null) {
       // Nenhuma imagem — placeholder com ícone.
-      return InkWell(
-        onTap: () => showGalleryModal(context),
-        borderRadius: BorderRadius.circular(12),
-        child: const Center(
-          child: Icon(
-            Icons.image_outlined,
-            size: 40,
-            color: BmoColors.textMuted,
-          ),
+      // O DashCard já provê o InkWell + onTap que chama showGalleryModal.
+      return const Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 40,
+          color: BmoColors.textMuted,
         ),
       );
     }
@@ -70,55 +77,55 @@ class _GalleryContent extends ConsumerWidget {
     // fetched via ImagesClient (que injeta X-User-Id).
     final bytesAsync = ref.watch(imageBytesProvider(recent.id));
 
-    return InkWell(
-      onTap: () => showGalleryModal(context),
+    // O DashCard já provê o InkWell + onTap que chama showGalleryModal.
+    return ClipRRect(
       borderRadius: BorderRadius.circular(12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            bytesAsync.when(
-              loading: () => const Center(
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 40,
-                  color: BmoColors.textMuted,
-                ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          bytesAsync.when(
+            loading: () => const Center(
+              child: Icon(
+                Icons.image_outlined,
+                size: 40,
+                color: BmoColors.textMuted,
               ),
-              error: (_, _) => const Center(
+            ),
+            error: (e, st) {
+              debugPrint('[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st');
+              return const Center(
                 child: Icon(
                   Icons.broken_image_outlined,
                   size: 40,
                   color: BmoColors.textMuted,
                 ),
-              ),
-              data: (bytes) => Image.memory(
-                bytes,
-                fit: BoxFit.cover,
-              ),
+              );
+            },
+            data: (bytes) => Image.memory(
+              bytes,
+              fit: BoxFit.cover,
             ),
-            // Overlay gradiente escuro para legibilidade.
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 48,
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Color(0xCC1E1F23),
-                      Colors.transparent,
-                    ],
-                  ),
+          ),
+          // Overlay gradiente escuro para legibilidade.
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 48,
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    Color(0xCC1E1F23),
+                    Colors.transparent,
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

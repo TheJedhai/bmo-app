@@ -13,7 +13,9 @@ import '../../home_devices/providers/devices_providers.dart';
 /// (accentYellow quando há luzes acesas, textMuted quando tudo apagado).
 /// Toque navega para a aba Casa.
 class LightsCard extends ConsumerWidget {
-  const LightsCard({super.key});
+  const LightsCard({super.key, required this.accent});
+
+  final Color accent;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
