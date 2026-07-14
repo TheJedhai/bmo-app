@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 
 import 'widgets/clock_card.dart';
+import 'widgets/missions_card.dart';
 
 /// Especificação de um widget da dashboard.
 ///
 /// [featureKey] null = visível para todos os usuários.
 /// [featureKey] preenchido = só renderiza se a key estiver em
 /// [enabledFeaturesProvider].
+///
+/// [onTap] opcional: se presente, o [DashCard] recebe o callback e
+/// mostra chevron no header.
 class DashWidgetSpec {
   final String id;
   final int crossAxisCellCount;
   final int mainAxisCellCount;
   final String? featureKey;
+  final VoidCallback? onTap;
   final WidgetBuilder builder;
 
   const DashWidgetSpec({
@@ -19,6 +24,7 @@ class DashWidgetSpec {
     required this.crossAxisCellCount,
     required this.mainAxisCellCount,
     this.featureKey,
+    this.onTap,
     required this.builder,
   });
 }
@@ -36,8 +42,18 @@ final List<DashWidgetSpec> dashboardWidgets = [
     mainAxisCellCount: 1,
     builder: _clockCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'Missões',
+    crossAxisCellCount: 2,
+    mainAxisCellCount: 2,
+    builder: _missionsCardBuilder,
+  ),
 ];
 
 Widget _clockCardBuilder(BuildContext context) {
   return const ClockCard();
+}
+
+Widget _missionsCardBuilder(BuildContext context) {
+  return const MissionsCard();
 }

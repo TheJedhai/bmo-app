@@ -41,6 +41,7 @@ class DashboardScreen extends ConsumerWidget {
                 mainAxisCellCount: spec.mainAxisCellCount,
                 child: DashCard(
                   title: spec.id,
+                  onTap: spec.onTap,
                   child: spec.builder(context),
                 ),
               );
