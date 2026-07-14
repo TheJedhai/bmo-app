@@ -5,12 +5,11 @@ import '../../../core/theme/bmo_theme.dart';
 import '../../gallery/data/image_model.dart';
 import '../../gallery/providers/images_provider.dart';
 
-/// Card da galeria — span 2×1.
+/// Card da galeria.
 ///
-/// Mostra a thumbnail da imagem mais recente como fundo do card com
-/// overlay escuro gradiente. Se não houver imagens, mostra ícone
-/// image_outlined centralizado. Toque abre a galeria (showGalleryModal),
-/// preservando o comportamento da Home antiga.
+/// Mostra a thumbnail da imagem mais recente preenchendo todo o card com
+/// overlay gradiente escuro no rodapé e título da imagem em branco bold.
+/// Toque via DashCard onTap (showGalleryModal).
 class GalleryCard extends ConsumerWidget {
   const GalleryCard({super.key, required this.accent});
 
@@ -48,9 +47,8 @@ class _GalleryContent extends ConsumerWidget {
     sorted.sort((a, b) {
       final aDate = a.createdAt ?? DateTime(1970);
       final bDate = b.createdAt ?? DateTime(1970);
-      return bDate.compareTo(aDate); // descending
+      return bDate.compareTo(aDate);
     });
-    // Pega a primeira imagem com status "done".
     return sorted.cast<GalleryImage?>().firstWhere(
           (img) => img!.isDone,
           orElse: () => sorted.first,
@@ -62,8 +60,6 @@ class _GalleryContent extends ConsumerWidget {
     final recent = _mostRecent;
 
     if (recent == null) {
-      // Nenhuma imagem — placeholder com ícone.
-      // O DashCard já provê o InkWell + onTap que chama showGalleryModal.
       return const Center(
         child: Icon(
           Icons.image_outlined,
@@ -73,11 +69,8 @@ class _GalleryContent extends ConsumerWidget {
       );
     }
 
-    // Thumbnail como fundo com overlay gradiente escuro,
-    // fetched via ImagesClient (que injeta X-User-Id).
     final bytesAsync = ref.watch(imageBytesProvider(recent.id));
 
-    // O DashCard já provê o InkWell + onTap que chama showGalleryModal.
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Stack(
@@ -92,7 +85,9 @@ class _GalleryContent extends ConsumerWidget {
               ),
             ),
             error: (e, st) {
-              debugPrint('[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st');
+              debugPrint(
+                '[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st',
+              );
               return const Center(
                 child: Icon(
                   Icons.broken_image_outlined,
@@ -106,12 +101,12 @@ class _GalleryContent extends ConsumerWidget {
               fit: BoxFit.cover,
             ),
           ),
-          // Overlay gradiente escuro para legibilidade.
+          // Overlay gradiente escuro no rodapé
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            height: 48,
+            height: 56,
             child: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -125,6 +120,24 @@ class _GalleryContent extends ConsumerWidget {
               ),
             ),
           ),
+          // Título da imagem (prompt) sobre o overlay
+          if (recent.prompt != null && recent.prompt!.isNotEmpty)
+            Positioned(
+              bottom: 10,
+              left: 12,
+              right: 12,
+              child: Text(
+                recent.prompt!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
         ],
       ),
     );

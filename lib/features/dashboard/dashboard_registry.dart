@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/navigation/app_tab.dart';
+import '../../core/navigation/tab_provider.dart';
 import '../../core/theme/bmo_theme.dart';
 import '../gallery/widgets/gallery_modal.dart';
 import 'widgets/clock_card.dart';
@@ -64,6 +67,7 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentGreen,
     width: 340,
     pulseDelay: Duration(milliseconds: 500),
+    onTap: _goToMissions,
     builder: _missionsCardBuilder,
   ),
   const DashWidgetSpec(
@@ -72,6 +76,7 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentBlue,
     width: 340,
     pulseDelay: Duration(milliseconds: 1000),
+    onTap: _goToRss,
     builder: _rssCardBuilder,
   ),
   const DashWidgetSpec(
@@ -80,6 +85,7 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentRed,
     width: 300,
     pulseDelay: Duration(milliseconds: 1500),
+    onTap: _goToHomeDevices,
     builder: _lightsCardBuilder,
   ),
   const DashWidgetSpec(
@@ -93,6 +99,24 @@ final List<DashWidgetSpec> dashboardWidgets = [
     builder: _galleryCardBuilder,
   ),
 ];
+
+void _goToMissions(BuildContext context) {
+  ProviderScope.containerOf(context)
+      .read(currentTabProvider.notifier)
+      .setTab(AppTab.missions);
+}
+
+void _goToRss(BuildContext context) {
+  ProviderScope.containerOf(context)
+      .read(currentTabProvider.notifier)
+      .setTab(AppTab.rss);
+}
+
+void _goToHomeDevices(BuildContext context) {
+  ProviderScope.containerOf(context)
+      .read(currentTabProvider.notifier)
+      .setTab(AppTab.homeDevices);
+}
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
   return ClockCard(accent: accent);

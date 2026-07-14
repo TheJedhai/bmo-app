@@ -9,9 +9,8 @@ import '../../../core/theme/bmo_theme.dart';
 
 /// Relógio + data + saudação.
 ///
-/// Span 2×1 no grid da dashboard. Atualiza a hora a cada minuto e mostra
-/// a data por extenso em pt-BR com saudação por período do dia + nome do
-/// usuário atual.
+/// Mostra a hora em PressStart2P 44px na cor do accent, data por extenso
+/// em pt-BR e saudação por período do dia com nome do usuário.
 class ClockCard extends ConsumerStatefulWidget {
   const ClockCard({super.key, required this.accent});
 
@@ -63,16 +62,22 @@ class _ClockCardState extends ConsumerState<ClockCard> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Hora atual
+        // Hora em destaque
         Text(
           hourFormat.format(_now),
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'PressStart2P',
-            fontSize: 32,
-            color: BmoColors.accentGreen,
+            fontSize: 44,
+            color: widget.accent,
+            shadows: [
+              Shadow(
+                color: widget.accent.withValues(alpha: 0.40),
+                blurRadius: 8,
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         // Data por extenso
         Text(
           dateFormat.format(_now),
@@ -82,14 +87,25 @@ class _ClockCardState extends ConsumerState<ClockCard> {
             color: BmoColors.textSecondary,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         // Saudação + nome
-        Text(
-          '${_greeting(hour)} $userName',
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            color: BmoColors.textSecondary,
+        RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 16,
+              color: BmoColors.textPrimary,
+            ),
+            children: [
+              TextSpan(
+                text: '${_greeting(hour)} ',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: widget.accent,
+                ),
+              ),
+              TextSpan(text: userName),
+            ],
           ),
         ),
       ],

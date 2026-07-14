@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/navigation/app_tab.dart';
-import '../../../core/navigation/tab_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../missions/data/models/task.dart';
 import '../../missions/data/missions_providers.dart';
+import 'dash_card.dart';
 
-/// Card de missões pendentes — span 2×2.
+/// Card de missões pendentes.
 ///
 /// Mostra a contagem de tarefas pendentes em destaque e as próximas 3
-/// tarefas com prazo mais próximo. Toque navega para a aba Missões.
+/// tarefas com prazo mais próximo, com cores de urgência (hoje = amarelo,
+/// amanhã = azul, atrasada = vermelho). Toque via DashCard onTap.
 class MissionsCard extends ConsumerWidget {
   const MissionsCard({super.key, required this.accent});
 
@@ -30,73 +30,57 @@ class MissionsCard extends ConsumerWidget {
     return tasksAsync.when(
       loading: () => const _LoadingState(),
       error: (_, _) => const _ErrorState(),
-      data: (tasks) => _MissionsContent(tasks: tasks),
+      data: (tasks) => _MissionsContent(tasks: tasks, accent: accent),
     );
   }
 }
 
-class _MissionsContent extends ConsumerWidget {
-  const _MissionsContent({required this.tasks});
+class _MissionsContent extends StatelessWidget {
+  const _MissionsContent({required this.tasks, required this.accent});
 
   final List<Task> tasks;
+  final Color accent;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final pendingCount = tasks.length;
 
-    // Próximas 3 tarefas com prazo, ordenadas por dueDate mais próximo.
-    final withDue = tasks
-        .where((t) => t.dueDate != null)
-        .toList()
-      ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
+    final withDue =
+        tasks.where((t) => t.dueDate != null).toList()
+          ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
     final upcoming = withDue.take(3).toList();
 
-    return InkWell(
-      onTap: () =>
-          ref.read(currentTabProvider.notifier).setTab(AppTab.missions),
-      borderRadius: BorderRadius.circular(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Contagem em destaque
-          Text(
-            '$pendingCount',
-            style: const TextStyle(
-              fontFamily: 'PressStart2P',
-              fontSize: 40,
-              color: BmoColors.accentYellow,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Contagem em destaque
+        DashCard.highlightNumber('$pendingCount', accent),
+        const SizedBox(height: 4),
+        Text(
+          pendingCount == 1 ? 'tarefa pendente' : 'tarefas pendentes',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: BmoColors.textSecondary,
           ),
-          const SizedBox(height: 4),
+        ),
+        if (upcoming.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Divider(color: BmoColors.textMuted, height: 1),
+          const SizedBox(height: 12),
+          ...upcoming.map((task) => _TaskRow(task: task)),
+        ] else if (pendingCount > 0) ...[
+          const SizedBox(height: 16),
           Text(
-            pendingCount == 1 ? 'tarefa pendente' : 'tarefas pendentes',
-            style: const TextStyle(
+            'Nenhuma tarefa com prazo definido',
+            style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 13,
-              color: BmoColors.textSecondary,
+              fontSize: 12,
+              color: BmoColors.textMuted.withValues(alpha: 0.7),
             ),
           ),
-          if (upcoming.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const Divider(
-              color: BmoColors.textMuted,
-              height: 1,
-            ),
-            const SizedBox(height: 12),
-            ...upcoming.map((task) => _TaskRow(task: task)),
-          ] else if (pendingCount > 0) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Nenhuma tarefa com prazo definido',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                color: BmoColors.textMuted.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 }
@@ -106,22 +90,28 @@ class _TaskRow extends StatelessWidget {
 
   final Task task;
 
-  String _deadlineLabel(DateTime due) {
+  ({String label, Color? color}) _deadlineInfo(DateTime due) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final dueDay = DateTime(due.year, due.month, due.day);
     final diff = dueDay.difference(today).inDays;
 
-    if (diff < 0) return 'atrasada';
-    if (diff == 0) return 'hoje';
-    if (diff == 1) return 'amanhã';
-    return 'em ${diff}d';
+    if (diff < 0) {
+      return (label: 'atrasada', color: BmoColors.accentRed);
+    }
+    if (diff == 0) {
+      return (label: 'hoje', color: BmoColors.accentYellow);
+    }
+    if (diff == 1) {
+      return (label: 'amanhã', color: BmoColors.accentBlue);
+    }
+    return (label: 'em ${diff}d', color: null);
   }
 
   @override
   Widget build(BuildContext context) {
-    final label = task.dueDate != null ? _deadlineLabel(task.dueDate!) : '';
-    final isOverdue = label == 'atrasada';
+    final info =
+        task.dueDate != null ? _deadlineInfo(task.dueDate!) : null;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -141,15 +131,13 @@ class _TaskRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (label.isNotEmpty)
+          if (info != null)
             Text(
-              label,
+              info.label,
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 12,
-                color: isOverdue
-                    ? const Color(0xFFE57373)
-                    : BmoColors.textMuted,
+                color: info.color ?? BmoColors.textMuted,
               ),
             ),
         ],

@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/navigation/app_tab.dart';
-import '../../../core/navigation/tab_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../home_devices/data/device.dart';
 import '../../home_devices/providers/devices_providers.dart';
 
-/// Card de luzes da casa — span 2×1.
+/// Card de luzes da casa.
 ///
-/// Mostra "N de M luzes acesas" com ícone de lâmpada condicional
-/// (accentYellow quando há luzes acesas, textMuted quando tudo apagado).
-/// Toque navega para a aba Casa.
+/// Mostra ícone de lâmpada grande em outline na cor do accent,
+/// "N de M" em bold e "luzes acesas" em muted. Toque via DashCard onTap.
 class LightsCard extends ConsumerWidget {
   const LightsCard({super.key, required this.accent});
 
@@ -24,63 +21,58 @@ class LightsCard extends ConsumerWidget {
     return devicesAsync.when(
       loading: () => const _LoadingState(),
       error: (_, _) => const _ErrorState(),
-      data: (devices) => _LightsContent(devices: devices),
+      data: (devices) => _LightsContent(devices: devices, accent: accent),
     );
   }
 }
 
-class _LightsContent extends ConsumerWidget {
-  const _LightsContent({required this.devices});
+class _LightsContent extends StatelessWidget {
+  const _LightsContent({required this.devices, required this.accent});
 
   final Map<String, LightDevice> devices;
+  final Color accent;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final total = devices.length;
     final onCount =
         devices.values.where((d) => d.state == LightState.on).length;
 
-    return InkWell(
-      onTap: () =>
-          ref.read(currentTabProvider.notifier).setTab(AppTab.homeDevices),
-      borderRadius: BorderRadius.circular(12),
-      child: Row(
-        children: [
-          // Ícone de lâmpada
-          Icon(
-            onCount > 0 ? Icons.lightbulb : Icons.lightbulb_outline,
-            size: 36,
-            color: onCount > 0 ? BmoColors.accentYellow : BmoColors.textMuted,
-          ),
-          const SizedBox(width: 16),
-          // Contagem
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$onCount de $total',
-                  style: const TextStyle(
-                    fontFamily: 'PressStart2P',
-                    fontSize: 20,
-                    color: BmoColors.accentYellow,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'luzes acesas',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    color: BmoColors.textSecondary,
-                  ),
-                ),
-              ],
+    return Row(
+      children: [
+        // Ícone de lâmpada grande em outline na cor do accent
+        Icon(
+          Icons.lightbulb_outline,
+          size: 48,
+          color: accent,
+        ),
+        const SizedBox(width: 16),
+        // Contagem
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$onCount de $total',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: BmoColors.textPrimary,
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(height: 4),
+            const Text(
+              'luzes acesas',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                color: BmoColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -94,7 +86,7 @@ class _LoadingState extends StatelessWidget {
       padding: EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(Icons.lightbulb_outline, size: 36, color: BmoColors.textMuted),
+          Icon(Icons.lightbulb_outline, size: 48, color: BmoColors.textMuted),
           SizedBox(width: 16),
           Text(
             '—',
@@ -119,7 +111,7 @@ class _ErrorState extends StatelessWidget {
       padding: EdgeInsets.all(16),
       child: Row(
         children: [
-          Icon(Icons.lightbulb_outline, size: 36, color: BmoColors.textMuted),
+          Icon(Icons.lightbulb_outline, size: 48, color: BmoColors.textMuted),
           SizedBox(width: 16),
           Text(
             'sem conexão',

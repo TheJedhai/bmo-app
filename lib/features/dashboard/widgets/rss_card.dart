@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/navigation/app_tab.dart';
-import '../../../core/navigation/tab_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../rss/data/models/article.dart';
 import '../../rss/data/models/feed.dart';
 import '../../rss/data/rss_providers.dart';
+import 'dash_card.dart';
 
-/// Card de notícias não lidas — span 2×2.
+/// Card de notícias não lidas.
 ///
 /// Mostra a contagem de artigos não lidos em destaque e os títulos dos
-/// 3 artigos não lidos mais recentes, com nome do feed. Toque navega
-/// para a aba Notícias.
+/// 3 artigos não lidos mais recentes, com nome do feed em textMuted.
+/// Toque via DashCard onTap.
 class RssCard extends ConsumerWidget {
   const RssCard({super.key, required this.accent});
 
@@ -31,7 +30,6 @@ class RssCard extends ConsumerWidget {
     );
     final feedsAsync = ref.watch(feedsProvider);
 
-    // Se algum dos providers está carregando ou erro
     final allAsync = _combine(unreadCountAsync, unreadArticlesAsync, feedsAsync);
 
     return allAsync.when(
@@ -46,13 +44,12 @@ class RssCard extends ConsumerWidget {
           unreadCount: count,
           articles: articles,
           feeds: feeds,
+          accent: accent,
         );
       },
     );
   }
 
-  /// Combina múltiplos AsyncValues — retorna loading se qualquer um
-  /// estiver carregando, error se qualquer um tiver erro, data caso contrário.
   AsyncValue<void> _combine(
     AsyncValue<int> a,
     AsyncValue<List<Article>> b,
@@ -66,16 +63,18 @@ class RssCard extends ConsumerWidget {
   }
 }
 
-class _RssContent extends ConsumerWidget {
+class _RssContent extends StatelessWidget {
   const _RssContent({
     required this.unreadCount,
     required this.articles,
     required this.feeds,
+    required this.accent,
   });
 
   final int unreadCount;
   final List<Article> articles;
   final List<Feed> feeds;
+  final Color accent;
 
   String _feedName(int feedId) {
     return feeds
@@ -86,54 +85,45 @@ class _RssContent extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final recent = articles.take(3).toList();
 
-    return InkWell(
-      onTap: () => ref.read(currentTabProvider.notifier).setTab(AppTab.rss),
-      borderRadius: BorderRadius.circular(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Contagem em destaque
-          Text(
-            '$unreadCount',
-            style: const TextStyle(
-              fontFamily: 'PressStart2P',
-              fontSize: 40,
-              color: BmoColors.accentYellow,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Contagem em destaque
+        DashCard.highlightNumber('$unreadCount', accent),
+        const SizedBox(height: 4),
+        Text(
+          unreadCount == 1 ? 'artigo não lido' : 'artigos não lidos',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: BmoColors.textSecondary,
+          ),
+        ),
+        if (recent.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Divider(color: BmoColors.textMuted, height: 1),
+          const SizedBox(height: 12),
+          ...recent.map(
+            (article) => _ArticleRow(
+              article: article,
+              feedName: _feedName(article.feedId),
             ),
           ),
-          const SizedBox(height: 4),
+        ] else if (unreadCount > 0) ...[
+          const SizedBox(height: 16),
           Text(
-            unreadCount == 1 ? 'artigo não lido' : 'artigos não lidos',
-            style: const TextStyle(
+            'Artigos carregando...',
+            style: TextStyle(
               fontFamily: 'Inter',
-              fontSize: 13,
-              color: BmoColors.textSecondary,
+              fontSize: 12,
+              color: BmoColors.textMuted.withValues(alpha: 0.7),
             ),
           ),
-          if (recent.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            const Divider(color: BmoColors.textMuted, height: 1),
-            const SizedBox(height: 12),
-            ...recent.map((article) => _ArticleRow(
-                  article: article,
-                  feedName: _feedName(article.feedId),
-                )),
-          ] else if (unreadCount > 0) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Artigos carregando...',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 12,
-                color: BmoColors.textMuted.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 }
