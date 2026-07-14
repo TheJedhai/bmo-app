@@ -10,6 +10,7 @@ import '../../../core/events/rich_blocks_state.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/bmo_rich_block.dart';
+import '../providers/chat_providers.dart';
 
 /// Renders a rich-content block of type "question" — an interactive prompt
 /// with selectable options the user can click to answer.
@@ -128,6 +129,14 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
               widget.block.blockId,
               {'status': 'answered', 'chosen_value': value},
             );
+
+        // If the block payload says there's no follow-up action, echo the
+        // chosen option label as a user chat message so the assistant can
+        // respond to it in the current conversation.
+        final hasAction = widget.block.payload['has_action'] as bool? ?? false;
+        if (!hasAction) {
+          _sendAsChatMessage(value);
+        }
       } else if (response.statusCode == 409) {
         // Already answered or cancelled — sync to discover the real state
         // and render it.  Don't show an error; the real state is what matters.
@@ -147,6 +156,25 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
         _errorMessage = 'Erro de conexão. Tente novamente.';
       });
     }
+  }
+
+  // ---- chat message echo ---------------------------------------------------
+
+  /// Looks up the label for [value] in the payload options and, if a chat
+  /// session is currently selected, sends it as a user message through the
+  /// same streaming path used by the chat input (POST /api/chat with SSE,
+  /// X-User-Id header, etc.).
+  void _sendAsChatMessage(String value) {
+    final label = _payloadOptions
+        .where((o) => o.value == value)
+        .map((o) => o.label)
+        .firstOrNull;
+    final text = (label != null && label.isNotEmpty) ? label : value;
+
+    final selectedId = ref.read(selectedConversationIdProvider);
+    if (selectedId == null) return;
+
+    ref.read(chatControllerProvider(selectedId).notifier).sendMessage(text);
   }
 
   // ---- build --------------------------------------------------------------
