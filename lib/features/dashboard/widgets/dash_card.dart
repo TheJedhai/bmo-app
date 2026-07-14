@@ -162,6 +162,7 @@ class _DashCardState extends State<DashCard>
                       borderRadius: BorderRadius.circular(12),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           if (widget.title != null)
                             _DashCardHeader(
@@ -169,11 +170,9 @@ class _DashCardState extends State<DashCard>
                               accent: widget.accent,
                               showChevron: widget.onTap != null,
                             ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: widget.child,
-                            ),
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: widget.child,
                           ),
                         ],
                       ),
