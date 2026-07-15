@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
@@ -9,6 +10,7 @@ import 'features/chat/widgets/bmo_rich_image_card.dart';
 import 'features/chat/widgets/bmo_rich_question_card.dart';
 
 void main() async {
+  usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 
   // Carrega SharedPreferences antes do app iniciar — o identity provider

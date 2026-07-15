@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/widgets/bmo_back_button.dart';
 import '../data/models/feed.dart';
 import '../data/rss_providers.dart';
 import 'selected_view_provider.dart';
@@ -42,12 +43,7 @@ class _RssScreenState extends ConsumerState<RssScreen> {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: context.canPop()
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.pop(),
-              )
-            : null,
+        leading: const BmoBackButton(),
         title: Text(
           'Notícias',
           style: Theme.of(context).textTheme.headlineSmall,

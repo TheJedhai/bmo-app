@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/widgets/bmo_back_button.dart';
 import '../crypto/vault_crypto.dart' as crypto;
 import '../data/vault_client.dart';
 import 'dart:async';
@@ -35,12 +35,7 @@ class VaultScreen extends ConsumerWidget {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: context.canPop()
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.pop(),
-              )
-            : null,
+        leading: const BmoBackButton(),
         title: Text(
           'Cofre',
           style: Theme.of(context).textTheme.headlineSmall,

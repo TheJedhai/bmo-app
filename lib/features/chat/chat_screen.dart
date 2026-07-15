@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/identity/identity_state.dart';
 import '../../core/theme/bmo_theme.dart';
+import '../../core/widgets/bmo_back_button.dart';
 import 'data/chat_message.dart';
 import 'providers/chat_providers.dart';
 import 'widgets/chat_input.dart';
@@ -71,12 +72,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: context.canPop()
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => context.pop(),
-              )
-            : null,
+        leading: const BmoBackButton(),
         title: Text(
           'Chat',
           style: Theme.of(context).textTheme.headlineSmall,
