@@ -28,28 +28,22 @@ class BmoFrame extends ConsumerWidget {
 
     // ---- Control sizing & positioning -------------------------------------
     //
-    // Each control (gear / avatar) is a visual circle centered inside a
-    // touch hitbox (touchSize × touchSize). The hitbox is anchored to the
-    // outer edge via Positioned(right:, top: or bottom:).
+    // The visual circle (diameter = visualDiameter) is centered on the
+    // green band via offset = (borderPadding - visualDiameter) / 2.
+    // This offset is the Positioned anchor — the circle's outer edge
+    // sits exactly at that distance from the Container edge.
     //
-    // Inner edge of the visual circle from the outer edge:
-    //   offset + (touchSize + circleDiameter) / 2
-    // This must be ≤ borderPadding so the circle never crosses into the
-    // dark screen area. Solving for offset:
-    //   offset = borderPadding - (touchSize + circleDiameter) / 2
+    // A larger touch hitbox (≥40 px) wraps the circle; on mobile the
+    // hitbox overflows the band, but only the painted circle needs to
+    // look centered.
     //
-    // Desktop (borderPadding=28, touchSize=44, D=32): 28 - 38 = -10
-    // Mobile  (borderPadding=12, touchSize=40, D=26): 12 - 33 = -21
-    //
-    // Negative offsets overflow the outer edge of the green Container;
-    // Flutter's Stack doesn't clip, so the circle stays visible over the
-    // green chassis — and out of the dark screen.
-    final controlOffset = isMobile ? -21.0 : -10.0;
-    final gearDiameter = isMobile ? 26.0 : 32.0;
-    final gearIconSize = isMobile ? 14.0 : 18.0;
+    // Desktop (borderPadding=28): D=24 → offset=(28-24)/2=2
+    // Mobile  (borderPadding=12): D=20 → offset=(12-20)/2=-4 (symmetric overflow)
+    final visualDiameter = isMobile ? 20.0 : 24.0;
+    final controlOffset = (borderPadding - visualDiameter) / 2;
     final touchSize = isMobile ? 40.0 : 44.0;
-    final avatarOuterDiam = isMobile ? 26.0 : 32.0;
-    final avatarInnerRadius = isMobile ? 8.0 : 10.0;
+    final gearIconSize = isMobile ? 12.0 : 14.0;
+    final avatarInnerRadius = isMobile ? 6.0 : 8.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
@@ -76,9 +70,10 @@ class BmoFrame extends ConsumerWidget {
             right: controlOffset,
             child: _ControlHitbox(
               size: touchSize,
+              alignment: Alignment.topRight,
               onTap: () => showSettingsModal(context),
               child: _DarkCircle(
-                diameter: gearDiameter,
+                diameter: visualDiameter,
                 child: Icon(Icons.settings,
                     size: gearIconSize, color: BmoColors.accentGreen),
               ),
@@ -94,11 +89,12 @@ class BmoFrame extends ConsumerWidget {
                     if (user == null) return const SizedBox.shrink();
                     return _ControlHitbox(
                       size: touchSize,
+                      alignment: Alignment.bottomRight,
                       onTap: () =>
                           ref.read(currentUserProvider.notifier).clearUser(),
                       child: _FramedAvatar(
                         profile: user,
-                        outerDiameter: avatarOuterDiam,
+                        outerDiameter: visualDiameter,
                         innerRadius: avatarInnerRadius,
                       ),
                     );
@@ -119,15 +115,20 @@ class BmoFrame extends ConsumerWidget {
 /// Hitbox invisível que garante área de toque ≥ [size]×[size] mesmo quando
 /// o círculo visual é menor (importante no mobile onde a faixa verde é fina).
 ///
-/// O [child] (círculo visível) é centralizado dentro do hitbox; o excedente
-/// transborda para dentro da tela escura, mas não afeta layout do conteúdo.
+/// O [child] (círculo visível) é ancorado no canto dado por [alignment]
+/// (ex.: Alignment.topRight para a engrenagem, Alignment.bottomRight para
+/// o avatar). Isso faz com que o offset do Positioned corresponda
+/// diretamente à borda do círculo, mantendo a fórmula de centralização
+/// exata.
 class _ControlHitbox extends StatelessWidget {
   final double size;
+  final Alignment alignment;
   final VoidCallback onTap;
   final Widget child;
 
   const _ControlHitbox({
     required this.size,
+    required this.alignment,
     required this.onTap,
     required this.child,
   });
@@ -140,7 +141,7 @@ class _ControlHitbox extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: Center(child: child),
+        child: Align(alignment: alignment, child: child),
       ),
     );
   }
