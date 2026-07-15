@@ -35,16 +35,16 @@ class BmoFrame extends ConsumerWidget {
     // A larger touch hitbox (≥40 px) wraps the circle via GestureDetector;
     // only the painted circle needs to look right.
     //
-    // Desktop (borderPadding=28): D=20, offset=8 — 8px of outer breathing
-    //   room, inner edge touches the dark screen at exactly 28px. The
-    //   circle sits on the straight part of the band, optically centered.
-    // Mobile  (borderPadding=12): D=20, offset=-4 — symmetric overflow
-    //   (band is too narrow for full containment; 4px over on each side).
-    final visualDiameter = 20.0;
-    final controlOffset = isMobile ? -4.0 : 8.0;
+    // Desktop (borderPadding=28): D=22, offset=8 — 8px outer breathing
+    //   room, inner edge overflows 2px into the dark screen (invisible
+    //   against screenBg background).
+    // Mobile  (borderPadding=12): D=22, offset=-5 — symmetric overflow
+    //   (band is too narrow; 5px over on each side).
+    final visualDiameter = 22.0;
+    final controlOffset = isMobile ? -5.0 : 8.0;
     final touchSize = isMobile ? 40.0 : 44.0;
-    final gearIconSize = 12.0;
-    final avatarInnerRadius = isMobile ? 6.0 : 7.0;
+    final gearIconSize = 13.0;
+    final avatarInnerRadius = isMobile ? 7.0 : 8.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
