@@ -8,8 +8,8 @@
 ///
 /// - **Reloading the page = vault locked.** There is no way to recover the
 ///   session from storage because it was never stored.
-/// - **Switching tabs locks the vault** because [AppTab.vault] has
-///   `keepAlive: false` — the TabPage is disposed, the provider goes with it.
+/// - **Navigating away locks the vault** because the route is popped and
+///   the provider is disposed with the widget tree.
 /// - Phase 8.4 will add an inactivity timer that calls [VaultSessionNotifier.lock]
 ///   to proactively zero the keys even while the tab is open.
 ///
@@ -97,7 +97,7 @@ final vaultSessionProvider =
 ///
 /// ## Lifecycle
 /// - Created by [unlockWithPassword] or [unlockWithRecoveryKey].
-/// - Destroyed by [lock] or by widget disposal (keepAlive: false on the tab).
+/// - Destroyed by [lock] or by widget disposal (route popped).
 /// - Phase 8.4 will add an inactivity timer that calls [lock] automatically.
 ///
 /// **NEVER call [lock] from [build]** — it would cause an infinite loop.

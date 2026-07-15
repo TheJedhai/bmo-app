@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// Por decisão consciente de segurança, NÃO exibe conteúdo nem contagem
 /// de itens — isso vazaria informação. Mostra apenas um ícone de cadeado
 /// grande em outline na cor do accent, centralizado.
-/// Toque via DashCard onTap → AppTab.vault.
+/// Toque via DashCard onTap → pushFeature(VaultScreen).
 class VaultCard extends StatelessWidget {
   const VaultCard({super.key, required this.accent});
 
