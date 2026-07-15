@@ -6,15 +6,8 @@ import 'core/identity/widgets/profile_selector.dart';
 import 'core/theme/bmo_theme.dart';
 import 'core/widgets/bmo_dock.dart';
 import 'core/widgets/bmo_frame.dart';
-import 'core/widgets/tab_page.dart';
-import 'core/navigation/tab_provider.dart';
 import 'core/events/events_provider.dart';
-import 'features/chat/chat_screen.dart';
 import 'features/dashboard/presentation/dashboard_screen.dart';
-import 'features/home_devices/presentation/home_devices_screen.dart';
-import 'features/missions/presentation/missions_screen.dart';
-import 'features/rss/presentation/rss_screen.dart';
-import 'features/vault/presentation/vault_screen.dart';
 
 class BmoApp extends ConsumerWidget {
   const BmoApp({super.key});
@@ -68,30 +61,20 @@ class _BmoShell extends ConsumerWidget {
 ///
 /// Extraído como widget separado para que o [eventsListenerProvider] só
 /// seja primado quando há perfil — o SSE depende do X-User-Id no client.
+///
+/// A Dashboard é a raiz permanente. As demais telas são empurradas por
+/// cima via [pushFeature] (definido em core/navigation/push_feature.dart).
 class _BmoMainShell extends ConsumerWidget {
   const _BmoMainShell();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentTab = ref.watch(currentTabProvider);
     ref.watch(eventsListenerProvider); // Prime SSE com X-User-Id.
 
-    return Column(
+    return const Column(
       children: [
-        Expanded(
-          child: IndexedStack(
-            index: currentTab.index,
-            children: const [
-              TabPage(keepAlive: false, child: DashboardScreen()),
-              TabPage(keepAlive: true, child: ChatScreen()),
-              TabPage(keepAlive: true, child: MissionsScreen()),
-              TabPage(keepAlive: true, child: HomeDevicesScreen()),
-              TabPage(keepAlive: true, child: RssScreen()),
-              TabPage(keepAlive: false, child: VaultScreen()),
-            ],
-          ),
-        ),
-        const BmoDock(),
+        Expanded(child: DashboardScreen()),
+        BmoDock(),
       ],
     );
   }
