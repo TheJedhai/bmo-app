@@ -11,9 +11,9 @@ const _kMobileBreakpoint = 600.0;
 /// Casca visual do BMO ocupando a viewport inteira: borda verde nas 4
 /// extremidades + tela escura no meio cobrindo todo o resto do espaço.
 ///
-/// Hospeda controles de settings (engrenagem, canto superior direito) e
-/// perfil (avatar, canto inferior direito) ancorados dentro da tela escura,
-/// visíveis de qualquer aba.
+/// Os controles de settings (engrenagem, canto superior direito) e perfil
+/// (avatar, canto inferior direito) ficam sobre a faixa verde do chassi,
+/// ancorados com um pequeno offset da borda externa.
 class BmoFrame extends ConsumerWidget {
   final Widget child;
   const BmoFrame({super.key, required this.child});
@@ -26,30 +26,18 @@ class BmoFrame extends ConsumerWidget {
     final borderPadding = isMobile ? 12.0 : 28.0;
     final innerRadius = isMobile ? 12.0 : 18.0;
 
-    // ---- Gear (top-right corner) -------------------------------------------
-    final gearIconSize = isMobile ? 14.0 : 16.0;
-    final gearTouchPad = isMobile ? 13.0 : 14.0; // ~40px / ~44px target
-
-    // ---- Avatar (bottom-right, above dock) ---------------------------------
+    // ---- Control sizing ---------------------------------------------------
     //
-    // O dock de navegação ocupa a base da tela interna (56px mobile, 64px
-    // desktop).  Ancorar o avatar no canto inferior causaria sobreposição
-    // visual com o dock em ambas as resoluções, então ele é posicionado
-    // logo acima do dock com um pequeno respiro.
-    final dockHeight = isMobile ? 56.0 : 64.0;
-    final dockGap = isMobile ? 4.0 : 8.0;
-    final avatarInnerRadius = isMobile ? 10.0 : 12.0;
-    final avatarOuterRadius = avatarInnerRadius + 2.0; // espaço p/ borda
-    final avatarTouchPad = 8.0; // (outerDiameter 20/24) + 2×8 = 36/40px
-
-    // ---- Offsets ancorados na borda interna da tela escura ------------------
-    //
-    // Somamos o touch-padding ao borderPadding para que o controle inteiro
-    // (área de toque + ícone) fique dentro da tela escura, sem vazar para
-    // a moldura verde.
-    final gearInset = borderPadding + gearTouchPad; // top & right
-    final avatarRightInset = borderPadding + avatarTouchPad;
-    final avatarBottom = borderPadding + dockHeight + dockGap;
+    // Desktop: círculo ~32px sobre faixa verde de 28px — transborda ~8px
+    //          para dentro da tela escura.
+    // Mobile:  círculo ~26px sobre faixa de 12px — transborda mais, mas
+    //          é inevitável. Touch target ≥40px garantido por SizedBox.
+    final controlOffset = isMobile ? 2.0 : 4.0;
+    final gearDiameter = isMobile ? 26.0 : 32.0;
+    final gearIconSize = isMobile ? 14.0 : 18.0;
+    final touchSize = isMobile ? 40.0 : 44.0;
+    final avatarOuterDiam = isMobile ? 26.0 : 32.0;
+    final avatarInnerRadius = isMobile ? 8.0 : 10.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
@@ -57,7 +45,7 @@ class BmoFrame extends ConsumerWidget {
       color: BmoColors.bodyGreen,
       child: Stack(
         children: [
-          // Inner screen
+          // ---- Inner screen ----
           Padding(
             padding: EdgeInsets.all(borderPadding),
             child: Container(
@@ -70,37 +58,36 @@ class BmoFrame extends ConsumerWidget {
             ),
           ),
 
-          // ---- Settings gear (top-right) ----
+          // ---- Settings gear (top-right, on green band) ----
           Positioned(
-            top: gearInset,
-            right: gearInset,
-            child: IconButton(
-              icon: Icon(Icons.settings, size: gearIconSize),
-              color: BmoColors.screenBg,
-              tooltip: 'Configurações',
-              padding: EdgeInsets.all(gearTouchPad),
-              constraints: const BoxConstraints(),
-              onPressed: () => showSettingsModal(context),
+            top: controlOffset,
+            right: controlOffset,
+            child: _ControlHitbox(
+              size: touchSize,
+              onTap: () => showSettingsModal(context),
+              child: _DarkCircle(
+                diameter: gearDiameter,
+                child: Icon(Icons.settings,
+                    size: gearIconSize, color: BmoColors.accentGreen),
+              ),
             ),
           ),
 
-          // ---- Profile avatar (bottom-right, acima do dock) ----
+          // ---- Profile avatar (bottom-right, on green band) ----
           Positioned(
-            bottom: avatarBottom,
-            right: avatarRightInset,
+            bottom: controlOffset,
+            right: controlOffset,
             child: userAsync.whenOrNull(
                   data: (user) {
                     if (user == null) return const SizedBox.shrink();
-                    return GestureDetector(
+                    return _ControlHitbox(
+                      size: touchSize,
                       onTap: () =>
                           ref.read(currentUserProvider.notifier).clearUser(),
-                      child: Padding(
-                        padding: EdgeInsets.all(avatarTouchPad),
-                        child: _FramedAvatar(
-                          profile: user,
-                          innerRadius: avatarInnerRadius,
-                          outerRadius: avatarOuterRadius,
-                        ),
+                      child: _FramedAvatar(
+                        profile: user,
+                        outerDiameter: avatarOuterDiam,
+                        innerRadius: avatarInnerRadius,
                       ),
                     );
                   },
@@ -113,28 +100,83 @@ class BmoFrame extends ConsumerWidget {
   }
 }
 
+// ============================================================================
+// Private helpers
+// ============================================================================
+
+/// Hitbox invisível que garante área de toque ≥ [size]×[size] mesmo quando
+/// o círculo visual é menor (importante no mobile onde a faixa verde é fina).
+///
+/// O [child] (círculo visível) é centralizado dentro do hitbox; o excedente
+/// transborda para dentro da tela escura, mas não afeta layout do conteúdo.
+class _ControlHitbox extends StatelessWidget {
+  final double size;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _ControlHitbox({
+    required this.size,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Center(child: child),
+      ),
+    );
+  }
+}
+
+/// Círculo escuro ([BmoColors.screenBg]) usado como fundo de contraste
+/// para controles que ficam sobre o chassi verde claro.
+class _DarkCircle extends StatelessWidget {
+  final double diameter;
+  final Widget child;
+
+  const _DarkCircle({required this.diameter, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: diameter,
+      height: diameter,
+      decoration: const BoxDecoration(
+        color: BmoColors.screenBg,
+        shape: BoxShape.circle,
+      ),
+      child: Center(child: child),
+    );
+  }
+}
+
 /// Avatar de perfil com fundo escuro e borda fina verde para contraste
 /// contra o chassi claro ([BmoColors.bodyGreen]).
 ///
-/// Diferente do [ProfileAvatar] puro (que usa fundo translúcido e ficaria
-/// invisível sobre o chassi), este envolve o avatar num círculo sólido
-/// [BmoColors.screenBg] com borda de 1.5px em [BmoColors.accentGreen].
+/// Envolve o [ProfileAvatar] num círculo sólido [BmoColors.screenBg] com
+/// borda de 1.5px em [BmoColors.accentGreen].
 class _FramedAvatar extends StatelessWidget {
   final dynamic profile; // UserProfile
+  final double outerDiameter;
   final double innerRadius;
-  final double outerRadius;
 
   const _FramedAvatar({
     required this.profile,
+    required this.outerDiameter,
     required this.innerRadius,
-    required this.outerRadius,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: outerRadius * 2,
-      height: outerRadius * 2,
+      width: outerDiameter,
+      height: outerDiameter,
       decoration: BoxDecoration(
         color: BmoColors.screenBg,
         shape: BoxShape.circle,
