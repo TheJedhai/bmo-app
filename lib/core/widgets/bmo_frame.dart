@@ -26,13 +26,25 @@ class BmoFrame extends ConsumerWidget {
     final borderPadding = isMobile ? 12.0 : 28.0;
     final innerRadius = isMobile ? 12.0 : 18.0;
 
-    // ---- Control sizing ---------------------------------------------------
+    // ---- Control sizing & positioning -------------------------------------
     //
-    // Desktop: círculo ~32px sobre faixa verde de 28px — transborda ~8px
-    //          para dentro da tela escura.
-    // Mobile:  círculo ~26px sobre faixa de 12px — transborda mais, mas
-    //          é inevitável. Touch target ≥40px garantido por SizedBox.
-    final controlOffset = isMobile ? 2.0 : 4.0;
+    // Each control (gear / avatar) is a visual circle centered inside a
+    // touch hitbox (touchSize × touchSize). The hitbox is anchored to the
+    // outer edge via Positioned(right:, top: or bottom:).
+    //
+    // Inner edge of the visual circle from the outer edge:
+    //   offset + (touchSize + circleDiameter) / 2
+    // This must be ≤ borderPadding so the circle never crosses into the
+    // dark screen area. Solving for offset:
+    //   offset = borderPadding - (touchSize + circleDiameter) / 2
+    //
+    // Desktop (borderPadding=28, touchSize=44, D=32): 28 - 38 = -10
+    // Mobile  (borderPadding=12, touchSize=40, D=26): 12 - 33 = -21
+    //
+    // Negative offsets overflow the outer edge of the green Container;
+    // Flutter's Stack doesn't clip, so the circle stays visible over the
+    // green chassis — and out of the dark screen.
+    final controlOffset = isMobile ? -21.0 : -10.0;
     final gearDiameter = isMobile ? 26.0 : 32.0;
     final gearIconSize = isMobile ? 14.0 : 18.0;
     final touchSize = isMobile ? 40.0 : 44.0;
