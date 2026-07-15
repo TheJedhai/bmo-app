@@ -20,7 +20,7 @@ import '../../../core/theme/bmo_theme.dart';
 ///   Stack [
 ///     Container (superfície + borda + glow),
 ///     CustomPaint (cantoneiras L),
-///     Column (header + Expanded child)
+///     Column (header + child, mainAxisSize.min)
 ///   ]
 class DashCard extends StatefulWidget {
   const DashCard({

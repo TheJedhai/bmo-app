@@ -71,75 +71,89 @@ class _GalleryContent extends ConsumerWidget {
 
     final bytesAsync = ref.watch(imageBytesProvider(recent.id));
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          bytesAsync.when(
-            loading: () => const Center(
-              child: Icon(
-                Icons.image_outlined,
-                size: 40,
-                color: BmoColors.textMuted,
-              ),
-            ),
-            error: (e, st) {
-              debugPrint(
-                '[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st',
-              );
-              return const Center(
-                child: Icon(
-                  Icons.broken_image_outlined,
-                  size: 40,
-                  color: BmoColors.textMuted,
+    // LayoutBuilder com fallback porque o DashCard usa Column(mainAxisSize.min),
+    // que passa altura infinita para os filhos. Com altura infinita,
+    // StackFit.expand quebra. Usamos 160px de fallback: 220px do spec
+    // menos ~60px de chrome do DashCard (header + padding).
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageHeight =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 160.0;
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            height: imageHeight,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                bytesAsync.when(
+                  loading: () => const Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 40,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                  error: (e, st) {
+                    debugPrint(
+                      '[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st',
+                    );
+                    return const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 40,
+                        color: BmoColors.textMuted,
+                      ),
+                    );
+                  },
+                  data: (bytes) => Image.memory(
+                    bytes,
+                    fit: BoxFit.cover,
+                  ),
                 ),
-              );
-            },
-            data: (bytes) => Image.memory(
-              bytes,
-              fit: BoxFit.cover,
+                // Overlay gradiente escuro no rodapé
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 56,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Color(0xCC1E1F23),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // Título da imagem (prompt) sobre o overlay
+                if (recent.prompt != null && recent.prompt!.isNotEmpty)
+                  Positioned(
+                    bottom: 10,
+                    left: 12,
+                    right: 12,
+                    child: Text(
+                      recent.prompt!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          // Overlay gradiente escuro no rodapé
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 56,
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Color(0xCC1E1F23),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Título da imagem (prompt) sobre o overlay
-          if (recent.prompt != null && recent.prompt!.isNotEmpty)
-            Positioned(
-              bottom: 10,
-              left: 12,
-              right: 12,
-              child: Text(
-                recent.prompt!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
