@@ -5,6 +5,7 @@ import '../../core/navigation/app_tab.dart';
 import '../../core/navigation/tab_provider.dart';
 import '../../core/theme/bmo_theme.dart';
 import '../gallery/widgets/gallery_modal.dart';
+import 'widgets/chat_card.dart';
 import 'widgets/clock_card.dart';
 import 'widgets/gallery_card.dart';
 import 'widgets/lights_card.dart';
@@ -91,6 +92,14 @@ final List<DashWidgetSpec> dashboardWidgets = [
     onTap: showGalleryModal,
     builder: _galleryCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'chat',
+    title: 'Chat',
+    accent: BmoColors.accentGreen,
+    pulseDelay: Duration(milliseconds: 2500),
+    onTap: _goToChat,
+    builder: _chatCardBuilder,
+  ),
 ];
 
 void _goToMissions(BuildContext context) {
@@ -111,6 +120,12 @@ void _goToHomeDevices(BuildContext context) {
       .setTab(AppTab.homeDevices);
 }
 
+void _goToChat(BuildContext context) {
+  ProviderScope.containerOf(context)
+      .read(currentTabProvider.notifier)
+      .setTab(AppTab.chat);
+}
+
 Widget _clockCardBuilder(BuildContext context, Color accent) {
   return ClockCard(accent: accent);
 }
@@ -129,4 +144,8 @@ Widget _lightsCardBuilder(BuildContext context, Color accent) {
 
 Widget _galleryCardBuilder(BuildContext context, Color accent) {
   return GalleryCard(accent: accent);
+}
+
+Widget _chatCardBuilder(BuildContext context, Color accent) {
+  return ChatCard(accent: accent);
 }
