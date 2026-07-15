@@ -11,6 +11,7 @@ import 'widgets/gallery_card.dart';
 import 'widgets/lights_card.dart';
 import 'widgets/missions_card.dart';
 import 'widgets/rss_card.dart';
+import 'widgets/vault_card.dart';
 
 /// Especificação de um widget da dashboard.
 ///
@@ -100,6 +101,14 @@ final List<DashWidgetSpec> dashboardWidgets = [
     onTap: _goToChat,
     builder: _chatCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'cofre',
+    title: 'Cofre',
+    accent: BmoColors.accentYellow,
+    pulseDelay: Duration(milliseconds: 3000),
+    onTap: _goToVault,
+    builder: _vaultCardBuilder,
+  ),
 ];
 
 void _goToMissions(BuildContext context) {
@@ -126,6 +135,12 @@ void _goToChat(BuildContext context) {
       .setTab(AppTab.chat);
 }
 
+void _goToVault(BuildContext context) {
+  ProviderScope.containerOf(context)
+      .read(currentTabProvider.notifier)
+      .setTab(AppTab.vault);
+}
+
 Widget _clockCardBuilder(BuildContext context, Color accent) {
   return ClockCard(accent: accent);
 }
@@ -148,4 +163,8 @@ Widget _galleryCardBuilder(BuildContext context, Color accent) {
 
 Widget _chatCardBuilder(BuildContext context, Color accent) {
   return ChatCard(accent: accent);
+}
+
+Widget _vaultCardBuilder(BuildContext context, Color accent) {
+  return VaultCard(accent: accent);
 }
