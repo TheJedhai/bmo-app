@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../data/device.dart';
@@ -18,6 +19,12 @@ class HomeDevicesScreen extends ConsumerWidget {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: context.canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              )
+            : null,
         title: Text(
           'Casa',
           style: Theme.of(context).textTheme.headlineSmall,

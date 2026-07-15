@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../data/models/feed.dart';
@@ -33,7 +34,7 @@ class _RssScreenState extends ConsumerState<RssScreen> {
           ? Drawer(
               backgroundColor: BmoColors.screenBg,
               child: RssSidebar(
-                onItemTap: () => Navigator.of(context).pop(),
+                onItemTap: () => context.pop(),
               ),
             )
           : null,
@@ -41,6 +42,12 @@ class _RssScreenState extends ConsumerState<RssScreen> {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
+        leading: context.canPop()
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => context.pop(),
+              )
+            : null,
         title: Text(
           'Notícias',
           style: Theme.of(context).textTheme.headlineSmall,
