@@ -12,7 +12,6 @@ import '../events/events_provider.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_selector.dart';
 import '../theme/bmo_theme.dart';
-import '../widgets/bmo_dock.dart';
 import '../widgets/bmo_frame.dart';
 
 // ---------------------------------------------------------------------------
@@ -75,14 +74,7 @@ class _AppShell extends ConsumerWidget {
         if (user == null) {
           return const BmoFrame(child: ProfileSelector());
         }
-        return BmoFrame(
-          child: Column(
-            children: [
-              Expanded(child: child),
-              const BmoDock(),
-            ],
-          ),
-        );
+        return BmoFrame(child: child);
       },
       error: (_, _) => const BmoFrame(child: ProfileSelector()),
     );
@@ -97,7 +89,7 @@ class _AppShell extends ConsumerWidget {
 ///
 /// Route tree:
 /// ```
-/// ShellRoute (BmoFrame + BmoDock)
+/// ShellRoute (BmoFrame)
 ///   /           DashboardScreen
 ///   /chat       ChatScreen
 ///   /missoes    MissionsScreen
