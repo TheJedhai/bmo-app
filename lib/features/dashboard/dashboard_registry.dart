@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../core/navigation/app_router.dart';
 import '../../core/theme/bmo_theme.dart';
 import '../gallery/widgets/gallery_modal.dart';
 import 'widgets/chat_card.dart';
@@ -109,24 +109,24 @@ final List<DashWidgetSpec> dashboardWidgets = [
   ),
 ];
 
-void _goToMissions(BuildContext context) {
-  context.push('/missoes');
+void _goToMissions(BuildContext _) {
+  appRouter.push('/missoes');
 }
 
-void _goToRss(BuildContext context) {
-  context.push('/noticias');
+void _goToRss(BuildContext _) {
+  appRouter.push('/noticias');
 }
 
-void _goToHomeDevices(BuildContext context) {
-  context.push('/casa');
+void _goToHomeDevices(BuildContext _) {
+  appRouter.push('/casa');
 }
 
-void _goToChat(BuildContext context) {
-  context.push('/chat');
+void _goToChat(BuildContext _) {
+  appRouter.push('/chat');
 }
 
-void _goToVault(BuildContext context) {
-  context.push('/cofre');
+void _goToVault(BuildContext _) {
+  appRouter.push('/cofre');
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
