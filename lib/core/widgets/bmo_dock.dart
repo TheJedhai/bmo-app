@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../features/chat/chat_screen.dart';
-import '../../features/dashboard/presentation/dashboard_screen.dart';
-import '../../features/home_devices/presentation/home_devices_screen.dart';
-import '../../features/missions/presentation/missions_screen.dart';
+import 'package:go_router/go_router.dart';
 import '../../features/rss/data/rss_providers.dart';
-import '../../features/rss/presentation/rss_screen.dart';
-import '../../features/vault/presentation/vault_screen.dart';
 import '../navigation/app_tab.dart';
-import '../navigation/push_feature.dart';
-import '../navigation/tab_provider.dart';
 import '../theme/bmo_theme.dart';
 
 const _kMobileBreakpoint = 600.0;
@@ -19,7 +12,8 @@ class BmoDock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentTab = ref.watch(currentTabProvider);
+    final currentPath = GoRouterState.of(context).uri.toString();
+    final currentTab = AppTabLookup.fromPath(currentPath);
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
     // Unread count for RSS badge — only watched once at the top so the
@@ -115,21 +109,22 @@ class BmoDock extends ConsumerWidget {
 
 /// Navega para a feature correspondente ao item do dock tocado.
 ///
-/// Dashboard faz popUntil (volta à raiz); demais features são empurradas
-/// via [pushFeature].
+/// Dashboard usa [GoRouter.go] (substitui o stack — sem botão voltar);
+/// demais features usam [GoRouter.push] (empurra no stack do shell —
+/// botão voltar aparece automaticamente).
 void _onDockTap(BuildContext context, AppTab tab) {
   switch (tab) {
     case AppTab.home:
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      context.go('/');
     case AppTab.chat:
-      pushFeature(context, const ChatScreen());
+      context.push('/chat');
     case AppTab.missions:
-      pushFeature(context, const MissionsScreen());
+      context.push('/missoes');
     case AppTab.homeDevices:
-      pushFeature(context, const HomeDevicesScreen());
+      context.push('/casa');
     case AppTab.rss:
-      pushFeature(context, const RssScreen());
+      context.push('/noticias');
     case AppTab.vault:
-      pushFeature(context, const VaultScreen());
+      context.push('/cofre');
   }
 }

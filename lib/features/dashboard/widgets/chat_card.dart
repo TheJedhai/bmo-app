@@ -10,7 +10,7 @@ import '../../chat/providers/chat_providers.dart';
 /// Mostra as 3 conversas mais recentes (título truncado, em Inter).
 /// Se não houver conversas, exibe "Nenhuma conversa ainda" em textMuted
 /// — mas o card continua clicável.
-/// Toque via DashCard onTap → pushFeature(ChatScreen).
+/// Toque via DashCard onTap → context.push('/chat').
 class ChatCard extends ConsumerWidget {
   const ChatCard({super.key, required this.accent});
 
