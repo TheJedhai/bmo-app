@@ -28,22 +28,23 @@ class BmoFrame extends ConsumerWidget {
 
     // ---- Control sizing & positioning -------------------------------------
     //
-    // The visual circle (diameter = visualDiameter) is centered on the
-    // green band via offset = (borderPadding - visualDiameter) / 2.
-    // This offset is the Positioned anchor — the circle's outer edge
-    // sits exactly at that distance from the Container edge.
+    // Optical centering, not mathematical. The rounded outer corner of the
+    // frame shifts the perceived center inward, so controls are pushed
+    // toward the straight section of the green band.
     //
-    // A larger touch hitbox (≥40 px) wraps the circle; on mobile the
-    // hitbox overflows the band, but only the painted circle needs to
-    // look centered.
+    // A larger touch hitbox (≥40 px) wraps the circle via GestureDetector;
+    // only the painted circle needs to look right.
     //
-    // Desktop (borderPadding=28): D=24 → offset=(28-24)/2=2
-    // Mobile  (borderPadding=12): D=20 → offset=(12-20)/2=-4 (symmetric overflow)
-    final visualDiameter = isMobile ? 20.0 : 24.0;
-    final controlOffset = (borderPadding - visualDiameter) / 2;
+    // Desktop (borderPadding=28): D=20, offset=8 — 8px of outer breathing
+    //   room, inner edge touches the dark screen at exactly 28px. The
+    //   circle sits on the straight part of the band, optically centered.
+    // Mobile  (borderPadding=12): D=20, offset=-4 — symmetric overflow
+    //   (band is too narrow for full containment; 4px over on each side).
+    final visualDiameter = 20.0;
+    final controlOffset = isMobile ? -4.0 : 8.0;
     final touchSize = isMobile ? 40.0 : 44.0;
-    final gearIconSize = isMobile ? 12.0 : 14.0;
-    final avatarInnerRadius = isMobile ? 6.0 : 8.0;
+    final gearIconSize = 12.0;
+    final avatarInnerRadius = isMobile ? 6.0 : 7.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
