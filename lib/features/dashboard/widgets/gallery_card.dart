@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -55,6 +57,81 @@ class _GalleryContent extends ConsumerWidget {
         );
   }
 
+  /// Stack da imagem + overlay + prompt, sem somar alturas.
+  /// Expande para preencher o espaço alocado pelo pai.
+  Widget _buildImageStack(
+    AsyncValue<Uint8List> bytesAsync,
+    GalleryImage recent,
+  ) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        bytesAsync.when(
+          loading: () => const Center(
+            child: Icon(
+              Icons.image_outlined,
+              size: 40,
+              color: BmoColors.textMuted,
+            ),
+          ),
+          error: (e, st) {
+            debugPrint(
+              '[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st',
+            );
+            return const Center(
+              child: Icon(
+                Icons.broken_image_outlined,
+                size: 40,
+                color: BmoColors.textMuted,
+              ),
+            );
+          },
+          data: (bytes) => Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+          ),
+        ),
+        // Overlay gradiente escuro no rodapé
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 56,
+          child: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Color(0xCC1E1F23),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Título da imagem (prompt) sobre o overlay
+        if (recent.prompt != null && recent.prompt!.isNotEmpty)
+          Positioned(
+            bottom: 10,
+            left: 12,
+            right: 12,
+            child: Text(
+              recent.prompt!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recent = _mostRecent;
@@ -71,87 +148,25 @@ class _GalleryContent extends ConsumerWidget {
 
     final bytesAsync = ref.watch(imageBytesProvider(recent.id));
 
-    // LayoutBuilder com fallback porque o DashCard usa Column(mainAxisSize.min),
-    // que passa altura infinita para os filhos. Com altura infinita,
-    // StackFit.expand quebra. Usamos 160px de fallback: 220px do spec
-    // menos ~60px de chrome do DashCard (header + padding).
+    // DashCard agora usa Flexible → constraints finitos quando o card
+    // tem altura fixa (ex. 220px). Usamos SizedBox.expand para preencher
+    // exatamente o espaço alocado, sem somar alturas.
+    // Fallback: SizedBox(height: 160) se constraints infinitos (card sem
+    // altura fixa no registry).
     return LayoutBuilder(
       builder: (context, constraints) {
-        final imageHeight =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : 160.0;
+        final hasFiniteHeight = constraints.maxHeight.isFinite;
 
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            height: imageHeight,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                bytesAsync.when(
-                  loading: () => const Center(
-                    child: Icon(
-                      Icons.image_outlined,
-                      size: 40,
-                      color: BmoColors.textMuted,
-                    ),
-                  ),
-                  error: (e, st) {
-                    debugPrint(
-                      '[GalleryCard] imageBytesProvider(${recent.id}) error — $e\n$st',
-                    );
-                    return const Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 40,
-                        color: BmoColors.textMuted,
-                      ),
-                    );
-                  },
-                  data: (bytes) => Image.memory(
-                    bytes,
-                    fit: BoxFit.cover,
-                  ),
+          child: hasFiniteHeight
+              ? SizedBox.expand(
+                  child: _buildImageStack(bytesAsync, recent),
+                )
+              : SizedBox(
+                  height: 160,
+                  child: _buildImageStack(bytesAsync, recent),
                 ),
-                // Overlay gradiente escuro no rodapé
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: 56,
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Color(0xCC1E1F23),
-                          Colors.transparent,
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                // Título da imagem (prompt) sobre o overlay
-                if (recent.prompt != null && recent.prompt!.isNotEmpty)
-                  Positioned(
-                    bottom: 10,
-                    left: 12,
-                    right: 12,
-                    child: Text(
-                      recent.prompt!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
         );
       },
     );
