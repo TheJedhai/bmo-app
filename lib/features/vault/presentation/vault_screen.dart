@@ -28,11 +28,21 @@ class VaultScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(vaultSessionProvider);
 
-    if (session == null) {
-      return const _LockedVaultView();
-    }
-
-    return _UnlockedVaultView(session: session);
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: BmoColors.screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          'Cofre',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+      ),
+      body: session == null
+          ? const _LockedVaultView()
+          : _UnlockedVaultView(session: session),
+    );
   }
 }
 

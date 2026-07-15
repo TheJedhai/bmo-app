@@ -7,6 +7,7 @@ import 'data/chat_message.dart';
 import 'providers/chat_providers.dart';
 import 'widgets/chat_input.dart';
 import 'widgets/chat_message_list.dart';
+import 'widgets/conversation_list.dart';
 import 'widgets/sidebar_layout.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -17,6 +18,8 @@ class ChatScreen extends ConsumerStatefulWidget {
 }
 
 class _ChatScreenState extends ConsumerState<ChatScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
   @override
   void initState() {
     super.initState();
@@ -50,7 +53,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SidebarLayout(child: _ChatBody());
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.transparent,
+      drawer: isMobile
+          ? Drawer(
+              backgroundColor: BmoColors.screenBg,
+              child: ConversationList(
+                onItemTap: () => Navigator.of(context).pop(),
+              ),
+            )
+          : null,
+      appBar: AppBar(
+        backgroundColor: BmoColors.screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          'Chat',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        actions: isMobile
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.menu),
+                  color: BmoColors.textPrimary,
+                  onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                ),
+              ]
+            : null,
+      ),
+      body: SidebarLayout(child: _ChatBody()),
+    );
   }
 }
 

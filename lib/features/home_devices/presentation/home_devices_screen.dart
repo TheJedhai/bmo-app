@@ -12,39 +12,28 @@ class HomeDevicesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Column(
-      children: [
-        _HeaderBar(
-          onAlarmsTap: () => showDialog(
-            context: context,
-            builder: (_) => const AlarmsListModal(),
-          ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: BmoColors.screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          'Casa',
+          style: Theme.of(context).textTheme.headlineSmall,
         ),
-        const Expanded(child: _DeviceList()),
-      ],
-    );
-  }
-}
-
-class _HeaderBar extends StatelessWidget {
-  final VoidCallback onAlarmsTap;
-
-  const _HeaderBar({required this.onAlarmsTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Row(
-        children: [
-          const Spacer(),
+        actions: [
           IconButton(
-            onPressed: onAlarmsTap,
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => const AlarmsListModal(),
+            ),
             icon: const Icon(Icons.alarm, color: BmoColors.accentYellow),
             tooltip: 'Alarmes',
           ),
         ],
       ),
+      body: const _DeviceList(),
     );
   }
 }

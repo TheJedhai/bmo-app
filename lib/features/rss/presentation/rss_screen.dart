@@ -26,10 +26,43 @@ class _RssScreenState extends ConsumerState<RssScreen> {
     final isMobile =
         MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
-    if (isMobile) {
-      return _MobileLayout(scaffoldKey: _scaffoldKey);
-    }
-    return const _DesktopLayout();
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.transparent,
+      drawer: isMobile
+          ? Drawer(
+              backgroundColor: BmoColors.screenBg,
+              child: RssSidebar(
+                onItemTap: () => Navigator.of(context).pop(),
+              ),
+            )
+          : null,
+      appBar: AppBar(
+        backgroundColor: BmoColors.screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          'Notícias',
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        actions: [
+          if (isMobile)
+            IconButton(
+              icon: const Icon(Icons.menu),
+              color: BmoColors.textPrimary,
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline,
+                color: BmoColors.accentGreen),
+            onPressed: () => _openAddFeedDialog(context),
+          ),
+        ],
+      ),
+      body: isMobile
+          ? const ArticleList()
+          : const _DesktopLayout(),
+    );
   }
 }
 
@@ -68,69 +101,6 @@ void _openAddFeedDialog(BuildContext context) {
     barrierColor: Colors.black54,
     builder: (_) => const FeedFormModal(),
   );
-}
-
-// ============================================================
-// Mobile
-// ============================================================
-
-class _MobileLayout extends ConsumerWidget {
-  final GlobalKey<ScaffoldState> scaffoldKey;
-
-  const _MobileLayout({required this.scaffoldKey});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final view = ref.watch(currentRssViewProvider);
-
-    final title = switch (view) {
-      AllArticles() => 'Todos',
-      UnreadArticles() => 'Não lidos',
-      StarredArticles() => 'Favoritos',
-      FeedView() => 'Feed',
-    };
-
-    return Scaffold(
-      key: scaffoldKey,
-      backgroundColor: Colors.transparent,
-      drawer: Drawer(
-        backgroundColor: BmoColors.screenBg,
-        child: RssSidebar(
-          onItemTap: () {
-            Navigator.of(context).pop();
-          },
-        ),
-      ),
-      appBar: AppBar(
-        backgroundColor: BmoColors.screenBg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu),
-            color: BmoColors.textPrimary,
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-        title: Text(
-          title,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: BmoColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: BmoColors.accentGreen),
-            onPressed: () => _openAddFeedDialog(context),
-          ),
-        ],
-      ),
-      body: const ArticleList(),
-    );
-  }
 }
 
 // ============================================================
