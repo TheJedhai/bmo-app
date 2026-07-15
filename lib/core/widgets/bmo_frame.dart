@@ -40,11 +40,11 @@ class BmoFrame extends ConsumerWidget {
     //   against screenBg background).
     // Mobile  (borderPadding=12): D=22, offset=-5 — symmetric overflow
     //   (band is too narrow; 5px over on each side).
-    final visualDiameter = 22.0;
+    final visualDiameter = 28.0;
     final controlOffset = isMobile ? -5.0 : 8.0;
     final touchSize = isMobile ? 40.0 : 44.0;
-    final gearIconSize = 13.0;
-    final avatarInnerRadius = isMobile ? 7.0 : 8.0;
+    final gearIconSize = 20.0;
+    final avatarInnerRadius = isMobile ? 7.0 : 20.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
