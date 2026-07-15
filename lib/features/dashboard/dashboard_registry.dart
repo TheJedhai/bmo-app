@@ -13,9 +13,9 @@ import 'widgets/rss_card.dart';
 
 /// Especificação de um widget da dashboard.
 ///
-/// Cada card tem largura fixa ([width]), altura opcional ([height] null =
-/// altura pelo conteúdo), e um [accent] que define cor da borda, glow e
-/// destaques internos.
+/// A largura é definida pelo masonry layout (número de colunas responsivo).
+/// Altura opcional ([height] null = altura intrínseca pelo conteúdo).
+/// [accent] define cor da borda, glow e destaques internos.
 ///
 /// [featureKey] null = visível para todos os usuários.
 /// [featureKey] preenchido = só renderiza se a key estiver em
@@ -29,7 +29,6 @@ class DashWidgetSpec {
   final String id;
   final String title;
   final Color accent;
-  final double width;
   final double? height;
   final Duration pulseDelay;
   final String? featureKey;
@@ -40,7 +39,6 @@ class DashWidgetSpec {
     required this.id,
     required this.title,
     required this.accent,
-    required this.width,
     this.height,
     this.pulseDelay = Duration.zero,
     this.featureKey,
@@ -58,14 +56,12 @@ final List<DashWidgetSpec> dashboardWidgets = [
     id: 'relogio',
     title: 'Relógio',
     accent: BmoColors.accentYellow,
-    width: 400,
     builder: _clockCardBuilder,
   ),
   const DashWidgetSpec(
     id: 'missoes',
     title: 'Missões',
     accent: BmoColors.accentGreen,
-    width: 340,
     pulseDelay: Duration(milliseconds: 500),
     onTap: _goToMissions,
     builder: _missionsCardBuilder,
@@ -74,7 +70,6 @@ final List<DashWidgetSpec> dashboardWidgets = [
     id: 'noticias',
     title: 'Notícias',
     accent: BmoColors.accentBlue,
-    width: 340,
     pulseDelay: Duration(milliseconds: 1000),
     onTap: _goToRss,
     builder: _rssCardBuilder,
@@ -83,7 +78,6 @@ final List<DashWidgetSpec> dashboardWidgets = [
     id: 'casa',
     title: 'Casa',
     accent: BmoColors.accentRed,
-    width: 300,
     pulseDelay: Duration(milliseconds: 1500),
     onTap: _goToHomeDevices,
     builder: _lightsCardBuilder,
@@ -92,7 +86,6 @@ final List<DashWidgetSpec> dashboardWidgets = [
     id: 'galeria',
     title: 'Galeria',
     accent: BmoColors.accentRed,
-    width: 400,
     height: 220,
     pulseDelay: Duration(milliseconds: 2000),
     onTap: showGalleryModal,
