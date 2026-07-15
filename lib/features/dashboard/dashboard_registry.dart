@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/navigation/app_tab.dart';
-import '../../core/navigation/tab_provider.dart';
+import '../../core/navigation/push_feature.dart';
 import '../../core/theme/bmo_theme.dart';
+import '../chat/chat_screen.dart';
 import '../gallery/widgets/gallery_modal.dart';
+import '../home_devices/presentation/home_devices_screen.dart';
+import '../missions/presentation/missions_screen.dart';
+import '../rss/presentation/rss_screen.dart';
+import '../vault/presentation/vault_screen.dart';
 import 'widgets/chat_card.dart';
 import 'widgets/clock_card.dart';
 import 'widgets/gallery_card.dart';
@@ -112,33 +116,23 @@ final List<DashWidgetSpec> dashboardWidgets = [
 ];
 
 void _goToMissions(BuildContext context) {
-  ProviderScope.containerOf(context)
-      .read(currentTabProvider.notifier)
-      .setTab(AppTab.missions);
+  pushFeature(context, const MissionsScreen());
 }
 
 void _goToRss(BuildContext context) {
-  ProviderScope.containerOf(context)
-      .read(currentTabProvider.notifier)
-      .setTab(AppTab.rss);
+  pushFeature(context, const RssScreen());
 }
 
 void _goToHomeDevices(BuildContext context) {
-  ProviderScope.containerOf(context)
-      .read(currentTabProvider.notifier)
-      .setTab(AppTab.homeDevices);
+  pushFeature(context, const HomeDevicesScreen());
 }
 
 void _goToChat(BuildContext context) {
-  ProviderScope.containerOf(context)
-      .read(currentTabProvider.notifier)
-      .setTab(AppTab.chat);
+  pushFeature(context, const ChatScreen());
 }
 
 void _goToVault(BuildContext context) {
-  ProviderScope.containerOf(context)
-      .read(currentTabProvider.notifier)
-      .setTab(AppTab.vault);
+  pushFeature(context, const VaultScreen());
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {

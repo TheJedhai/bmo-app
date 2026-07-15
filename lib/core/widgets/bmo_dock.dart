@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../features/chat/chat_screen.dart';
+import '../../features/dashboard/presentation/dashboard_screen.dart';
+import '../../features/home_devices/presentation/home_devices_screen.dart';
+import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/rss/data/rss_providers.dart';
+import '../../features/rss/presentation/rss_screen.dart';
+import '../../features/vault/presentation/vault_screen.dart';
 import '../navigation/app_tab.dart';
+import '../navigation/push_feature.dart';
 import '../navigation/tab_provider.dart';
 import '../theme/bmo_theme.dart';
 
@@ -45,8 +52,7 @@ class BmoDock extends ConsumerWidget {
               isActive ? BmoColors.accentGreen : BmoColors.textMuted;
 
           return InkWell(
-            onTap: () =>
-                ref.read(currentTabProvider.notifier).setTab(tab),
+            onTap: () => _onDockTap(context, tab),
             borderRadius: BorderRadius.circular(12),
             child: Padding(
               padding: EdgeInsets.symmetric(
@@ -104,5 +110,26 @@ class BmoDock extends ConsumerWidget {
     }
 
     return iconWidget;
+  }
+}
+
+/// Navega para a feature correspondente ao item do dock tocado.
+///
+/// Dashboard faz popUntil (volta à raiz); demais features são empurradas
+/// via [pushFeature].
+void _onDockTap(BuildContext context, AppTab tab) {
+  switch (tab) {
+    case AppTab.home:
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    case AppTab.chat:
+      pushFeature(context, const ChatScreen());
+    case AppTab.missions:
+      pushFeature(context, const MissionsScreen());
+    case AppTab.homeDevices:
+      pushFeature(context, const HomeDevicesScreen());
+    case AppTab.rss:
+      pushFeature(context, const RssScreen());
+    case AppTab.vault:
+      pushFeature(context, const VaultScreen());
   }
 }
