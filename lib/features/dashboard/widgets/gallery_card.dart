@@ -326,41 +326,6 @@ class _GalleryCardState extends ConsumerState<GalleryCard> {
               ),
             ),
           ),
-
-        // --- Dots indicadores ---
-        if (showControls)
-          Positioned(
-            bottom: 58,
-            left: 0,
-            right: 0,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                // absorve o tap para não propagar ao DashCard
-              },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(images.length, (i) {
-                  final isActive = i == _currentIndex;
-                  return GestureDetector(
-                    onTap: () => _goToPage(i),
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isActive
-                            ? widget.accent
-                            : BmoColors.textMuted.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-          ),
       ],
     );
   }
