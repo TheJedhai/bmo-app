@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/navigation/app_router.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../rss/data/models/article.dart';
 import '../../rss/data/models/feed.dart';
@@ -134,37 +136,61 @@ class _ArticleRow extends StatelessWidget {
   final Article article;
   final String feedName;
 
+  Future<void> _openArticle(BuildContext context) async {
+    final url = article.url;
+    if (url != null && url.isNotEmpty) {
+      final uri = Uri.tryParse(url);
+      if (uri != null) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+    // Fallback: abre a lista de notícias
+    appRouter.push('/noticias');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            article.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              color: BmoColors.textPrimary,
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openArticle(context),
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            height: 48,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  article.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    color: BmoColors.textPrimary,
+                  ),
+                ),
+                if (feedName.isNotEmpty) ...[
+                  SizedBox(height: 2),
+                  Text(
+                    feedName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (feedName.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              feedName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                color: BmoColors.textMuted,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

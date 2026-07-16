@@ -66,43 +66,47 @@ class BmoFrame extends ConsumerWidget {
           ),
 
           // ---- Settings gear (top-right, on green band) ----
-          Positioned(
-            top: controlOffset,
-            right: controlOffset,
-            child: _ControlHitbox(
-              size: touchSize,
-              alignment: Alignment.topRight,
-              onTap: () => showSettingsModal(context),
-              child: _DarkCircle(
-                diameter: visualDiameter,
-                child: Icon(Icons.settings,
-                    size: gearIconSize, color: BmoColors.accentGreen),
+          // Hidden on mobile — moves to the dashboard header.
+          if (!isMobile)
+            Positioned(
+              top: controlOffset,
+              right: controlOffset,
+              child: _ControlHitbox(
+                size: touchSize,
+                alignment: Alignment.topRight,
+                onTap: () => showSettingsModal(context),
+                child: _DarkCircle(
+                  diameter: visualDiameter,
+                  child: Icon(Icons.settings,
+                      size: gearIconSize, color: BmoColors.accentGreen),
+                ),
               ),
             ),
-          ),
 
           // ---- Profile avatar (bottom-right, on green band) ----
-          Positioned(
-            bottom: controlOffset,
-            right: controlOffset,
-            child: userAsync.whenOrNull(
-                  data: (user) {
-                    if (user == null) return const SizedBox.shrink();
-                    return _ControlHitbox(
-                      size: touchSize,
-                      alignment: Alignment.bottomRight,
-                      onTap: () =>
-                          ref.read(currentUserProvider.notifier).clearUser(),
-                      child: _FramedAvatar(
-                        profile: user,
-                        outerDiameter: visualDiameter,
-                        innerRadius: avatarInnerRadius,
-                      ),
-                    );
-                  },
-                ) ??
-                const SizedBox.shrink(),
-          ),
+          // Hidden on mobile — moves to the dashboard header.
+          if (!isMobile)
+            Positioned(
+              bottom: controlOffset,
+              right: controlOffset,
+              child: userAsync.whenOrNull(
+                    data: (user) {
+                      if (user == null) return const SizedBox.shrink();
+                      return _ControlHitbox(
+                        size: touchSize,
+                        alignment: Alignment.bottomRight,
+                        onTap: () =>
+                            ref.read(currentUserProvider.notifier).clearUser(),
+                        child: _FramedAvatar(
+                          profile: user,
+                          outerDiameter: visualDiameter,
+                          innerRadius: avatarInnerRadius,
+                        ),
+                      );
+                    },
+                  ) ??
+                  const SizedBox.shrink(),
+            ),
         ],
       ),
     );

@@ -164,7 +164,7 @@ class _LightRow extends StatelessWidget {
     return Opacity(
       opacity: isPending ? 0.6 : 1.0,
       child: SizedBox(
-        height: 36,
+        height: 48,
         child: Row(
           children: [
             Expanded(
@@ -189,7 +189,6 @@ class _LightRow extends StatelessWidget {
                 if (states.contains(WidgetState.selected)) return accent;
                 return BmoColors.textMuted;
               }),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ],
         ),
