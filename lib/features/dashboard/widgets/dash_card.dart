@@ -74,7 +74,7 @@ class _DashCardState extends State<DashCard>
       vsync: this,
       duration: const Duration(seconds: 4),
     );
-    _glowAnimation = Tween<double>(begin: 14, end: 24).animate(
+    _glowAnimation = Tween<double>(begin: 12, end: 28).animate(
       CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
     );
 
@@ -129,9 +129,17 @@ class _DashCardState extends State<DashCard>
                   width: 1.5,
                 ),
                 boxShadow: [
+                  // Halo interno — forte e tight
                   BoxShadow(
-                    color: widget.accent.withValues(alpha: 0.18),
+                    color: widget.accent.withValues(alpha: 0.55),
                     blurRadius: _glowAnimation.value,
+                    spreadRadius: (_glowAnimation.value - 12) / 8 + 1,
+                  ),
+                  // Bloom externo — difuso e amplo
+                  BoxShadow(
+                    color: widget.accent.withValues(alpha: 0.30),
+                    blurRadius: _glowAnimation.value * 1.8,
+                    spreadRadius: 2,
                   ),
                 ],
               ),

@@ -48,6 +48,7 @@ class DashboardScreen extends ConsumerWidget {
           mainAxisSpacing: _kSpacing,
           crossAxisSpacing: _kSpacing,
           padding: const EdgeInsets.all(_kPadding),
+          clipBehavior: Clip.none,
           itemCount: visibleWidgets.length,
           itemBuilder: (context, index) {
             final spec = visibleWidgets[index];
@@ -128,6 +129,7 @@ class _DashboardMobileLayout extends ConsumerWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
+            clipBehavior: Clip.none,
             padding: const EdgeInsets.fromLTRB(
               _kMobilePadding,
               0,
