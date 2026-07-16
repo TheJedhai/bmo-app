@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/navigation/app_router.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../chat/data/conversation.dart';
 import '../../chat/providers/chat_providers.dart';
@@ -26,43 +27,85 @@ class ChatCard extends ConsumerWidget {
       data: (conversations) => _ChatContent(
         conversations: conversations,
         accent: accent,
+        onNewChat: () async {
+          try {
+            final conv =
+                await ref.read(conversationsProvider.notifier).createNew();
+            ref.read(selectedConversationIdProvider.notifier).state =
+                conv.uuid;
+            appRouter.push('/chat');
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('falha ao criar: $e')),
+              );
+            }
+          }
+        },
       ),
     );
   }
 }
 
 class _ChatContent extends StatelessWidget {
-  const _ChatContent({required this.conversations, required this.accent});
+  const _ChatContent({
+    required this.conversations,
+    required this.accent,
+    required this.onNewChat,
+  });
 
   final List<Conversation> conversations;
   final Color accent;
+  final VoidCallback onNewChat;
 
   @override
   Widget build(BuildContext context) {
-    if (conversations.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: Center(
-          child: Text(
-            'Nenhuma conversa ainda',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              color: BmoColors.textMuted,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final recent = conversations.take(3).toList();
+    final theme = Theme.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.chat_bubble_outline, size: 28, color: accent),
-        const SizedBox(height: 12),
-        ...recent.map((conv) => _ConversationRow(conversation: conv)),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: BmoColors.accentGreen,
+              foregroundColor: const Color(0xFF0F1115),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(
+              'Novo chat',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: const Color(0xFF0F1115),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onPressed: onNewChat,
+          ),
+        ),
+        if (conversations.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 12),
+            child: Center(
+              child: Text(
+                'Nenhuma conversa ainda',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ),
+          )
+        else ...[
+          const SizedBox(height: 12),
+          Icon(Icons.chat_bubble_outline, size: 28, color: accent),
+          const SizedBox(height: 12),
+          ...conversations.take(3).map(
+                (conv) => _ConversationRow(conversation: conv),
+              ),
+        ],
       ],
     );
   }
