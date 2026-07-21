@@ -5,6 +5,7 @@ import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
 import '../../features/gallery/providers/images_provider.dart';
+import '../../features/finances/data/finances_providers.dart';
 import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
@@ -46,9 +47,20 @@ final eventsStreamProvider =
 
   while (!cancelled) {
     try {
-      yield* client.connect();
-      // Clean disconnect — reset backoff and reconnect immediately.
-      backoff = const Duration(seconds: 1);
+      var receivedData = false;
+      await for (final event in client.connect()) {
+        receivedData = true;
+        yield event;
+      }
+      // Clean disconnect — reset backoff only if we actually streamed data.
+      if (receivedData) {
+        backoff = const Duration(seconds: 1);
+      }
+      if (cancelled) break;
+      await Future.delayed(backoff);
+      if (cancelled) break;
+      backoff = backoff * 2;
+      if (backoff > maxBackoff) backoff = maxBackoff;
     } catch (e) {
       if (cancelled) break;
       debugPrint('SSE error: $e. Reconnecting in ${backoff.inSeconds}s...');
@@ -138,6 +150,10 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'connected':
       debugPrint('SSE connected');
       ref.read(sseGenerationProvider.notifier).state++;
+
+    // ---- Finances ----
+    case 'finances.dedup_review':
+      ref.invalidate(dedupReviewsProvider);
   }
 }
 

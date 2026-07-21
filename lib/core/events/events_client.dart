@@ -12,7 +12,7 @@ class EventsClient {
         _baseUrl = baseUrl;
 
   Stream<Map<String, dynamic>> connect() async* {
-    final request = http.Request('GET', Uri.parse('$_baseUrl/api/v1/events'));
+    final request = http.Request('GET', Uri.parse('$_baseUrl/api/v1/events/stream'));
     request.headers['Accept'] = 'text/event-stream';
 
     final streamedResponse = await _client.send(request);
