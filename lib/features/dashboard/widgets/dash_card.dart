@@ -143,55 +143,57 @@ class _DashCardState extends State<DashCard>
                   ),
                 ],
               ),
-              child: Stack(
-                children: [
-                  // Cantoneiras em L nos 4 cantos
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CustomPaint(
-                        painter: _LCornerPainter(
-                          color: widget.accent,
-                          strokeLength: 18,
-                          strokeWidth: 2.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Conteúdo do card
-                  Material(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    child: InkWell(
-                      onTap:
-                          widget.onTap != null
-                              ? () => widget.onTap!(context)
-                              : null,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (widget.title != null)
-                            _DashCardHeader(
-                              title: widget.title!,
-                              accent: widget.accent,
-                              showChevron: widget.onTap != null,
-                            ),
-                          Flexible(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: widget.child,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              child: child!,
             );
           },
+          // Cacheia a sub-árvore estática — só o BoxShadow reconstrói a cada frame.
+          child: Stack(
+            children: [
+              // Cantoneiras em L nos 4 cantos
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CustomPaint(
+                    painter: _LCornerPainter(
+                      color: widget.accent,
+                      strokeLength: 18,
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                ),
+              ),
+              // Conteúdo do card
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+                child: InkWell(
+                  onTap:
+                      widget.onTap != null
+                          ? () => widget.onTap!(context)
+                          : null,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.title != null)
+                        _DashCardHeader(
+                          title: widget.title!,
+                          accent: widget.accent,
+                          showChevron: widget.onTap != null,
+                        ),
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: widget.child,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
