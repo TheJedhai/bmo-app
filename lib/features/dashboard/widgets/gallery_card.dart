@@ -136,18 +136,13 @@ class _GalleryCardState extends ConsumerState<GalleryCard> {
               color: BmoColors.textMuted,
             ),
           ),
-          error: (e, st) {
-            debugPrint(
-              '[GalleryCard] imageBytesProvider(${img.id}) error — $e\n$st',
-            );
-            return const Center(
-              child: Icon(
-                Icons.broken_image_outlined,
-                size: 40,
-                color: BmoColors.textMuted,
-              ),
-            );
-          },
+          error: (e, st) => const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              size: 40,
+              color: BmoColors.textMuted,
+            ),
+          ),
           data: (bytes) => Image.memory(
             bytes,
             fit: BoxFit.cover,
@@ -211,16 +206,9 @@ class _GalleryCardState extends ConsumerState<GalleryCard> {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     return imagesAsync.when(
-      loading: () {
-        debugPrint('[GalleryCard] state=loading');
-        return const _LoadingState();
-      },
-      error: (e, st) {
-        debugPrint('[GalleryCard] state=error — $e\n$st');
-        return const _ErrorState();
-      },
+      loading: () => const _LoadingState(),
+      error: (e, st) => const _ErrorState(),
       data: (images) {
-        debugPrint('[GalleryCard] state=data — ${images.length} imagens');
         final completed = _getCompletedImages(images);
 
         // Sincroniza timer em post-frame para evitar setState durante build
