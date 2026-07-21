@@ -25,6 +25,10 @@ import 'widgets/vault_card.dart';
 /// mostra chevron no header.
 ///
 /// [pulseDelay] define o atraso inicial da animação de glow.
+///
+/// [showInNavBar] se true, o card aparece como atalho na barra de navegação
+/// inferior. [navIcon] e [route] são obrigatórios quando [showInNavBar] é true
+/// — [navIcon] define o ícone e [route] a rota de destino (usada com go()).
 class DashWidgetSpec {
   final String id;
   final String title;
@@ -34,6 +38,9 @@ class DashWidgetSpec {
   final String? featureKey;
   final void Function(BuildContext)? onTap;
   final Widget Function(BuildContext context, Color accent) builder;
+  final bool showInNavBar;
+  final IconData? navIcon;
+  final String? route;
 
   const DashWidgetSpec({
     required this.id,
@@ -44,6 +51,9 @@ class DashWidgetSpec {
     this.featureKey,
     this.onTap,
     required this.builder,
+    this.showInNavBar = false,
+    this.navIcon,
+    this.route,
   });
 }
 
@@ -64,6 +74,9 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentGreen,
     pulseDelay: Duration(milliseconds: 500),
     onTap: _goToMissions,
+    showInNavBar: true,
+    navIcon: Icons.task_alt,
+    route: '/missoes',
     builder: _missionsCardBuilder,
   ),
   const DashWidgetSpec(
@@ -72,6 +85,9 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentBlue,
     pulseDelay: Duration(milliseconds: 1000),
     onTap: _goToRss,
+    showInNavBar: true,
+    navIcon: Icons.rss_feed,
+    route: '/noticias',
     builder: _rssCardBuilder,
   ),
   const DashWidgetSpec(
@@ -80,6 +96,9 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentRed,
     pulseDelay: Duration(milliseconds: 1500),
     onTap: _goToHomeDevices,
+    showInNavBar: true,
+    navIcon: Icons.lightbulb_outline,
+    route: '/casa',
     builder: _lightsCardBuilder,
   ),
   const DashWidgetSpec(
@@ -97,6 +116,9 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentGreen,
     pulseDelay: Duration(milliseconds: 2500),
     onTap: _goToChat,
+    showInNavBar: true,
+    navIcon: Icons.chat_bubble_outline,
+    route: '/chat',
     builder: _chatCardBuilder,
   ),
   const DashWidgetSpec(
@@ -105,6 +127,9 @@ final List<DashWidgetSpec> dashboardWidgets = [
     accent: BmoColors.accentYellow,
     pulseDelay: Duration(milliseconds: 3000),
     onTap: _goToVault,
+    showInNavBar: true,
+    navIcon: Icons.lock_outline,
+    route: '/cofre',
     builder: _vaultCardBuilder,
   ),
 ];

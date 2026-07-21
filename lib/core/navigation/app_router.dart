@@ -13,6 +13,7 @@ import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_selector.dart';
 import '../theme/bmo_theme.dart';
 import '../widgets/bmo_frame.dart';
+import '../widgets/bmo_nav_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Navigator keys
@@ -55,9 +56,10 @@ Page<void> _buildFeaturePage(Widget child, GoRouterState state) {
 /// from the tree — go_router still instantiates it, but since it is never
 /// mounted its providers are never subscribed.
 class _AppShell extends ConsumerWidget {
-  const _AppShell({required this.child});
+  const _AppShell({required this.child, required this.currentLocation});
 
   final Widget child;
+  final String currentLocation;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -74,7 +76,20 @@ class _AppShell extends ConsumerWidget {
         if (user == null) {
           return const BmoFrame(child: ProfileSelector());
         }
-        return BmoFrame(child: child);
+        final isDashboard = currentLocation == '/';
+        return BmoFrame(
+          child: isDashboard
+              ? child
+              : Stack(
+                  children: [
+                    Positioned.fill(
+                      bottom: BmoNavBar.totalBottomInset,
+                      child: child,
+                    ),
+                    const BmoNavBar(),
+                  ],
+                ),
+        );
       },
       error: (_, _) => const BmoFrame(child: ProfileSelector()),
     );
@@ -103,7 +118,10 @@ final appRouter = GoRouter(
   routes: [
     ShellRoute(
       navigatorKey: shellNavigatorKey,
-      builder: (context, state, child) => _AppShell(child: child),
+      builder: (context, state, child) => _AppShell(
+        currentLocation: state.uri.path,
+        child: child,
+      ),
       routes: [
         GoRoute(
           path: '/',
