@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_router.dart';
 import '../../core/theme/bmo_theme.dart';
+import '../finances/presentation/widgets/finances_dash_card.dart';
 import '../gallery/widgets/gallery_modal.dart';
 import 'widgets/chat_card.dart';
 import 'widgets/clock_card.dart';
@@ -132,6 +133,15 @@ final List<DashWidgetSpec> dashboardWidgets = [
     route: '/cofre',
     builder: _vaultCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'financas',
+    title: 'Finanças',
+    accent: BmoColors.accentGreen,
+    pulseDelay: Duration(milliseconds: 3500),
+    featureKey: 'finances',
+    onTap: _goToFinances,
+    builder: _financesCardBuilder,
+  ),
 ];
 
 void _goToMissions(BuildContext _) {
@@ -152,6 +162,10 @@ void _goToChat(BuildContext _) {
 
 void _goToVault(BuildContext _) {
   appRouter.push('/cofre');
+}
+
+void _goToFinances(BuildContext _) {
+  appRouter.push('/financas');
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
@@ -180,4 +194,8 @@ Widget _chatCardBuilder(BuildContext context, Color accent) {
 
 Widget _vaultCardBuilder(BuildContext context, Color accent) {
   return VaultCard(accent: accent);
+}
+
+Widget _financesCardBuilder(BuildContext context, Color accent) {
+  return FinancesDashCard(accent: accent);
 }

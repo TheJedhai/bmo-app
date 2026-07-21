@@ -7,6 +7,7 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/home_devices/presentation/home_devices_screen.dart';
 import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/rss/presentation/rss_screen.dart';
+import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
 import '../events/events_provider.dart';
 import '../identity/identity_provider.dart';
@@ -154,6 +155,11 @@ final appRouter = GoRouter(
           path: '/cofre',
           pageBuilder: (context, state) =>
               _buildFeaturePage(const VaultScreen(), state),
+        ),
+        GoRoute(
+          path: '/financas',
+          pageBuilder: (context, state) =>
+              _buildFeaturePage(const FinancesScreen(), state),
         ),
       ],
     ),
