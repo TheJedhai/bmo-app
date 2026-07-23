@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/finances_providers.dart';
+import 'transaction_list_sheet.dart';
 
 /// Cards do mês (gastos, receita, net) com seletor de mês.
 class SummarySection extends ConsumerWidget {
@@ -58,6 +59,25 @@ class SummarySection extends ConsumerWidget {
           ),
           error: (error, _) => const SizedBox.shrink(),
           data: (summary) {
+            void openFlowSheet(String flow, String title) {
+              final totalFormatted = currencyFormat.format(
+                flow == 'expense'
+                    ? summary.totalSpent.abs()
+                    : summary.totalIncome,
+              );
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => TransactionListSheet(
+                  title: '$title  •  $totalFormatted',
+                  flow: flow,
+                  from: range.from,
+                  to: range.to,
+                ),
+              );
+            }
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -67,6 +87,8 @@ class SummarySection extends ConsumerWidget {
                       label: 'Gastos',
                       value: currencyFormat.format(summary.totalSpent.abs()),
                       color: BmoColors.accentRed,
+                      onTap: () =>
+                          openFlowSheet('expense', 'Gastos'),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -75,6 +97,8 @@ class SummarySection extends ConsumerWidget {
                       label: 'Receita',
                       value: currencyFormat.format(summary.totalIncome),
                       color: BmoColors.accentGreen,
+                      onTap: () =>
+                          openFlowSheet('income', 'Receita'),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -143,45 +167,54 @@ class _SummaryCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
+  final VoidCallback? onTap;
 
   const _SummaryCard({
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: BmoColors.screenBgElevated,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 11,
-              color: BmoColors.textMuted,
-            ),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: BmoColors.screenBgElevated,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.3)),
           ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-            overflow: TextOverflow.ellipsis,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

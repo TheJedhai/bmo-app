@@ -77,6 +77,8 @@ class FinancesClient {
     DateTime? to,
     String? accountId,
     String? q,
+    String? flow,
+    String? category,
     int pageSize = 50,
     int page = 1,
   }) async {
@@ -88,6 +90,8 @@ class FinancesClient {
     if (to != null) params['to'] = _formatDate(to);
     if (accountId != null) params['account_id'] = accountId;
     if (q != null && q.isNotEmpty) params['q'] = q;
+    if (flow != null) params['flow'] = flow;
+    if (category != null) params['category'] = category;
 
     final uri = Uri.parse('$_baseUrl/api/v1/finances/transactions')
         .replace(queryParameters: params);
