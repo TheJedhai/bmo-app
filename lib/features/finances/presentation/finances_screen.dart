@@ -443,7 +443,7 @@ class _DedupSection extends ConsumerWidget {
                       onResolve: (resolution) {
                         ref
                             .read(dedupReviewsProvider.notifier)
-                            .resolve(review.id, resolution: resolution);
+                            .resolve(review.id, verdict: resolution);
                         // Refetch summary after resolve
                         ref.invalidate(summaryProvider);
                       },

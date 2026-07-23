@@ -267,9 +267,9 @@ class DedupReviewsNotifier extends AsyncNotifier<List<DedupReview>> {
   }
 
   /// Resolve uma review e remove da lista local.
-  Future<void> resolve(int id, {required String resolution}) async {
+  Future<void> resolve(int id, {required String verdict}) async {
     final client = ref.read(financesClientProvider);
-    await client.resolveDedupReview(id, resolution: resolution);
+    await client.resolveDedupReview(id, verdict: verdict);
     // Remove da lista local
     final current = state.valueOrNull ?? const <DedupReview>[];
     state = AsyncData(current.where((r) => r.id != id).toList());

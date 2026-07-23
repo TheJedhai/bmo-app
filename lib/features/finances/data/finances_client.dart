@@ -122,11 +122,11 @@ class FinancesClient {
         .toList();
   }
 
-  Future<void> resolveDedupReview(int id, {required String resolution}) async {
+  Future<void> resolveDedupReview(int id, {required String verdict}) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/finances/dedup-reviews/$id/resolve'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'resolution': resolution}),
+      body: jsonEncode({'verdict': verdict}),
     );
     _ensureOk(response);
   }
