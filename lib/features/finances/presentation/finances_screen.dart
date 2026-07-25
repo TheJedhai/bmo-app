@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
-import '../data/category_labels.dart';
+
+import '../data/categorization_providers.dart';
 import '../data/finances_providers.dart';
 import '../data/models/summary.dart';
+import 'categorization_screen.dart';
 import 'widgets/accounts_header.dart';
-import 'widgets/dedup_review_card.dart';
+
 import 'widgets/summary_section.dart';
 import 'widgets/transaction_list_sheet.dart';
 import 'widgets/transactions_list.dart';
@@ -44,8 +46,6 @@ class _FinancesScreenState extends ConsumerState<FinancesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = ref.watch(dedupPendingCountProvider);
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
@@ -57,42 +57,6 @@ class _FinancesScreenState extends ConsumerState<FinancesScreen> {
           'Finanças',
           style: Theme.of(context).textTheme.headlineSmall,
         ),
-        actions: [
-          if (pendingCount > 0)
-            Stack(
-              children: [
-                IconButton(
-                  onPressed: () => _scrollToDedup(),
-                  icon: const Icon(Icons.compare_arrows,
-                      color: BmoColors.accentYellow),
-                  tooltip: 'Revisão de duplicatas',
-                ),
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: BmoColors.accentRed,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints:
-                        const BoxConstraints(minWidth: 18, minHeight: 18),
-                    child: Text(
-                      pendingCount.toString(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
       ),
       body: RefreshIndicator(
         color: BmoColors.accentGreen,
@@ -101,7 +65,6 @@ class _FinancesScreenState extends ConsumerState<FinancesScreen> {
             ref.read(accountsProvider.notifier).refresh(),
             ref.read(summaryProvider.notifier).refresh(),
             ref.read(transactionsProvider.notifier).refresh(),
-            ref.read(dedupReviewsProvider.notifier).refresh(),
           ]);
         },
         child: CustomScrollView(
@@ -110,6 +73,10 @@ class _FinancesScreenState extends ConsumerState<FinancesScreen> {
           slivers: [
             // ---- Contas ----
             const SliverToBoxAdapter(child: AccountsHeader()),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+            // ---- Categorizar (pendências) ----
+            const SliverToBoxAdapter(child: _CategorizeCard()),
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
             // ---- Resumo mensal ----
@@ -133,25 +100,10 @@ class _FinancesScreenState extends ConsumerState<FinancesScreen> {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             const TransactionsList(),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-            // ---- Revisão de duplicatas ----
-            const SliverToBoxAdapter(child: _SectionHeader(title: 'Revisão de duplicatas')),
-            const SliverToBoxAdapter(child: SizedBox(height: 8)),
-            const SliverToBoxAdapter(child: _DedupSection()),
             const SliverToBoxAdapter(child: SizedBox(height: 32)),
           ],
         ),
       ),
-    );
-  }
-
-  void _scrollToDedup() {
-    // Scroll to bottom where dedup section is.
-    _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOut,
     );
   }
 }
@@ -245,7 +197,16 @@ class _CategoryBreakdownState extends ConsumerState<_CategoryBreakdown> {
             unique.fold<double>(0, (sum, c) => sum + c.total.abs());
         if (total == 0) return const SizedBox.shrink();
 
-        // Assign consistent colors — same color for pie slice and list row dot
+        // Hidden categories — visual filter
+        final hidden = ref.watch(hiddenCategoriesProvider);
+        final visible =
+            unique.where((c) => !hidden.contains(c.category)).toList();
+        final visibleTotal =
+            visible.fold<double>(0, (sum, c) => sum + c.total.abs());
+        final displayTotal = visibleTotal > 0 ? visibleTotal : total;
+
+        // Assign consistent colors from full list — colors stay same
+        // regardless of hide/show state
         final catColors = <String, Color>{};
         for (var i = 0; i < unique.length; i++) {
           catColors[unique[i].category] =
@@ -253,7 +214,7 @@ class _CategoryBreakdownState extends ConsumerState<_CategoryBreakdown> {
         }
 
         void openCategorySheet(CategorySummary cat) {
-          final displayName = categoryDisplayName(cat.category);
+          final displayName = cat.category;
           final totalFormatted = _formatCurrency(cat.total);
           showModalBottomSheet(
             context: context,
@@ -263,6 +224,7 @@ class _CategoryBreakdownState extends ConsumerState<_CategoryBreakdown> {
               title: '$displayName  •  $totalFormatted',
               flow: 'expense',
               category: cat.category,
+              categoryId: cat.categoryId,
               from: range.from,
               to: range.to,
             ),
@@ -280,25 +242,59 @@ class _CategoryBreakdownState extends ConsumerState<_CategoryBreakdown> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header — static title
-                  const Padding(
-                    padding: EdgeInsets.symmetric(
+                  // Header row
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
                         vertical: 6, horizontal: 4),
-                    child: Text(
-                      'Por categoria',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: BmoColors.textPrimary,
-                      ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Por categoria',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: BmoColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (hidden.isNotEmpty)
+                          GestureDetector(
+                            onTap: () => ref
+                                .read(hiddenCategoriesProvider.notifier)
+                                .showAll(),
+                            child: Text(
+                              'Mostrar todas',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                color: BmoColors.accentGreen
+                                    .withValues(alpha: 0.8),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                  // Indicator when categories are hidden
+                  if (hidden.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Total considerado: ${_formatCurrency(-visibleTotal.abs())}  ·  '
+                      '${hidden.length} categoria${hidden.length > 1 ? 's' : ''} oculta${hidden.length > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: BmoColors.textMuted,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
-                  // Pie chart — always visible
+                  // Pie chart — visible categories only
                   _CategoryPie(
-                      categories: unique,
-                      total: total,
+                      categories: visible,
+                      total: displayTotal,
                       catColors: catColors),
                   const SizedBox(height: 8),
                   // List header — tappable, controls list collapse
@@ -342,18 +338,24 @@ class _CategoryBreakdownState extends ConsumerState<_CategoryBreakdown> {
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: unique.map((cat) {
-                              final pct =
-                                  cat.total.abs() / total;
+                              final isHidden =
+                                  hidden.contains(cat.category);
+                              final pct = cat.total.abs() /
+                                  (isHidden ? total : displayTotal);
                               return _CategoryListRow(
                                 key: ValueKey(
                                     'cat-${cat.category}'),
                                 color: catColors[cat.category]!,
-                                label: categoryDisplayName(
-                                    cat.category),
+                                label: cat.category,
                                 value: cat.total,
                                 percentage: pct,
+                                isHidden: isHidden,
                                 onTap: () =>
                                     openCategorySheet(cat),
+                                onToggleVisibility: () => ref
+                                    .read(hiddenCategoriesProvider
+                                        .notifier)
+                                    .toggle(cat.category),
                               );
                             }).toList(),
                           )
@@ -411,7 +413,7 @@ class _CategoryPieState extends State<_CategoryPie> {
         outrosCount++;
       } else {
         _sliceMeta.add((
-          label: categoryDisplayName(cat.category),
+          label: cat.category,
           value: cat.total.abs(),
           color: widget.catColors[cat.category]!,
           pct: pct,
@@ -433,7 +435,7 @@ class _CategoryPieState extends State<_CategoryPie> {
       _sliceMeta.clear();
       for (final cat in widget.categories) {
         _sliceMeta.add((
-          label: categoryDisplayName(cat.category),
+          label: cat.category,
           value: cat.total.abs(),
           color: widget.catColors[cat.category]!,
           pct: cat.total.abs() / widget.total,
@@ -447,6 +449,27 @@ class _CategoryPieState extends State<_CategoryPie> {
 
     // Fixed tooltip area — same height always, no layout shift.
     const double tooltipAreaHeight = 42;
+    const double pieDiameter = 280.0;
+    const double pieRadius = pieDiameter / 2;
+
+    final sections = <PieChartSectionData>[];
+    for (var i = 0; i < _sliceMeta.length; i++) {
+      final meta = _sliceMeta[i];
+      final isTouched = i == _touchedIndex;
+      Color color = meta.color;
+      if (isTouched) {
+        final hsl = HSLColor.fromColor(meta.color);
+        final lit = (hsl.lightness + 0.08).clamp(0.0, 1.0);
+        color = hsl.withLightness(lit).toColor();
+      }
+      sections.add(PieChartSectionData(
+        color: color,
+        value: meta.value,
+        title: '',
+        radius: pieRadius,
+        titleStyle: const TextStyle(fontSize: 0),
+      ));
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -466,63 +489,36 @@ class _CategoryPieState extends State<_CategoryPie> {
               : const SizedBox.shrink(),
         ),
         const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final diameter = constraints.maxWidth.clamp(0.0, 420.0);
-            final radius = diameter / 2;
-
-            final sections = <PieChartSectionData>[];
-            for (var i = 0; i < _sliceMeta.length; i++) {
-              final meta = _sliceMeta[i];
-              final isTouched = i == _touchedIndex;
-              Color color = meta.color;
-              if (isTouched) {
-                final hsl = HSLColor.fromColor(meta.color);
-                final lit = (hsl.lightness + 0.08).clamp(0.0, 1.0);
-                color = hsl.withLightness(lit).toColor();
-              }
-              sections.add(PieChartSectionData(
-                color: color,
-                value: meta.value,
-                title: '',
-                radius: radius,
-                titleStyle: const TextStyle(fontSize: 0),
-              ));
-            }
-
-            return Center(
-              child: SizedBox(
-                width: diameter,
-                height: diameter,
-                child: PieChart(
-                  PieChartData(
-                    sections: sections,
-                    centerSpaceRadius: 0,
-                    sectionsSpace: 0,
-                    borderData: FlBorderData(show: false),
-                    pieTouchData: PieTouchData(
-                      touchCallback:
-                          (FlTouchEvent event, pieTouchResponse) {
-                        if (!event.isInterestedForInteractions ||
-                            pieTouchResponse == null ||
-                            pieTouchResponse.touchedSection == null) {
-                          setState(() => _touchedIndex = -1);
-                          return;
-                        }
-                        final idx = pieTouchResponse
-                            .touchedSection!.touchedSectionIndex;
-                        setState(() => _touchedIndex = idx);
-                      },
-                    ),
-                  ),
+        Center(
+          child: SizedBox(
+            width: pieDiameter,
+            height: pieDiameter,
+            child: PieChart(
+              PieChartData(
+                sections: sections,
+                centerSpaceRadius: 0,
+                sectionsSpace: 0,
+                borderData: FlBorderData(show: false),
+                pieTouchData: PieTouchData(
+                  touchCallback: (event, response) {
+                    if (!event.isInterestedForInteractions ||
+                        response == null ||
+                        response.touchedSection == null) {
+                      setState(() => _touchedIndex = -1);
+                      return;
+                    }
+                    setState(() => _touchedIndex =
+                        response.touchedSection!.touchedSectionIndex);
+                  },
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       ],
     );
   }
+
 }
 
 /// Tooltip flutuante: nome da categoria, valor e porcentagem.
@@ -607,6 +603,8 @@ class _CategoryListRow extends StatelessWidget {
   final double value;
   final double percentage;
   final VoidCallback? onTap;
+  final bool isHidden;
+  final VoidCallback? onToggleVisibility;
 
   const _CategoryListRow({
     super.key,
@@ -615,12 +613,24 @@ class _CategoryListRow extends StatelessWidget {
     required this.value,
     required this.percentage,
     this.onTap,
+    this.isHidden = false,
+    this.onToggleVisibility,
   });
 
   @override
   Widget build(BuildContext context) {
     final formatted = _formatCurrency(value);
     final pctText = '${(percentage * 100).toStringAsFixed(0)}%';
+
+    final effectiveColor = isHidden
+        ? BmoColors.textMuted.withValues(alpha: 0.4)
+        : color;
+    final textColor = isHidden ? BmoColors.textMuted : BmoColors.textPrimary;
+    final valueColor = isHidden
+        ? BmoColors.textMuted
+        : (value < 0
+            ? BmoColors.accentRed.withValues(alpha: 0.8)
+            : BmoColors.textPrimary);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -637,7 +647,7 @@ class _CategoryListRow extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: BoxDecoration(
-                    color: color,
+                    color: effectiveColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -645,10 +655,10 @@ class _CategoryListRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 12,
-                      color: BmoColors.textPrimary,
+                      color: textColor,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -660,9 +670,9 @@ class _CategoryListRow extends StatelessWidget {
                     fontFamily: 'Inter',
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: value < 0
-                        ? BmoColors.accentRed.withValues(alpha: 0.8)
-                        : BmoColors.textPrimary,
+                    color: valueColor,
+                    decoration:
+                        isHidden ? TextDecoration.lineThrough : null,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -670,15 +680,36 @@ class _CategoryListRow extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: BmoColors.textMuted.withValues(alpha: 0.15),
+                    color: isHidden
+                        ? BmoColors.textMuted.withValues(alpha: 0.08)
+                        : BmoColors.textMuted.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     pctText,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 11,
-                      color: BmoColors.textMuted,
+                      color: isHidden
+                          ? BmoColors.textMuted.withValues(alpha: 0.5)
+                          : BmoColors.textMuted,
+                      decoration:
+                          isHidden ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onToggleVisibility,
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      isHidden ? Icons.visibility_off : Icons.visibility,
+                      size: 16,
+                      color: isHidden
+                          ? BmoColors.textMuted.withValues(alpha: 0.4)
+                          : BmoColors.textMuted.withValues(alpha: 0.5),
                     ),
                   ),
                 ),
@@ -775,73 +806,6 @@ class _AccountBreakdown extends ConsumerWidget {
 }
 
 // ============================================================================
-// Dedup section
-// ============================================================================
-
-class _DedupSection extends ConsumerWidget {
-  const _DedupSection();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final reviewsAsync = ref.watch(dedupReviewsProvider);
-
-    return reviewsAsync.when(
-      loading: () => const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, _) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Text(
-          'Erro: $error',
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 13,
-            color: BmoColors.textSecondary,
-          ),
-        ),
-      ),
-      data: (reviews) {
-        if (reviews.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Center(
-              child: Text(
-                'Nenhuma duplicata pendente.',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  color: BmoColors.textMuted,
-                ),
-              ),
-            ),
-          );
-        }
-
-        return Column(
-          children: reviews
-              .map((review) => Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
-                    child: DedupReviewCard(
-                      review: review,
-                      onResolve: (resolution) {
-                        ref
-                            .read(dedupReviewsProvider.notifier)
-                            .resolve(review.id, verdict: resolution);
-                        // Refetch summary after resolve
-                        ref.invalidate(summaryProvider);
-                      },
-                    ),
-                  ))
-              .toList(),
-        );
-      },
-    );
-  }
-}
-
-// ============================================================================
 // Transaction filters (inline)
 // ============================================================================
 
@@ -909,6 +873,78 @@ class _TransactionFiltersState extends ConsumerState<_TransactionFilters> {
           visualDensity: VisualDensity.compact,
         ),
       ],
+    );
+  }
+}
+
+// ============================================================================
+// Categorize card — visível apenas quando há pendências
+// ============================================================================
+
+class _CategorizeCard extends ConsumerWidget {
+  const _CategorizeCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(uncategorizedCountProvider);
+
+    if (count == 0) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        color: BmoColors.screenBgElevated,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: BmoColors.accentYellow.withValues(alpha: 0.3),
+          ),
+        ),
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const CategorizationScreen(),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: BmoColors.accentYellow.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.category_outlined,
+                    color: BmoColors.accentYellow,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Categorizar ($count)',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                ),
+                const Icon(Icons.chevron_right,
+                    color: BmoColors.textMuted, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

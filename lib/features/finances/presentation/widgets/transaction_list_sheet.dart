@@ -3,17 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../data/category_labels.dart';
 import '../../data/finances_client.dart';
 import '../../data/finances_providers.dart';
+import '../../data/models/category.dart';
 import '../../data/models/transaction.dart';
+import 'category_picker_sheet.dart';
 
 /// Bottom sheet content: lista de transações filtrada por flow/categoria.
 ///
-/// Usada tanto pelo clique em categoria (flow=expense, category=nome)
+/// Usada tanto pelo clique em categoria (flow=expense, categoryId=id)
 /// quanto pelos cards de Gastos (flow=expense) e Receita (flow=income).
 class TransactionListSheet extends ConsumerStatefulWidget {
   final String title;
   final String? flow;
+  final int? categoryId;
   final String? category;
   final DateTime from;
   final DateTime to;
@@ -22,6 +26,7 @@ class TransactionListSheet extends ConsumerStatefulWidget {
     super.key,
     required this.title,
     this.flow,
+    this.categoryId,
     this.category,
     required this.from,
     required this.to,
@@ -51,6 +56,7 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
         to: widget.to,
         flow: widget.flow,
         category: widget.category,
+        categoryId: widget.categoryId,
         pageSize: 50,
       );
       if (mounted) {
@@ -72,6 +78,52 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
           _error = e.toString();
           _loading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _recategorize(Transaction tx) async {
+    if (tx.merchantNormalized == null) return;
+
+    final category = await showModalBottomSheet<Category>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const CategoryPickerSheet(),
+    );
+    if (category == null || !mounted) return;
+
+    try {
+      final client = ref.read(financesClientProvider);
+      final count = await client.recategorize(
+        merchantNormalized: tx.merchantNormalized!,
+        categoryId: category.id,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '$count lançamentos recategorizados como "${category.name}".'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: BmoColors.screenBgElevated,
+          ),
+        );
+      }
+
+      ref.invalidate(summaryProvider);
+      _fetch();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro: $e'),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: BmoColors.screenBgElevated,
+          ),
+        );
       }
     }
   }
@@ -167,10 +219,11 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
       itemBuilder: (context, index) {
         final tx = _items![index];
         final dateStr = DateFormat('dd/MM/yyyy').format(tx.date);
-        final isExpense = tx.displayAmount < 0;
+        final isExpense = widget.flow != 'income';
+        final catLabel = categoryDisplayName(tx.category);
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Row(
             children: [
               Expanded(
@@ -189,7 +242,7 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      dateStr,
+                      '$catLabel  •  $dateStr',
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 11,
@@ -199,7 +252,7 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Text(
                 _formatCurrency(tx.displayAmount),
                 style: TextStyle(
@@ -211,6 +264,21 @@ class _TransactionListSheetState extends ConsumerState<TransactionListSheet> {
                       : BmoColors.accentGreen,
                 ),
               ),
+              if (tx.merchantNormalized != null) ...[
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: IconButton(
+                    icon: const Icon(Icons.swap_horiz,
+                        size: 16, color: BmoColors.textMuted),
+                    onPressed: () => _recategorize(tx),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Alterar categoria',
+                  ),
+                ),
+              ],
             ],
           ),
         );

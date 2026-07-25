@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/category_labels.dart';
 import '../../data/finances_providers.dart';
+import '../../data/models/category.dart';
+import 'category_picker_sheet.dart';
 
 /// Lista de transações com scroll infinito.
 class TransactionsList extends ConsumerWidget {
@@ -78,8 +80,13 @@ class TransactionsList extends ConsumerWidget {
             color: BmoColors.screenBgElevated,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10)),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
+            child: InkWell(
+              onTap: tx.merchantNormalized != null
+                  ? () => _showRecategorizeSheet(context, ref, tx)
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
                   // Conteúdo principal
@@ -170,11 +177,139 @@ class TransactionsList extends ConsumerWidget {
                 ],
               ),
             ),
+            ),
           ),
         );
       },
     );
   }
+}
+
+void _showRecategorizeSheet(
+    BuildContext context, WidgetRef ref, dynamic tx) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: BmoColors.screenBgElevated,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: BmoColors.textMuted.withAlpha(100),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                tx.description as String? ?? '',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: BmoColors.textPrimary,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Categoria atual: ${categoryDisplayName(tx.category as String? ?? 'other')}',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.of(ctx).pop();
+                    final category =
+                        await showModalBottomSheet<Category>(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const CategoryPickerSheet(),
+                    );
+                    if (category == null) return;
+
+                    try {
+                      final client = ref.read(financesClientProvider);
+                      final count = await client.recategorize(
+                        merchantNormalized:
+                            tx.merchantNormalized as String,
+                        categoryId: category.id,
+                      );
+
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                '$count lançamentos recategorizados como "${category.name}".'),
+                            duration: const Duration(seconds: 2),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: BmoColors.screenBgElevated,
+                          ),
+                        );
+                      }
+
+                      ref.invalidate(summaryProvider);
+                      ref
+                          .read(transactionsProvider.notifier)
+                          .refresh();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Erro: $e'),
+                            duration: const Duration(seconds: 3),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: BmoColors.screenBgElevated,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.swap_horiz,
+                      size: 16, color: BmoColors.accentGreen),
+                  label: const Text(
+                    'Alterar categoria deste estabelecimento',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: BmoColors.accentGreen,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: BmoColors.accentGreen),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _PendingBadge extends StatelessWidget {
