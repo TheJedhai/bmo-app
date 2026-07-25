@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
+import '../data/calendar_providers.dart';
+import '../data/models/calendar_event.dart';
 import 'widgets/agenda_view.dart';
+import 'widgets/event_form_modal.dart';
 import 'widgets/month_view.dart';
 
 enum AgendaViewMode { month, agenda }
@@ -75,14 +78,44 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 Expanded(
                   child: AgendaView(
                     selectedDay: selectedDay,
-                    onEventTap: (_) {
-                      // TODO: open edit modal (commit 5)
-                    },
+                    onEventTap: (event) => _openEditModal(event),
                   ),
                 ),
               ],
             ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openCreateModal,
+        backgroundColor: BmoColors.accentGreen,
+        foregroundColor: BmoColors.screenBg,
+        child: const Icon(Icons.add),
+      ),
     );
+  }
+
+  void _openCreateModal() async {
+    final result = await showEventFormModal(
+      context,
+      initialDate: ref.read(selectedDayProvider),
+    );
+    if (result != null && mounted) {
+      // Refresh current month
+      final month = (
+        year: _focusedMonth.year,
+        month: _focusedMonth.month,
+      );
+      ref.read(eventsProvider(month).notifier).refresh();
+    }
+  }
+
+  void _openEditModal(CalendarEvent event) async {
+    final result = await showEventFormModal(context, event: event);
+    if (result != null && mounted) {
+      final month = (
+        year: _focusedMonth.year,
+        month: _focusedMonth.month,
+      );
+      ref.read(eventsProvider(month).notifier).refresh();
+    }
   }
 }
 
