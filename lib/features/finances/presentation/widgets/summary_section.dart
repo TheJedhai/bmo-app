@@ -4,9 +4,10 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/finances_providers.dart';
+import '../../data/models/summary.dart';
 import 'transaction_list_sheet.dart';
 
-/// Cards do mês (gastos, receita, net) com seletor de mês.
+/// Bloco do topo: seletor de mês + cards de saldo, fatura, dívida e posição.
 class SummarySection extends ConsumerWidget {
   const SummarySection({super.key});
 
@@ -78,37 +79,58 @@ class SummarySection extends ConsumerWidget {
               );
             }
 
+            final netPositionColor = summary.netPosition >= 0
+                ? BmoColors.accentGreen
+                : BmoColors.accentRed;
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: _SummaryCard(
-                      label: 'Gastos',
-                      value: currencyFormat.format(summary.totalSpent.abs()),
-                      color: BmoColors.accentRed,
-                      onTap: () =>
-                          openFlowSheet('expense', 'Gastos'),
-                    ),
+                  // Row 1: Saldo em conta + Posição
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MetricCard(
+                          label: 'Saldo em conta',
+                          value: currencyFormat
+                              .format(summary.checkingBalance),
+                          color: BmoColors.accentGreen,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _MetricCard(
+                          label: 'Posição',
+                          value: currencyFormat
+                              .format(summary.netPosition),
+                          color: netPositionColor,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
-                      label: 'Receita',
-                      value: currencyFormat.format(summary.totalIncome),
-                      color: BmoColors.accentGreen,
-                      onTap: () =>
-                          openFlowSheet('income', 'Receita'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _SummaryCard(
-                      label: 'Saldo',
-                      value: currencyFormat.format(summary.net),
-                      color: summary.net >= 0
-                          ? BmoColors.accentGreen
-                          : BmoColors.accentRed,
+                  const SizedBox(height: 12),
+                  // Row 2: Fatura em aberto + Resumo do mês
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: _BillCard(bill: summary.openBill),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _CompactFlowCard(
+                            spent: summary.totalSpent.abs(),
+                            income: summary.totalIncome,
+                            format: currencyFormat,
+                            onTapSpent: () =>
+                                openFlowSheet('expense', 'Gastos'),
+                            onTapIncome: () =>
+                                openFlowSheet('income', 'Receita'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -123,13 +145,12 @@ class SummarySection extends ConsumerWidget {
   void _changeMonth(WidgetRef ref, int delta) {
     final current = ref.read(summaryMonthRangeProvider);
     var newFrom = DateTime(current.from.year, current.from.month + delta, 1);
-    var newTo = DateTime(newFrom.year, newFrom.month + 1, 0); // último dia do mês
+    var newTo =
+        DateTime(newFrom.year, newFrom.month + 1, 0); // último dia do mês
     final today = DateTime.now();
-    // Se for o mês atual, limita o "to" a hoje
     if (newFrom.year == today.year && newFrom.month == today.month) {
       newTo = today;
     }
-    // Não permite navegar para o futuro
     if (newFrom.isAfter(today)) return;
 
     ref.read(summaryMonthRangeProvider.notifier).state = (
@@ -139,51 +160,24 @@ class SummarySection extends ConsumerWidget {
   }
 }
 
-class _MonthButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
+// ============================================================================
+// Metric card (saldo, posição, dívida)
+// ============================================================================
 
-  const _MonthButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 32,
-      height: 32,
-      child: Material(
-        color: BmoColors.screenBgElevated,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(8),
-          child: Icon(icon, size: 18, color: BmoColors.textPrimary),
-        ),
-      ),
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
+class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  final VoidCallback? onTap;
 
-  const _SummaryCard({
+  const _MetricCard({
     required this.label,
     required this.value,
     required this.color,
-    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
+    return Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: BmoColors.screenBgElevated,
@@ -206,7 +200,7 @@ class _SummaryCard extends StatelessWidget {
                 value,
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: color,
                 ),
@@ -214,6 +208,278 @@ class _SummaryCard extends StatelessWidget {
               ),
             ],
           ),
+        );
+  }
+}
+
+// ============================================================================
+// Fatura em aberto card
+// ============================================================================
+
+class _BillCard extends StatelessWidget {
+  final BillInfo? bill;
+
+  const _BillCard({required this.bill});
+
+  @override
+  Widget build(BuildContext context) {
+    final currencyFormat = NumberFormat.currency(
+      locale: 'pt_BR',
+      symbol: 'R\$',
+    );
+
+    if (bill == null) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: BmoColors.screenBgElevated,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: BmoColors.textMuted.withValues(alpha: 0.2),
+          ),
+        ),
+        child: const Text(
+          'Fatura em aberto: sem fatura importada',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 12,
+            color: BmoColors.textMuted,
+          ),
+        ),
+      );
+    }
+
+    final formattedAmount = currencyFormat.format(bill!.totalAmount);
+    String? dueLabel;
+    if (bill!.dueDate != null) {
+      try {
+        final due = DateTime.parse(bill!.dueDate!);
+        dueLabel = DateFormat('dd/MM/yyyy').format(due);
+      } catch (_) {
+        dueLabel = bill!.dueDate;
+      }
+    }
+
+    String? importedLabel;
+    if (bill!.importedAt != null) {
+      try {
+        final utc = DateTime.parse(bill!.importedAt!);
+        final local = utc.toLocal();
+        importedLabel =
+            'atualizado em ${DateFormat('dd/MM HH:mm').format(local)}';
+      } catch (_) {
+        importedLabel = 'atualizado em ${bill!.importedAt}';
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBgElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: BmoColors.accentYellow.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.receipt_long,
+                  size: 14, color: BmoColors.accentYellow),
+              SizedBox(width: 6),
+              Text(
+                'Fatura em aberto',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            formattedAmount,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: BmoColors.accentYellow,
+            ),
+          ),
+          if (dueLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Vencimento $dueLabel',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                color: BmoColors.textSecondary,
+              ),
+            ),
+          ],
+          if (bill!.itemCount != null || importedLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              [
+                if (bill!.itemCount != null)
+                  '${bill!.itemCount} itens',
+                ?importedLabel,
+              ].join(' · '),
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                color: BmoColors.textMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Compact gastos/receita (replaces old 2 separate cards)
+// ============================================================================
+
+class _CompactFlowCard extends StatelessWidget {
+  final double spent;
+  final double income;
+  final NumberFormat format;
+  final VoidCallback? onTapSpent;
+  final VoidCallback? onTapIncome;
+
+  const _CompactFlowCard({
+    required this.spent,
+    required this.income,
+    required this.format,
+    this.onTapSpent,
+    this.onTapIncome,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBgElevated,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Resumo do mês',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              color: BmoColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _FlowRow(
+            label: 'Gastos',
+            value: format.format(spent),
+            color: BmoColors.accentRed,
+            onTap: onTapSpent,
+          ),
+          const SizedBox(height: 4),
+          _FlowRow(
+            label: 'Receita',
+            value: format.format(income),
+            color: BmoColors.accentGreen,
+            onTap: onTapIncome,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FlowRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _FlowRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: BmoColors.textSecondary,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Month button
+// ============================================================================
+
+class _MonthButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _MonthButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: Material(
+        color: BmoColors.screenBgElevated,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Icon(icon, size: 18, color: BmoColors.textPrimary),
         ),
       ),
     );

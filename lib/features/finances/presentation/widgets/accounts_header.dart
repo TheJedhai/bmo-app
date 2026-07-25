@@ -109,11 +109,14 @@ class AccountsHeader extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             formattedBalance,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
-                              color: BmoColors.accentGreen,
+                              color: account.type == 'CREDIT' &&
+                                      account.balance < 0
+                                  ? BmoColors.accentRed
+                                  : BmoColors.accentGreen,
                             ),
                           ),
                         ),

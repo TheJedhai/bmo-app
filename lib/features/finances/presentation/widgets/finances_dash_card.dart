@@ -6,7 +6,7 @@ import '../../data/finances_providers.dart';
 
 /// Card da dashboard para a feature Finanças.
 ///
-/// Mostra um resumo rápido: saldo do mês e contagem de reviews pendentes.
+/// Mostra posição líquida (net_position), saldo em conta e fatura do cartão.
 class FinancesDashCard extends ConsumerWidget {
   final Color accent;
 
@@ -15,7 +15,6 @@ class FinancesDashCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(summaryProvider);
-    final pendingCount = ref.watch(dedupPendingCountProvider);
 
     return summaryAsync.when(
       loading: () => const Padding(
@@ -24,75 +23,128 @@ class FinancesDashCard extends ConsumerWidget {
       ),
       error: (_, _) => const _EmptyContent(),
       data: (summary) {
+        final isPositive = summary.netPosition >= 0;
+        final positionColor =
+            isPositive ? BmoColors.accentGreen : BmoColors.accentRed;
+        final bill = summary.openBill;
+        final hasDueDate = bill?.dueDate != null;
+
         return Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Saldo do mês
-              Row(
-                children: [
-                  const Text(
-                    'Saldo do mês',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: BmoColors.textSecondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (pendingCount > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: BmoColors.accentRed.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$pendingCount dup.',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
+          padding: const EdgeInsets.all(12),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+              // Metade esquerda — Posição, centralizada verticalmente
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Posição',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        color: BmoColors.textSecondary,
                       ),
                     ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _formatCurrency(summary.net),
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: summary.net >= 0
-                      ? BmoColors.accentGreen
-                      : BmoColors.accentRed,
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatCurrency(summary.netPosition),
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                        color: positionColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
-              // Mini barras gastos vs receita
-              Row(
-                children: [
-                  _MiniBar(
-                    label: 'Gastos',
-                    value: summary.totalSpent.abs(),
-                    color: BmoColors.accentRed,
-                  ),
-                  const SizedBox(width: 12),
-                  _MiniBar(
-                    label: 'Rec.',
-                    value: summary.totalIncome,
-                    color: BmoColors.accentGreen,
-                  ),
-                ],
+              // Divisor vertical sutil
+              const SizedBox(width: 12),
+              Container(
+                width: 1,
+                color: BmoColors.textMuted.withValues(alpha: 0.2),
+              ),
+              const SizedBox(width: 12),
+              // Metade direita — Em conta + Fatura
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Em conta',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10,
+                            color: BmoColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatCurrency(summary.checkingBalance),
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Fatura',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10,
+                            color: BmoColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          bill != null
+                              ? _formatCurrency(bill.totalAmount)
+                              : 'sem fatura importada',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: bill != null
+                                ? BmoColors.textPrimary
+                                : BmoColors.textMuted,
+                          ),
+                        ),
+                        if (hasDueDate) ...[
+                          const SizedBox(height: 1),
+                          Text(
+                            _formatDueDate(bill!.dueDate!),
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              color: BmoColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        );
+        ),
+      );
       },
     );
   }
@@ -114,6 +166,17 @@ class FinancesDashCard extends ConsumerWidget {
 
     final sign = value < 0 ? '-' : '';
     return '$sign R\$ ${buffer.toString()},$decPart';
+  }
+
+  /// Converte due_date (YYYY-MM-DD) para "dd/MM".
+  String _formatDueDate(String isoDate) {
+    try {
+      final parts = isoDate.split('-');
+      if (parts.length == 3) {
+        return 'vence ${parts[2]}/${parts[1]}';
+      }
+    } catch (_) {}
+    return isoDate;
   }
 }
 
@@ -138,60 +201,3 @@ class _EmptyContent extends StatelessWidget {
   }
 }
 
-class _MiniBar extends StatelessWidget {
-  final String label;
-  final double value;
-  final Color color;
-
-  const _MiniBar({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 10,
-              color: BmoColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            _formatShort(value),
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatShort(double v) {
-    final abs = v.abs();
-    final parts = abs.toStringAsFixed(2).split('.');
-    final intPart = parts[0];
-    final decPart = parts[1];
-    final buffer = StringBuffer();
-    final chars = intPart.split('');
-    for (var i = 0; i < chars.length; i++) {
-      if (i > 0 && (chars.length - i) % 3 == 0) {
-        buffer.write('.');
-      }
-      buffer.write(chars[i]);
-    }
-    final sign = v < 0 ? '-' : '';
-    return '$sign R\$ ${buffer.toString()},$decPart';
-  }
-}
