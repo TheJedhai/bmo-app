@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
+import '../../features/finances/data/categorization_providers.dart';
 import '../../features/gallery/providers/images_provider.dart';
-import '../../features/finances/data/finances_providers.dart';
+
 import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
@@ -147,13 +148,16 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
         ref.read(richBlocksProvider.notifier).applyPatch(blockId, patch);
       }
 
+    // ---- Finances ----
+    case 'finances.uncategorized':
+      ref.read(uncategorizedProvider.notifier).refresh();
+
     case 'connected':
       debugPrint('SSE connected');
       ref.read(sseGenerationProvider.notifier).state++;
 
-    // ---- Finances ----
-    case 'finances.dedup_review':
-      ref.invalidate(dedupReviewsProvider);
+
+
   }
 }
 

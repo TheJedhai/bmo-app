@@ -1,11 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_provider.dart';
 import '../../../core/identity/identity_state.dart';
 import 'finances_client.dart';
 import 'models/account.dart';
-import 'models/dedup_review.dart';
+
 import 'models/summary.dart';
 import 'models/transaction.dart';
 
@@ -73,9 +75,12 @@ class SummaryNotifier extends AsyncNotifier<FinanceSummary> {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) {
       return const FinanceSummary(
+        checkingBalance: 0,
         totalSpent: 0,
         totalIncome: 0,
         net: 0,
+        totalCreditDebt: 0,
+        netPosition: 0,
         byCategory: [],
         byAccount: [],
       );
@@ -247,42 +252,62 @@ final transactionsProvider =
 });
 
 // ============================================================
-// Dedup Reviews
+// Hidden categories — visual filter for category breakdown
 // ============================================================
 
-class DedupReviewsNotifier extends AsyncNotifier<List<DedupReview>> {
-  @override
-  Future<List<DedupReview>> build() async {
-    final userId = ref.watch(currentUserIdProvider);
-    if (userId == null) return const [];
-    final client = ref.watch(financesClientProvider);
-    return client.listDedupReviews(status: 'pending');
+/// Persisted set of hidden category names. Scoped by current user id.
+class HiddenCategoriesNotifier extends StateNotifier<Set<String>> {
+  final Ref _ref;
+
+  HiddenCategoriesNotifier(this._ref) : super(const {}) {
+    _load();
   }
 
-  Future<void> refresh() async {
-    state = const AsyncLoading();
-    final client = ref.read(financesClientProvider);
-    state =
-        await AsyncValue.guard(() => client.listDedupReviews(status: 'pending'));
+  void _load() {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    final userId = _ref.read(currentUserIdProvider);
+    if (prefs == null || userId == null) return;
+    try {
+      final raw = prefs.getStringList('hidden_categories_$userId');
+      if (raw != null) state = raw.toSet();
+    } catch (e) {
+      debugPrint('HiddenCategories load failed: $e');
+    }
   }
 
-  /// Resolve uma review e remove da lista local.
-  Future<void> resolve(int id, {required String verdict}) async {
-    final client = ref.read(financesClientProvider);
-    await client.resolveDedupReview(id, verdict: verdict);
-    // Remove da lista local
-    final current = state.valueOrNull ?? const <DedupReview>[];
-    state = AsyncData(current.where((r) => r.id != id).toList());
+  void _persist() {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    final userId = _ref.read(currentUserIdProvider);
+    if (prefs == null || userId == null) return;
+    try {
+      prefs.setStringList('hidden_categories_$userId', state.toList());
+    } catch (e) {
+      debugPrint('HiddenCategories persist failed: $e');
+    }
+  }
+
+  void toggle(String category) {
+    final updated = Set<String>.from(state);
+    if (updated.contains(category)) {
+      updated.remove(category);
+    } else {
+      updated.add(category);
+    }
+    state = updated;
+    _persist();
+  }
+
+  void showAll() {
+    state = const {};
+    _persist();
   }
 }
 
-final dedupReviewsProvider =
-    AsyncNotifierProvider<DedupReviewsNotifier, List<DedupReview>>(
-  DedupReviewsNotifier.new,
-);
-
-/// Contagem de reviews pendentes para badge.
-final dedupPendingCountProvider = Provider<int>((ref) {
-  final reviews = ref.watch(dedupReviewsProvider);
-  return reviews.whenOrNull(data: (list) => list.length) ?? 0;
+final hiddenCategoriesProvider =
+    StateNotifierProvider<HiddenCategoriesNotifier, Set<String>>((ref) {
+  final notifier = HiddenCategoriesNotifier(ref);
+  ref.listen(currentUserIdProvider, (_, _) => notifier.showAll());
+  return notifier;
 });
+
+
