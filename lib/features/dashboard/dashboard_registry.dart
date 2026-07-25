@@ -134,12 +134,26 @@ final List<DashWidgetSpec> dashboardWidgets = [
     builder: _vaultCardBuilder,
   ),
   const DashWidgetSpec(
+    id: 'agenda',
+    title: 'Agenda',
+    accent: BmoColors.accentYellow,
+    pulseDelay: Duration(milliseconds: 500),
+    onTap: _goToAgenda,
+    showInNavBar: true,
+    navIcon: Icons.calendar_month,
+    route: '/agenda',
+    builder: _agendaCardBuilder,
+  ),
+  const DashWidgetSpec(
     id: 'financas',
     title: 'Finanças',
     accent: BmoColors.accentGreen,
     pulseDelay: Duration(milliseconds: 3500),
     featureKey: 'finances',
     onTap: _goToFinances,
+    showInNavBar: true,
+    navIcon: Icons.monetization_on_outlined,
+    route: '/financas',
     builder: _financesCardBuilder,
   ),
 ];
@@ -166,6 +180,10 @@ void _goToVault(BuildContext _) {
 
 void _goToFinances(BuildContext _) {
   appRouter.push('/financas');
+}
+
+void _goToAgenda(BuildContext _) {
+  appRouter.push('/agenda');
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
@@ -198,4 +216,8 @@ Widget _vaultCardBuilder(BuildContext context, Color accent) {
 
 Widget _financesCardBuilder(BuildContext context, Color accent) {
   return FinancesDashCard(accent: accent);
+}
+
+Widget _agendaCardBuilder(BuildContext context, Color accent) {
+  return const SizedBox.shrink();
 }
