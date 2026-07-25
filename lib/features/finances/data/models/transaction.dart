@@ -10,6 +10,7 @@ class Transaction {
   final String status;
   final String accountId;
   final String? transactionType;
+  final String? merchantNormalized;
   final CreditCardMetadata? creditCardMetadata;
 
   const Transaction({
@@ -21,6 +22,7 @@ class Transaction {
     required this.status,
     required this.accountId,
     this.transactionType,
+    this.merchantNormalized,
     this.creditCardMetadata,
   });
 
@@ -34,6 +36,7 @@ class Transaction {
       status: json['status'] as String? ?? 'posted',
       accountId: json['account_id'] as String? ?? '',
       transactionType: json['type'] as String?,
+      merchantNormalized: json['merchant_normalized'] as String?,
       creditCardMetadata: json['credit_card_metadata'] != null
           ? CreditCardMetadata.fromJson(
               json['credit_card_metadata'] as Map<String, dynamic>)
@@ -45,11 +48,9 @@ class Transaction {
 
   /// Valor de exibição com sinal interpretado.
   ///
-  /// BANK_CREDIT = entrada (positivo), demais tipos = saída (negativo).
-  /// Cartão de crédito: valor positivo = gasto (negativo na exibição),
-  /// valor negativo = estorno/crédito (positivo na exibição).
+  /// CREDIT = entrada (positivo), demais tipos = saída (negativo).
   double get displayAmount {
-    if (transactionType == 'BANK_CREDIT') {
+    if (transactionType == 'CREDIT') {
       return amount.abs();
     }
     return -amount.abs();

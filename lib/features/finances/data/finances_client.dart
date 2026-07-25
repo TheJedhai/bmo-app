@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'models/account.dart';
+import 'models/category.dart';
 import 'models/dedup_review.dart';
 import 'models/summary.dart';
 import 'models/transaction.dart';
+import 'models/uncategorized_merchant.dart';
 
 class FinancesApiException implements Exception {
   final int statusCode;
@@ -79,6 +81,7 @@ class FinancesClient {
     String? q,
     String? flow,
     String? category,
+    int? categoryId,
     int pageSize = 50,
     int page = 1,
   }) async {
@@ -91,7 +94,12 @@ class FinancesClient {
     if (accountId != null) params['account_id'] = accountId;
     if (q != null && q.isNotEmpty) params['q'] = q;
     if (flow != null) params['flow'] = flow;
-    if (category != null) params['category'] = category;
+    if (categoryId != null) {
+      params['category_id'] = categoryId.toString();
+    } else if (category != null) {
+      // ponytail: fallback string enquanto backend não expõe category_id no summary
+      params['category'] = category;
+    }
 
     final uri = Uri.parse('$_baseUrl/api/v1/finances/transactions')
         .replace(queryParameters: params);
@@ -105,6 +113,113 @@ class FinancesClient {
         const <Transaction>[];
     final total = decoded['total'] as int? ?? 0;
     return (results, total);
+  }
+
+  // ============================================================
+  // Categories
+  // ============================================================
+
+  Future<List<Category>> listCategories() async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/api/v1/finances/categories'),
+    );
+    _ensureOk(response);
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => Category.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Category> createCategory({
+    required String name,
+    required String kind,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/finances/categories'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'name': name, 'kind': kind}),
+    );
+    _ensureOk(response);
+    return Category.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<Category> updateCategory(int id, {
+    String? name,
+    String? kind,
+    int? displayOrder,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (kind != null) body['kind'] = kind;
+    if (displayOrder != null) body['display_order'] = displayOrder;
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/api/v1/finances/categories/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _ensureOk(response);
+    return Category.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteCategory(int id) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/api/v1/finances/categories/$id'),
+    );
+    _ensureOk(response);
+  }
+
+  // ============================================================
+  // Uncategorized merchants
+  // ============================================================
+
+  Future<List<UncategorizedMerchant>> listUncategorized({String? since}) async {
+    final params = <String, String>{};
+    if (since != null) params['since'] = since;
+    final uri = Uri.parse('$_baseUrl/api/v1/finances/uncategorized')
+        .replace(queryParameters: params.isEmpty ? null : params);
+    final response = await _client.get(uri);
+    _ensureOk(response);
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => UncategorizedMerchant.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Categoriza um merchant. Retorna quantos lançamentos foram atualizados.
+  Future<int> categorize({
+    required String merchantNormalized,
+    required int categoryId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/finances/categorize'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'merchant_normalized': merchantNormalized,
+        'category_id': categoryId,
+      }),
+    );
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['updated_count'] as int? ?? 0;
+  }
+
+  /// Recategoriza um merchant (sobrescreve inclusive já categorizados).
+  /// Retorna quantos lançamentos foram atualizados.
+  Future<int> recategorize({
+    required String merchantNormalized,
+    required int categoryId,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/finances/recategorize'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'merchant_normalized': merchantNormalized,
+        'category_id': categoryId,
+      }),
+    );
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['updated_count'] as int? ?? 0;
   }
 
   // ============================================================
