@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/navigation/app_router.dart';
 import '../../core/theme/bmo_theme.dart';
+import '../calendar/presentation/widgets/calendar_dash_card.dart';
 import '../finances/presentation/widgets/finances_dash_card.dart';
 import '../gallery/widgets/gallery_modal.dart';
 import 'widgets/chat_card.dart';
@@ -219,5 +220,5 @@ Widget _financesCardBuilder(BuildContext context, Color accent) {
 }
 
 Widget _agendaCardBuilder(BuildContext context, Color accent) {
-  return const SizedBox.shrink();
+  return CalendarDashCard(accent: accent);
 }

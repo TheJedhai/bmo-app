@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
+import '../../features/calendar/data/calendar_providers.dart';
 import '../../features/finances/data/categorization_providers.dart';
 import '../../features/gallery/providers/images_provider.dart';
 
@@ -152,11 +153,20 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'finances.uncategorized':
       ref.read(uncategorizedProvider.notifier).refresh();
 
+    // ---- Calendar ----
+    case 'calendar.event.created':
+    case 'calendar.event.updated':
+    case 'calendar.event.deleted':
+      _invalidateAllFamilyInstances(ref, eventsProvider);
+    case 'calendar.calendar.created':
+    case 'calendar.calendar.updated':
+    case 'calendar.calendar.deleted':
+      ref.invalidate(calendarsProvider);
+      _invalidateAllFamilyInstances(ref, eventsProvider);
+
     case 'connected':
       debugPrint('SSE connected');
       ref.read(sseGenerationProvider.notifier).state++;
-
-
 
   }
 }
