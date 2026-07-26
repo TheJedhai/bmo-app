@@ -212,7 +212,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
             viewConfiguration: _viewConfig,
             callbacks: CalendarCallbacks(
               onPageChanged: _onPageChanged,
-              onTapped: (date) => widget.onDayTap(date),
+              onTapped: widget.viewMode == AgendaViewMode.month
+                  ? (date) => widget.onDayTap(date)
+                  : null,
               onEventTapped: (event, _) {
                 final ke = event as KalenderCalendarEvent;
                 widget.onDayTap(ke.source.occurrenceDate);
