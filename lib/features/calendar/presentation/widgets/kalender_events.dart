@@ -60,7 +60,6 @@ class KalenderCalendarEvent extends CalendarEvent {
     DateTimeRange? dateTimeRange,
     EventInteraction? interaction,
   }) {
-    debugPrint('[B] KalenderCalendarEvent.copyWith — start: ${dateTimeRange?.start}, end: ${dateTimeRange?.end}');
     return KalenderCalendarEvent(
       dateTimeRange: dateTimeRange ?? this.dateTimeRange,
       source: source,
@@ -219,7 +218,6 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
 /// Shows title and time; in short tiles, only title with ellipsis.
 /// Wrapped in [Consumer] so calendar color changes reflect immediately.
 Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
-  debugPrint('[B] kalenderMultiDayTileBuilder — id: ${event.id}, start: ${event.start}, end: ${event.end}');
   if (event is! KalenderCalendarEvent) {
     return Container(
       color: const Color(0xFF8BC9A3),

@@ -418,7 +418,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// only in the controller's newEvent/selectedEvent and is cleared when the
   /// drag ends or is cancelled.
   CalendarEvent? _onEventCreate(CalendarEvent event) {
-    debugPrint('[B] _onEventCreate called — range: ${event.start} → ${event.end}');
     return KalenderCalendarEvent.provisional(
       dateTimeRange: event.dateTimeRange,
     );
@@ -432,7 +431,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
     // creation modal receives the user's wall-clock time (e.g. 14:00, not 17:00Z).
     final localStart = event.start.toLocal();
     final localEnd = event.end.toLocal();
-    debugPrint('[B] _onEventCreated — range: $localStart → $localEnd');
     widget.onCreateFromRange(localStart, localEnd);
   }
 
