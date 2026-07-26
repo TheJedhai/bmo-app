@@ -206,6 +206,15 @@ final eventsProvider = AsyncNotifierProvider.family<
 );
 
 // ============================================================
+// Visible month (shared between AgendaScreen and MonthView)
+// ============================================================
+
+final visibleMonthProvider = StateProvider<MonthRange>((ref) {
+  final now = DateTime.now();
+  return (year: now.year, month: now.month);
+});
+
+// ============================================================
 // Upcoming events (dashboard card + agenda view)
 // ============================================================
 
@@ -215,9 +224,10 @@ final upcomingEventsProvider = FutureProvider.autoDispose
   if (userId == null) return const [];
   final repo = ref.watch(calendarRepositoryProvider);
   final now = DateTime.now();
-  // Fetch a wide enough range: today through end of next year.
-  final end = DateTime(now.year + 1, 12, 31);
+  // 365 days keeps us safely under backend's 370-day range limit.
+  final end = now.add(const Duration(days: 365));
   final all = await repo.listEvents(start: now, end: end);
-  all.sort((a, b) => a.occurrenceDate.compareTo(b.occurrenceDate));
+  // Backend returns events sorted by (occurrence_date, start_time, id).
+  // Dart sort is not stable, so trusting backend order preserves intra-day ordering.
   return all.take(limit).toList();
 });

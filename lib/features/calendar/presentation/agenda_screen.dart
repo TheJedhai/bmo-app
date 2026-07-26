@@ -22,8 +22,6 @@ class AgendaScreen extends ConsumerStatefulWidget {
 }
 
 class _AgendaScreenState extends ConsumerState<AgendaScreen> {
-  DateTime _focusedMonth = DateTime.now();
-
   @override
   Widget build(BuildContext context) {
     final viewMode = ref.watch(viewModeProvider);
@@ -49,23 +47,12 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         ],
       ),
       body: viewMode == AgendaViewMode.month
-          ? Column(
-              children: [
-                _MonthNavigator(
-                  focusedMonth: _focusedMonth,
-                  onMonthChanged: (m) => setState(() => _focusedMonth = m),
-                ),
-                Expanded(
-                  child: MonthView(
-                    focusedMonth: _focusedMonth,
-                    onDayTap: (day) {
-                      ref.read(selectedDayProvider.notifier).state = day;
-                      ref.read(viewModeProvider.notifier).state =
-                          AgendaViewMode.agenda;
-                    },
-                  ),
-                ),
-              ],
+          ? MonthView(
+              onDayTap: (day) {
+                ref.read(selectedDayProvider.notifier).state = day;
+                ref.read(viewModeProvider.notifier).state =
+                    AgendaViewMode.agenda;
+              },
             )
           : Column(
               children: [
@@ -98,11 +85,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
       initialDate: ref.read(selectedDayProvider),
     );
     if (result != null && mounted) {
-      // Refresh current month
-      final month = (
-        year: _focusedMonth.year,
-        month: _focusedMonth.month,
-      );
+      final month = ref.read(visibleMonthProvider);
       ref.read(eventsProvider(month).notifier).refresh();
     }
   }
@@ -110,10 +93,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   void _openEditModal(CalendarEvent event) async {
     final result = await showEventFormModal(context, event: event);
     if (result != null && mounted) {
-      final month = (
-        year: _focusedMonth.year,
-        month: _focusedMonth.month,
-      );
+      final month = ref.read(visibleMonthProvider);
       ref.read(eventsProvider(month).notifier).refresh();
     }
   }
@@ -187,66 +167,6 @@ class _ToggleChip extends StatelessWidget {
           size: 18,
           color: active ? BmoColors.accentGreen : BmoColors.textMuted,
         ),
-      ),
-    );
-  }
-}
-
-class _MonthNavigator extends StatelessWidget {
-  final DateTime focusedMonth;
-  final ValueChanged<DateTime> onMonthChanged;
-
-  const _MonthNavigator({
-    required this.focusedMonth,
-    required this.onMonthChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final months = [
-      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-    ];
-    final label = '${months[focusedMonth.month - 1]} ${focusedMonth.year}';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left, size: 22),
-            color: BmoColors.textSecondary,
-            onPressed: () {
-              final prev = DateTime(
-                focusedMonth.year,
-                focusedMonth.month - 1,
-                1,
-              );
-              onMonthChanged(prev);
-            },
-          ),
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'PressStart2P',
-              fontSize: 12,
-              color: BmoColors.textPrimary,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 22),
-            color: BmoColors.textSecondary,
-            onPressed: () {
-              final next = DateTime(
-                focusedMonth.year,
-                focusedMonth.month + 1,
-                1,
-              );
-              onMonthChanged(next);
-            },
-          ),
-        ],
       ),
     );
   }
