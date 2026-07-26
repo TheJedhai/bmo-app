@@ -32,6 +32,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
   late final DefaultEventsController _eventsController;
   late ViewConfiguration _viewConfig;
 
+  /// Cancels the current eventsProvider listener. Replaced when month changes.
+  ProviderSubscription<AsyncValue<List<CalendarEvent>>>? _eventsSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -41,10 +44,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final initialMonth = ref.read(visibleMonthProvider);
     _viewConfig = _buildViewConfig(widget.viewMode, initialMonth);
 
-    // Schedule initial event fetch after first frame so the listener in
-    // build() is already set up.
+    // Schedule initial event fetch + listen after first frame so the
+    // listener in build() is already set up.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _fetchEventsForMonth(initialMonth);
+      if (!mounted) return;
+      _listenToEvents(initialMonth);
+      _fetchEventsForMonth(initialMonth);
     });
 
     // Scroll to current time on initial open for day/week views.
@@ -64,6 +69,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   @override
   void dispose() {
+    _eventsSubscription?.close();
     _calendarController.dispose();
     _eventsController.dispose();
     super.dispose();
@@ -135,6 +141,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     // _onPageChanged but never watched here.
     ref.listen(visibleMonthProvider, (prev, next) {
       if (prev != next) {
+        _listenToEvents(next);
         _fetchEventsForMonth(next);
       }
     });
@@ -146,6 +153,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
     });
 
     return _buildCalendar();
+  }
+
+  /// Subscribes to eventsProvider for [range]. When events change (create/
+  /// edit/delete via modal, or SSE push), re-applies the visibility filter
+  /// and syncs to the calendar controller — without rebuilding CalendarView.
+  void _listenToEvents(MonthRange range) {
+    _eventsSubscription?.close();
+    // listenManual expects ProviderListenable<T>, but AsyncNotifierFamilyProvider
+    // (returned by eventsProvider(range)) doesn't statically satisfy the bound in
+    // riverpod 2.6.1 — the runtime type does implement it. Cast to dynamic to bypass.
+    _eventsSubscription = ref.listenManual(
+      eventsProvider(range) as dynamic,
+      (_, _) => _applyFilter(),
+    );
   }
 
   /// Fetches events for [range], then applies visibility filter.
