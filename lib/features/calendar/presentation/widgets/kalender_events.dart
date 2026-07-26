@@ -51,23 +51,34 @@ class KalenderCalendarEvent extends CalendarEvent {
   String? get startTime => source.startTime;
   String? get endTime => source.endTime;
 
+  /// Returns a [KalenderCalendarEvent] copy with the given fields replaced.
+  ///
+  /// Preserves [source] and all custom fields. Carries the existing [id]
+  /// over — required by kalender so selection/layout lookups keep working.
+  @override
+  KalenderCalendarEvent copyWith({
+    DateTimeRange? dateTimeRange,
+    EventInteraction? interaction,
+  }) {
+    return KalenderCalendarEvent(
+      dateTimeRange: dateTimeRange ?? this.dateTimeRange,
+      source: source,
+      interaction: interaction ?? this.interaction,
+    )..id = id;
+  }
+
   @override
   bool operator ==(Object other) =>
-      identical(this, other) ||
-      (other is KalenderCalendarEvent &&
-          other.id == id &&
-          other.start == start &&
-          other.end == end &&
-          other.source.title == source.title &&
-          other.source.allDay == source.allDay &&
-          other.source.startTime == source.startTime &&
-          other.source.endTime == source.endTime);
+      super == other &&
+      other is KalenderCalendarEvent &&
+      other.source.title == source.title &&
+      other.source.allDay == source.allDay &&
+      other.source.startTime == source.startTime &&
+      other.source.endTime == source.endTime;
 
   @override
   int get hashCode => Object.hash(
-        id,
-        start,
-        end,
+        super.hashCode,
         source.title,
         source.allDay,
         source.startTime,
