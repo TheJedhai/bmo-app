@@ -12,6 +12,9 @@ import 'kalender_events.dart';
 /// imprecise mode), this positions them centered on each edge for a cleaner
 /// look. The visual is a small rounded pill in the event's calendar color, with
 /// a touch target larger than the visible indicator.
+///
+/// Handles are only shown for the currently selected event (two-tap model).
+/// Hover alone does not show handles — the user must tap an event first.
 class BmoResizeHandlePositioner {
   /// The touch-target width for a resize handle (comfortable finger target).
   static const double _kTouchWidth = 44.0;
@@ -29,6 +32,7 @@ class BmoResizeHandlePositioner {
   static const double _kPillRadius = 2.0;
 
   /// Returns a [ResizeHandles] instance for the given parameters.
+  // ignore: long-parameter-list — signature required by kalender's ResizeHandlePositioner typedef
   static ResizeHandles call(
     CalendarEvent event,
     CalendarInteraction interaction,
@@ -63,15 +67,24 @@ class _BmoResizeHandles extends ResizeHandles {
 
   @override
   Widget build(BuildContext context) {
-    final location = context.location;
-    if (!showStart(location: location) && !showEnd(location: location)) {
-      return const SizedBox();
-    }
+    // Only show handles when this event is selected via the two-tap model.
+    // Kalender's hover still fires, but our handles paint nothing for
+    // unselected events — equivalent to the fork's InputMode.imprecise guard.
+    final container = ProviderScope.containerOf(context);
+    final selectedId = container.read(selectedEventIdProvider);
+    if (selectedId != event.id) return const SizedBox();
 
-    // Only vertical resizing matters — horizontal resize handles are disabled
-    // in imprecise mode and we don't use them.
-    final isVertical = axis == Axis.vertical;
-    if (!isVertical) return const SizedBox();
+    if (!showStart() && !showEnd()) return const SizedBox();
+
+    // Only vertical resizing — horizontal handles are disabled in imprecise
+    // mode and we don't use them.
+    if (axis != Axis.vertical) return const SizedBox();
+
+    // Calendar color for the pill.
+    final calendarsById = container.read(calendarsByIdProvider);
+    final ke = event as KalenderCalendarEvent;
+    final calendar = calendarsById[ke.source.calendarId];
+    final color = _hexToColor(calendar?.color ?? '#8BC9A3');
 
     // Half of the touch target extends outside the tile so the visual sits
     // right at the edge.
@@ -80,58 +93,7 @@ class _BmoResizeHandles extends ResizeHandles {
     final halfTouchH = touchHeight / 2;
     final left = (size.width - touchWidth) / 2;
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (showStart(location: location))
-          Positioned(
-            top: -halfTouchH,
-            left: left,
-            width: touchWidth,
-            height: touchHeight,
-            child: ResizeHandle(
-              event: event,
-              tileComponents: tileComponents,
-              direction: ResizeDirection.top,
-              visual: _EventColoredHandle(event: event),
-            ),
-          ),
-        if (showEnd(location: location))
-          Positioned(
-            bottom: -halfTouchH,
-            left: left,
-            width: touchWidth,
-            height: touchHeight,
-            child: ResizeHandle(
-              event: event,
-              tileComponents: tileComponents,
-              direction: ResizeDirection.bottom,
-              visual: _EventColoredHandle(event: event),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// A resize handle visual that renders as a small rounded pill in the event's
-/// calendar color.
-///
-/// The touch target (44x20) is larger than the visible indicator (20x3) so the
-/// handle is easy to grab on touch screens.
-class _EventColoredHandle extends ConsumerWidget {
-  final CalendarEvent event;
-
-  const _EventColoredHandle({required this.event});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final calendarsById = ref.watch(calendarsByIdProvider);
-    final ke = event as KalenderCalendarEvent;
-    final calendar = calendarsById[ke.source.calendarId];
-    final color = _hexToColor(calendar?.color ?? '#8BC9A3');
-
-    return Center(
+    final pill = Center(
       child: Container(
         width: BmoResizeHandlePositioner._kPillWidth,
         height: BmoResizeHandlePositioner._kPillHeight,
@@ -142,13 +104,56 @@ class _EventColoredHandle extends ConsumerWidget {
         ),
       ),
     );
-  }
 
-  static Color _hexToColor(String hex) {
-    final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length == 6) {
-      return Color(int.parse('FF$cleaned', radix: 16));
-    }
-    return const Color(0xFF8BC9A3);
+    // clipBehavior: Clip.none so the handle halves that extend beyond the tile
+    // edge remain hittable.
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        if (showStart())
+          Positioned(
+            top: -halfTouchH,
+            left: left,
+            width: touchWidth,
+            height: touchHeight,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  startResizeDetector,
+                  IgnorePointer(child: pill),
+                ],
+              ),
+            ),
+          ),
+        if (showEnd())
+          Positioned(
+            bottom: -halfTouchH,
+            left: left,
+            width: touchWidth,
+            height: touchHeight,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  endResizeDetector,
+                  IgnorePointer(child: pill),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
   }
+}
+
+Color _hexToColor(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length == 6) {
+    return Color(int.parse('FF$cleaned', radix: 16));
+  }
+  return const Color(0xFF8BC9A3);
 }
