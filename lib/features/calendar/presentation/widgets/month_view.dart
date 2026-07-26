@@ -360,8 +360,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
     // Recurring events blocked from drag/resize (commit 3 guard).
     if (source.isRecurring) return;
 
-    final newStart = updatedEvent.start;
-    final newEnd = updatedEvent.end;
+    // kalender stores DateTimes in UTC. Convert to local so newDate,
+    // newStartTime, and newEndTime reflect the user's wall-clock time.
+    final newStart = updatedEvent.start.toLocal();
+    final newEnd = updatedEvent.end.toLocal();
 
     // Snapshot kalender events for rollback: if the PATCH fails we need to
     // restore the tile positions. The provider hasn't been mutated yet, so
@@ -410,6 +412,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// only in the controller's newEvent/selectedEvent and is cleared when the
   /// drag ends or is cancelled.
   CalendarEvent? _onEventCreate(CalendarEvent event) {
+    debugPrint('[B] _onEventCreate called — range: ${event.start} → ${event.end}');
     return KalenderCalendarEvent.provisional(
       dateTimeRange: event.dateTimeRange,
     );
@@ -419,7 +422,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// modal with the final time range. If the user saves, the POST creates
   /// the real event; if cancelled, nothing remains.
   void _onEventCreated(CalendarEvent event) {
-    widget.onCreateFromRange(event.start, event.end);
+    // kalender stores DateTimes in UTC internally. Convert to local so the
+    // creation modal receives the user's wall-clock time (e.g. 14:00, not 17:00Z).
+    final localStart = event.start.toLocal();
+    final localEnd = event.end.toLocal();
+    debugPrint('[B] _onEventCreated — range: $localStart → $localEnd');
+    widget.onCreateFromRange(localStart, localEnd);
   }
 
   static String _buildShortDayName(BuildContext context, DateTime date) {
@@ -477,7 +485,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
       );
     }
 
-    return Stack(children: positionedLines);
+    return IgnorePointer(child: Stack(children: positionedLines));
   }
 
   /// Builds the time indicator (red now-line) with a time badge.
@@ -573,7 +581,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
   }
 }
 
-class _MonthNavigator extends StatelessWidget {
+class _MonthNavigator extends StatefulWidget {
   final CalendarController controller;
   final AgendaViewMode viewMode;
   final MonthRange initialMonth;
@@ -583,6 +591,40 @@ class _MonthNavigator extends StatelessWidget {
     required this.viewMode,
     required this.initialMonth,
   });
+
+  @override
+  State<_MonthNavigator> createState() => _MonthNavigatorState();
+}
+
+class _MonthNavigatorState extends State<_MonthNavigator> {
+  DateTimeRange? _visibleRange;
+
+  @override
+  void initState() {
+    super.initState();
+    _visibleRange = widget.controller.visibleDateTimeRange.value;
+    widget.controller.visibleDateTimeRange.addListener(_onRangeChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.visibleDateTimeRange.removeListener(_onRangeChanged);
+    super.dispose();
+  }
+
+  void _onRangeChanged() {
+    final newRange = widget.controller.visibleDateTimeRange.value;
+    // Defer rebuild to avoid setState/markNeedsBuild during parent build.
+    // kalender updates visibleDateTimeRange while CalendarView is building,
+    // so a synchronous setState here would hit "setState() called during build".
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _visibleRange = newRange;
+        });
+      }
+    });
+  }
 
   String _fallbackLabel(AgendaViewMode mode) {
     final now = DateTime.now();
@@ -611,81 +653,78 @@ class _MonthNavigator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<DateTimeRange?>(
-      valueListenable: controller.visibleDateTimeRange,
-      builder: (context, range, _) {
-        const months = [
-          'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-        ];
-        const days = [
-          'domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado',
-        ];
+    final range = _visibleRange;
 
-        final String label;
-        if (viewMode == AgendaViewMode.day && range != null) {
-          final d = range.start;
-          final dayName = days[d.weekday % 7];
-          label = '$dayName, ${d.day} de ${months[d.month - 1]} ${d.year}';
-        } else if (viewMode == AgendaViewMode.week && range != null) {
-          final start = range.start;
-          final end = range.end.subtract(const Duration(days: 1));
-          String fmt(DateTime d) => '${d.day}/${d.month}';
-          label = '${fmt(start)} – ${fmt(end)} ${start.year}';
-        } else if (range != null) {
-          final mid = range.start.add(const Duration(days: 15));
-          label = '${months[mid.month - 1]} ${mid.year}';
-        } else {
-          // Fallback when visibleDateTimeRange is still null on first render.
-          label = _fallbackLabel(viewMode);
-        }
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    ];
+    const days = [
+      'domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado',
+    ];
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            children: [
-              // Today button
-              _TodayButton(
-                onPressed: () => controller.animateToDate(DateTime.now()),
-              ),
-              const SizedBox(width: 4),
-              // Navigation arrows + label
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.chevron_left, size: 22),
-                      color: BmoColors.textSecondary,
-                      onPressed: () => controller.animateToPreviousPage(),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    Flexible(
-                      child: Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontFamily: 'PressStart2P',
-                          fontSize: 12,
-                          color: BmoColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.chevron_right, size: 22),
-                      color: BmoColors.textSecondary,
-                      onPressed: () => controller.animateToNextPage(),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    final String label;
+    if (widget.viewMode == AgendaViewMode.day && range != null) {
+      final d = range.start;
+      final dayName = days[d.weekday % 7];
+      label = '$dayName, ${d.day} de ${months[d.month - 1]} ${d.year}';
+    } else if (widget.viewMode == AgendaViewMode.week && range != null) {
+      final start = range.start;
+      final end = range.end.subtract(const Duration(days: 1));
+      String fmt(DateTime d) => '${d.day}/${d.month}';
+      label = '${fmt(start)} – ${fmt(end)} ${start.year}';
+    } else if (range != null) {
+      final mid = range.start.add(const Duration(days: 15));
+      label = '${months[mid.month - 1]} ${mid.year}';
+    } else {
+      // Fallback when visibleDateTimeRange is still null on first render.
+      label = _fallbackLabel(widget.viewMode);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          // Today button
+          _TodayButton(
+            onPressed: () => widget.controller.animateToDate(DateTime.now()),
           ),
-        );
-      },
+          const SizedBox(width: 4),
+          // Navigation arrows + label
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left, size: 22),
+                  color: BmoColors.textSecondary,
+                  onPressed: () => widget.controller.animateToPreviousPage(),
+                  visualDensity: VisualDensity.compact,
+                ),
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'PressStart2P',
+                      fontSize: 12,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right, size: 22),
+                  color: BmoColors.textSecondary,
+                  onPressed: () => widget.controller.animateToNextPage(),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
