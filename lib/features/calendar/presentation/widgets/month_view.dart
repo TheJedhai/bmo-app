@@ -44,6 +44,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _fetchEventsForMonth(initialMonth);
     });
+
+    // Scroll to current time on initial open for day/week views.
+    if (widget.viewMode == AgendaViewMode.day ||
+        widget.viewMode == AgendaViewMode.week) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _calendarController.animateToDateTime(
+            DateTime.now(),
+            pageDuration: Duration.zero,
+            scrollDuration: const Duration(milliseconds: 300),
+          );
+        }
+      });
+    }
   }
 
   @override
@@ -76,18 +90,14 @@ class _MonthViewState extends ConsumerState<MonthView> {
   }
 
   ViewConfiguration _buildViewConfig(AgendaViewMode mode, MonthRange initial) {
-    final initialDate = DateTime(initial.year, initial.month, 1);
-    final timeRange = TimeOfDayRange(
-      start: const TimeOfDay(hour: 0, minute: 0),
-      end: const TimeOfDay(hour: 24, minute: 0),
-    );
+    final timeRange = TimeOfDayRange.allDay();
     const heightPerMinute = 0.9;
 
     switch (mode) {
       case AgendaViewMode.day:
         return MultiDayViewConfiguration.singleDay(
           name: 'Day',
-          initialDateTime: initialDate,
+          initialDateTime: DateTime.now(),
           firstDayOfWeek: DateTime.sunday,
           timeOfDayRange: timeRange,
           initialHeightPerMinute: heightPerMinute,
@@ -95,21 +105,21 @@ class _MonthViewState extends ConsumerState<MonthView> {
       case AgendaViewMode.week:
         return MultiDayViewConfiguration.week(
           name: 'Week',
-          initialDateTime: initialDate,
+          initialDateTime: DateTime.now(),
           firstDayOfWeek: DateTime.sunday,
           timeOfDayRange: timeRange,
           initialHeightPerMinute: heightPerMinute,
         );
       case AgendaViewMode.month:
         return MonthViewConfiguration.singleMonth(
-          initialDateTime: initialDate,
+          initialDateTime: DateTime(initial.year, initial.month, 1),
           firstDayOfWeek: DateTime.sunday,
           showWeekNumbers: false,
         );
       case AgendaViewMode.agenda:
         // Agenda is handled separately; fallback to month config.
         return MonthViewConfiguration.singleMonth(
-          initialDateTime: initialDate,
+          initialDateTime: DateTime(initial.year, initial.month, 1),
           firstDayOfWeek: DateTime.sunday,
           showWeekNumbers: false,
         );
