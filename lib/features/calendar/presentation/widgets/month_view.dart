@@ -6,7 +6,7 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
-import '../agenda_screen.dart';
+import '../calendar_screen.dart';
 import 'kalender_events.dart';
 
 class MonthView extends ConsumerStatefulWidget {

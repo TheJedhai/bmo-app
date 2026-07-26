@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/dashboard/dashboard_registry.dart';
 import '../../features/rss/data/rss_providers.dart';
+import '../identity/identity_state.dart';
 import '../theme/bmo_theme.dart';
 
 /// Barra de navegação inferior flutuante — pílula compacta só com ícones.
@@ -25,9 +26,13 @@ class BmoNavBar extends ConsumerWidget {
     final router = GoRouter.of(context);
     final currentLocation = router.state.uri.path;
 
-    final navSpecs = dashboardWidgets
-        .where((s) => s.showInNavBar)
-        .toList();
+    final features = ref.watch(enabledFeaturesProvider);
+
+    final navSpecs = dashboardWidgets.where((s) {
+      if (!s.showInNavBar) return false;
+      if (s.featureKey == null) return true;
+      return features.contains(s.featureKey);
+    }).toList();
 
     return Positioned(
       left: 0,

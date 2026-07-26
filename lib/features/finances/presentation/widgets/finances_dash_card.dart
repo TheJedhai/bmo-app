@@ -50,13 +50,19 @@ class FinancesDashCard extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      _formatCurrency(summary.netPosition),
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: positionColor,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _formatCurrency(summary.netPosition),
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: positionColor,
+                        ),
                       ),
                     ),
                   ],
@@ -88,13 +94,19 @@ class FinancesDashCard extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          _formatCurrency(summary.checkingBalance),
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: BmoColors.textPrimary,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _formatCurrency(summary.checkingBalance),
+                            maxLines: 1,
+                            softWrap: false,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: BmoColors.textPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -112,17 +124,23 @@ class FinancesDashCard extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          bill != null
-                              ? _formatCurrency(bill.totalAmount)
-                              : 'sem fatura importada',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: bill != null
-                                ? BmoColors.textPrimary
-                                : BmoColors.textMuted,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            bill != null
+                                ? _formatCurrency(bill.totalAmount)
+                                : 'sem fatura importada',
+                            maxLines: 1,
+                            softWrap: false,
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: bill != null
+                                  ? BmoColors.textPrimary
+                                  : BmoColors.textMuted,
+                            ),
                           ),
                         ),
                         if (hasDueDate) ...[

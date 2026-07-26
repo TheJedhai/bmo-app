@@ -7,7 +7,7 @@ import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/home_devices/presentation/home_devices_screen.dart';
 import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/rss/presentation/rss_screen.dart';
-import '../../features/calendar/presentation/agenda_screen.dart';
+import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/calendars_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
@@ -159,9 +159,9 @@ final appRouter = GoRouter(
               _buildFeaturePage(const VaultScreen(), state),
         ),
         GoRoute(
-          path: '/agenda',
+          path: '/calendario',
           pageBuilder: (context, state) =>
-              _buildFeaturePage(const AgendaScreen(), state),
+              _buildFeaturePage(const CalendarScreen(), state),
         ),
         GoRoute(
           path: '/calendarios',

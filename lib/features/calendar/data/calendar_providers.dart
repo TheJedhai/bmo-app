@@ -254,7 +254,7 @@ final eventsProvider = AsyncNotifierProvider.family<
 );
 
 // ============================================================
-// Visible month (shared between AgendaScreen and MonthView)
+// Visible month (shared between CalendarScreen and MonthView)
 // ============================================================
 
 final visibleMonthProvider = StateProvider<MonthRange>((ref) {

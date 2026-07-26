@@ -13,16 +13,16 @@ import 'widgets/month_view.dart';
 enum AgendaViewMode { day, week, month, agenda }
 
 final selectedDayProvider = StateProvider<DateTime>((ref) => DateTime.now());
-final viewModeProvider = StateProvider<AgendaViewMode>((ref) => AgendaViewMode.month);
+final viewModeProvider = StateProvider<AgendaViewMode>((ref) => AgendaViewMode.week);
 
-class AgendaScreen extends ConsumerStatefulWidget {
-  const AgendaScreen({super.key});
+class CalendarScreen extends ConsumerStatefulWidget {
+  const CalendarScreen({super.key});
 
   @override
-  ConsumerState<AgendaScreen> createState() => _AgendaScreenState();
+  ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
-class _AgendaScreenState extends ConsumerState<AgendaScreen> {
+class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final viewMode = ref.watch(viewModeProvider);
@@ -36,7 +36,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
         scrolledUnderElevation: 0,
         leading: const BmoBackButton(),
         title: Text(
-          'Agenda',
+          'Calendário',
           style: Theme.of(context).textTheme.headlineSmall,
         ),
         actions: [

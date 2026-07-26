@@ -135,15 +135,15 @@ final List<DashWidgetSpec> dashboardWidgets = [
     builder: _vaultCardBuilder,
   ),
   const DashWidgetSpec(
-    id: 'agenda',
-    title: 'Agenda',
+    id: 'calendario',
+    title: 'Calendário',
     accent: BmoColors.accentYellow,
     pulseDelay: Duration(milliseconds: 500),
-    onTap: _goToAgenda,
+    onTap: _goToCalendar,
     showInNavBar: true,
     navIcon: Icons.calendar_month,
-    route: '/agenda',
-    builder: _agendaCardBuilder,
+    route: '/calendario',
+    builder: _calendarCardBuilder,
   ),
   const DashWidgetSpec(
     id: 'financas',
@@ -183,8 +183,8 @@ void _goToFinances(BuildContext _) {
   appRouter.push('/financas');
 }
 
-void _goToAgenda(BuildContext _) {
-  appRouter.push('/agenda');
+void _goToCalendar(BuildContext _) {
+  appRouter.push('/calendario');
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
@@ -219,6 +219,6 @@ Widget _financesCardBuilder(BuildContext context, Color accent) {
   return FinancesDashCard(accent: accent);
 }
 
-Widget _agendaCardBuilder(BuildContext context, Color accent) {
+Widget _calendarCardBuilder(BuildContext context, Color accent) {
   return CalendarDashCard(accent: accent);
 }
