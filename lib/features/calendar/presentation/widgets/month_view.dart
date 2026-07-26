@@ -14,12 +14,14 @@ import 'kalender_events.dart';
 class MonthView extends ConsumerStatefulWidget {
   final AgendaViewMode viewMode;
   final void Function(DateTime day) onDayTap;
+  final void Function(app.CalendarEvent event) onEventEdit;
   final void Function(DateTime start, DateTime end) onCreateFromRange;
 
   const MonthView({
     super.key,
     required this.viewMode,
     required this.onDayTap,
+    required this.onEventEdit,
     required this.onCreateFromRange,
   });
 
@@ -119,13 +121,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
           initialHeightPerMinute: heightPerMinute,
         );
       case AgendaViewMode.month:
-        return MonthViewConfiguration.singleMonth(
-          initialDateTime: DateTime(initial.year, initial.month, 1),
-          firstDayOfWeek: DateTime.sunday,
-          showWeekNumbers: false,
-        );
-      case AgendaViewMode.agenda:
-        // Agenda is handled separately; fallback to month config.
         return MonthViewConfiguration.singleMonth(
           initialDateTime: DateTime(initial.year, initial.month, 1),
           firstDayOfWeek: DateTime.sunday,
@@ -241,7 +236,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                   : null,
               onEventTapped: (event, _) {
                 final ke = event as KalenderCalendarEvent;
-                widget.onDayTap(ke.source.occurrenceDate);
+                widget.onEventEdit(ke.source);
               },
               onEventChanged: _onEventChanged,
               onEventCreate: _onEventCreate,
@@ -668,7 +663,6 @@ class _MonthNavigatorState extends State<_MonthNavigator> {
         String fmt(DateTime d) => '${d.day}/${d.month}';
         return '${fmt(weekStart)} – ${fmt(weekEnd)} ${weekStart.year}';
       case AgendaViewMode.month:
-      case AgendaViewMode.agenda:
         return '${months[now.month - 1]} ${now.year}';
     }
   }

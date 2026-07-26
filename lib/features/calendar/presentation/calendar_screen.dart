@@ -6,11 +6,10 @@ import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../data/calendar_providers.dart';
 import '../data/models/calendar_event.dart';
-import 'widgets/agenda_view.dart';
 import 'widgets/event_form_modal.dart';
 import 'widgets/month_view.dart';
 
-enum AgendaViewMode { day, week, month, agenda }
+enum AgendaViewMode { day, week, month }
 
 final selectedDayProvider = StateProvider<DateTime>((ref) => DateTime.now());
 final viewModeProvider = StateProvider<AgendaViewMode>((ref) => AgendaViewMode.week);
@@ -53,15 +52,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: viewMode == AgendaViewMode.agenda
-          ? _buildAgendaBody()
-          : MonthView(
+      body: MonthView(
               viewMode: viewMode,
               onDayTap: (day) {
                 ref.read(selectedDayProvider.notifier).state = day;
                 ref.read(viewModeProvider.notifier).state =
-                    AgendaViewMode.agenda;
+                    AgendaViewMode.day;
               },
+              onEventEdit: (event) => _openEditModal(event),
               onCreateFromRange: (start, end) =>
                   _openCreateModalForRange(start, end),
             ),
@@ -71,25 +69,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         foregroundColor: BmoColors.screenBg,
         child: const Icon(Icons.add),
       ),
-    );
-  }
-
-  Widget _buildAgendaBody() {
-    final selectedDay = ref.watch(selectedDayProvider);
-    return Column(
-      children: [
-        _AgendaHeader(
-          selectedDay: selectedDay,
-          onBackToMonth: () =>
-              ref.read(viewModeProvider.notifier).state = AgendaViewMode.month,
-        ),
-        Expanded(
-          child: AgendaView(
-            selectedDay: selectedDay,
-            onEventTap: (event) => _openEditModal(event),
-          ),
-        ),
-      ],
     );
   }
 
@@ -164,11 +143,6 @@ class _ViewModeToggle extends StatelessWidget {
             active: mode == AgendaViewMode.month,
             onTap: () => onChanged(AgendaViewMode.month),
           ),
-          _TextChip(
-            label: 'Agenda',
-            active: mode == AgendaViewMode.agenda,
-            onTap: () => onChanged(AgendaViewMode.agenda),
-          ),
         ],
       ),
     );
@@ -213,84 +187,3 @@ class _TextChip extends StatelessWidget {
   }
 }
 
-class _AgendaHeader extends StatelessWidget {
-  final DateTime selectedDay;
-  final VoidCallback onBackToMonth;
-
-  const _AgendaHeader({
-    required this.selectedDay,
-    required this.onBackToMonth,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final isToday = selectedDay.year == now.year &&
-        selectedDay.month == now.month &&
-        selectedDay.day == now.day;
-
-    final dayName = _dayName(selectedDay.weekday);
-    final formatted =
-        '${selectedDay.day} de ${_monthName(selectedDay.month)} ${selectedDay.year}';
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, size: 20),
-            color: BmoColors.textSecondary,
-            onPressed: onBackToMonth,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            '$dayName, $formatted',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color:
-                  isToday ? BmoColors.accentGreen : BmoColors.textSecondary,
-            ),
-          ),
-          if (isToday) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: BmoColors.accentGreen.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'hoje',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: BmoColors.accentGreen,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _dayName(int weekday) {
-    const names = [
-      'seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom',
-    ];
-    return names[weekday - 1];
-  }
-
-  String _monthName(int month) {
-    const names = [
-      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-    ];
-    return names[month - 1];
-  }
-}
