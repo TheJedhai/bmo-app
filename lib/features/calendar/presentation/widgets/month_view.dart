@@ -251,7 +251,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
               multiDayComponents: const MultiDayComponents(
                 headerComponents: MultiDayHeaderComponents(
                   dayHeaderStringBuilder: _buildShortDayName,
-                  weekNumberBuilder: _buildEmptyWeekNumber,
+                  weekNumberBuilder: _buildAllDayLabel,
                 ),
               ),
               multiDayComponentStyles: MultiDayComponentStyles(
@@ -412,8 +412,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
     return labels[idx];
   }
 
-  static Widget _buildEmptyWeekNumber(DateTimeRange range, dynamic style) {
-    return const SizedBox.shrink();
+  static Widget _buildAllDayLabel(DateTimeRange range, dynamic style) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(
+        'dia todo',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          color: BmoColors.textMuted,
+        ),
+      ),
+    );
   }
 
   void _onPageChanged(DateTimeRange range) {
