@@ -5,6 +5,7 @@ import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../../../core/widgets/calendar_color_picker.dart';
 import '../data/calendar_providers.dart';
+import '../data/calendar_visibility_provider.dart';
 import '../data/models/calendar.dart';
 
 class CalendarsScreen extends ConsumerStatefulWidget {
@@ -48,6 +49,7 @@ class _CalendarsScreenState extends ConsumerState<CalendarsScreen> {
           ),
         ),
         data: (calendars) {
+          final visibility = ref.watch(calendarVisibilityProvider);
           final personal = calendars.where((c) => c.type == 'personal').toList();
           final shared = calendars.where((c) => c.type == 'shared').toList();
           return ListView(
@@ -57,6 +59,9 @@ class _CalendarsScreenState extends ConsumerState<CalendarsScreen> {
                 _SectionHeader(title: 'Meus'),
                 ...personal.map((c) => _CalendarRow(
                   calendar: c,
+                  isVisible: !visibility.contains(c.id),
+                  onToggleVisibility: () =>
+                      ref.read(calendarVisibilityProvider.notifier).toggle(c.id),
                   onEdit: () => _openForm(calendar: c),
                   onDelete: c.isDefault ? null : () => _confirmDelete(c),
                 )),
@@ -66,6 +71,9 @@ class _CalendarsScreenState extends ConsumerState<CalendarsScreen> {
                 _SectionHeader(title: 'De nós dois'),
                 ...shared.map((c) => _CalendarRow(
                   calendar: c,
+                  isVisible: !visibility.contains(c.id),
+                  onToggleVisibility: () =>
+                      ref.read(calendarVisibilityProvider.notifier).toggle(c.id),
                   onEdit: () => _openForm(calendar: c),
                   onDelete: c.isDefault ? null : () => _confirmDelete(c),
                 )),
@@ -177,11 +185,15 @@ class _SectionHeader extends StatelessWidget {
 
 class _CalendarRow extends StatelessWidget {
   final Calendar calendar;
+  final bool isVisible;
+  final VoidCallback? onToggleVisibility;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   const _CalendarRow({
     required this.calendar,
+    this.isVisible = true,
+    this.onToggleVisibility,
     this.onEdit,
     this.onDelete,
   });
@@ -238,6 +250,18 @@ class _CalendarRow extends StatelessWidget {
               ),
             ),
           const SizedBox(width: 4),
+          if (onToggleVisibility != null)
+            IconButton(
+              icon: Icon(
+                isVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                size: 18,
+              ),
+              color: isVisible ? BmoColors.textMuted : BmoColors.accentRed,
+              onPressed: onToggleVisibility,
+              tooltip: isVisible ? 'Ocultar' : 'Mostrar',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
           if (onEdit != null)
             IconButton(
               icon: const Icon(Icons.edit_outlined, size: 18),

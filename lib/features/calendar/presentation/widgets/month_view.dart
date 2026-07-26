@@ -4,6 +4,7 @@ import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
+import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
 import 'kalender_events.dart';
 
@@ -74,7 +75,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
       if (!mounted) return;
       final events =
           ref.read(eventsProvider(range)).valueOrNull ?? const <app.CalendarEvent>[];
-      _syncEvents(events);
+      final visibility = ref.read(calendarVisibilityProvider);
+      final visible = events.where((e) => !visibility.contains(e.calendarId)).toList();
+      _syncEvents(visible);
     } catch (_) {
       // Fetch failed — keep previous events visible.
     }

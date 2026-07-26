@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
+import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart';
 
 class AgendaView extends ConsumerWidget {
@@ -73,11 +74,13 @@ class FullAgendaView extends ConsumerWidget {
       loading: () => const _LoadingWidget(),
       error: (_, _) => const _AgendaErrorWidget(),
       data: (events) {
-        if (events.isEmpty) return const _EmptyAgenda();
+        final visibility = ref.watch(calendarVisibilityProvider);
+        final visible = events.where((e) => !visibility.contains(e.calendarId)).toList();
+        if (visible.isEmpty) return const _EmptyAgenda();
 
         // Group by day.
         final grouped = <DateTime, List<CalendarEvent>>{};
-        for (final e in events) {
+        for (final e in visible) {
           final day = DateTime(e.occurrenceDate.year,
               e.occurrenceDate.month, e.occurrenceDate.day);
           (grouped[day] ??= []).add(e);
