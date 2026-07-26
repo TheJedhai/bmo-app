@@ -10,7 +10,7 @@ import 'widgets/agenda_view.dart';
 import 'widgets/event_form_modal.dart';
 import 'widgets/month_view.dart';
 
-enum AgendaViewMode { month, agenda }
+enum AgendaViewMode { day, week, month, agenda }
 
 final selectedDayProvider = StateProvider<DateTime>((ref) => DateTime.now());
 final viewModeProvider = StateProvider<AgendaViewMode>((ref) => AgendaViewMode.month);
@@ -54,15 +54,8 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: viewMode == AgendaViewMode.month
-          ? MonthView(
-              onDayTap: (day) {
-                ref.read(selectedDayProvider.notifier).state = day;
-                ref.read(viewModeProvider.notifier).state =
-                    AgendaViewMode.agenda;
-              },
-            )
-          : Column(
+      body: viewMode == AgendaViewMode.agenda
+          ? Column(
               children: [
                 _AgendaHeader(
                   selectedDay: selectedDay,
@@ -77,6 +70,14 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                   ),
                 ),
               ],
+            )
+          : MonthView(
+              viewMode: viewMode,
+              onDayTap: (day) {
+                ref.read(selectedDayProvider.notifier).state = day;
+                ref.read(viewModeProvider.notifier).state =
+                    AgendaViewMode.agenda;
+              },
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openCreateModal,
@@ -126,6 +127,18 @@ class _ViewModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _ToggleChip(
+            label: 'Dia',
+            icon: Icons.today,
+            active: mode == AgendaViewMode.day,
+            onTap: () => onChanged(AgendaViewMode.day),
+          ),
+          _ToggleChip(
+            label: 'Semana',
+            icon: Icons.view_week,
+            active: mode == AgendaViewMode.week,
+            onTap: () => onChanged(AgendaViewMode.week),
+          ),
           _ToggleChip(
             label: 'Mês',
             icon: Icons.calendar_month,

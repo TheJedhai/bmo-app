@@ -6,13 +6,16 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
+import '../agenda_screen.dart';
 import 'kalender_events.dart';
 
 class MonthView extends ConsumerStatefulWidget {
+  final AgendaViewMode viewMode;
   final void Function(DateTime day) onDayTap;
 
   const MonthView({
     super.key,
+    required this.viewMode,
     required this.onDayTap,
   });
 
@@ -23,7 +26,7 @@ class MonthView extends ConsumerStatefulWidget {
 class _MonthViewState extends ConsumerState<MonthView> {
   late final CalendarController _calendarController;
   late final DefaultEventsController _eventsController;
-  late final MonthViewConfiguration _viewConfig;
+  late ViewConfiguration _viewConfig;
 
   @override
   void initState() {
@@ -32,11 +35,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     _eventsController = DefaultEventsController();
 
     final initialMonth = ref.read(visibleMonthProvider);
-    _viewConfig = MonthViewConfiguration.singleMonth(
-      initialDateTime: DateTime(initialMonth.year, initialMonth.month, 1),
-      firstDayOfWeek: DateTime.sunday,
-      showWeekNumbers: false,
-    );
+    _viewConfig = _buildViewConfig(widget.viewMode, initialMonth);
 
     // Schedule initial event fetch after first frame so the listener in
     // build() is already set up.
@@ -50,6 +49,57 @@ class _MonthViewState extends ConsumerState<MonthView> {
     _calendarController.dispose();
     _eventsController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant MonthView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.viewMode != oldWidget.viewMode) {
+      final current = ref.read(visibleMonthProvider);
+      _viewConfig = _buildViewConfig(widget.viewMode, current);
+    }
+  }
+
+  ViewConfiguration _buildViewConfig(AgendaViewMode mode, MonthRange initial) {
+    final initialDate = DateTime(initial.year, initial.month, 1);
+    final timeRange = TimeOfDayRange(
+      start: TimeOfDay(hour: 6, minute: 0),
+      end: TimeOfDay(hour: 23, minute: 0),
+    );
+
+    switch (mode) {
+      case AgendaViewMode.day:
+        return MultiDayViewConfiguration.singleDay(
+          name: 'Day',
+          initialDateTime: initialDate,
+          firstDayOfWeek: DateTime.sunday,
+          timeOfDayRange: timeRange,
+          // ponytail: jump to roughly current hour on first open;
+          // fine-grained scroll-to-now handled by animateToDateTime if needed.
+          initialTimeOfDay: const TimeOfDay(hour: 8, minute: 0),
+        );
+      case AgendaViewMode.week:
+        return MultiDayViewConfiguration.week(
+          name: 'Week',
+          initialDateTime: initialDate,
+          firstDayOfWeek: DateTime.sunday,
+          timeOfDayRange: timeRange,
+          initialTimeOfDay: const TimeOfDay(hour: 8, minute: 0),
+        );
+      case AgendaViewMode.month:
+        return MonthViewConfiguration.singleMonth(
+          initialDateTime: initialDate,
+          firstDayOfWeek: DateTime.sunday,
+          showWeekNumbers: false,
+        );
+      case AgendaViewMode.agenda:
+        // Agenda is handled separately; fallback to month config.
+        return MonthViewConfiguration.singleMonth(
+          initialDateTime: initialDate,
+          firstDayOfWeek: DateTime.sunday,
+          showWeekNumbers: false,
+        );
+    }
   }
 
   @override
@@ -105,6 +155,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
       tileBuilder: kalenderMonthTileBuilder,
     );
 
+    final multiDayTileComponents = TileComponents(
+      tileBuilder: kalenderMultiDayTileBuilder,
+    );
+
     final overlayBuilders = OverlayBuilders(
       multiDayPortalOverlayButtonStringBuilder: (context, count) => '+$count mais',
     );
@@ -113,6 +167,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
       children: [
         _MonthNavigator(
           controller: _calendarController,
+          viewMode: widget.viewMode,
           initialMonth: ref.read(visibleMonthProvider),
         ),
         Expanded(
@@ -160,13 +215,65 @@ class _MonthViewState extends ConsumerState<MonthView> {
                   ),
                 ),
               ),
+              multiDayComponents: const MultiDayComponents(
+                headerComponents: MultiDayHeaderComponents(
+                  dayHeaderStringBuilder: _buildShortDayName,
+                ),
+              ),
+              multiDayComponentStyles: MultiDayComponentStyles(
+                headerStyles: MultiDayHeaderComponentStyles(
+                  dayHeaderStyle: DayHeaderStyle(
+                    numberTextStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: BmoColors.textPrimary,
+                    ),
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                ),
+                bodyStyles: MultiDayBodyComponentStyles(
+                  timeIndicatorStyle: TimeIndicatorStyle(
+                    lineColor: BmoColors.accentRed.withValues(alpha: 0.8),
+                    circleColor: BmoColors.accentRed,
+                  ),
+                  hourLinesStyle: HourLinesStyle(
+                    color: BmoColors.textMuted.withValues(alpha: 0.08),
+                  ),
+                  timelineStyle: TimelineStyle(
+                    textStyle: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+                  daySeparatorStyle: DaySeparatorStyle(
+                    color: BmoColors.textMuted.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
             ),
-            header: const CalendarHeader(),
+            header: CalendarHeader(
+              multiDayHeaderConfiguration: const MultiDayHeaderConfiguration(
+                showTiles: true,
+                tileHeight: 22,
+                eventPadding: EdgeInsets.only(left: 2, right: 2, bottom: 2),
+              ),
+            ),
             body: CalendarBody(
               monthTileComponents: tileComponents,
               monthBodyConfiguration: const MonthBodyConfiguration(
                 tileHeight: 20,
                 eventPadding: EdgeInsets.only(left: 1, right: 1, bottom: 1),
+              ),
+              multiDayTileComponents: multiDayTileComponents,
+              multiDayBodyConfiguration: const MultiDayBodyConfiguration(
+                showMultiDayEvents: false,
+                minimumTileHeight: 18,
+                horizontalPadding: EdgeInsets.only(left: 2, right: 4),
               ),
             ),
             locale: 'pt_BR',
@@ -177,9 +284,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
     );
   }
 
+  static String _buildShortDayName(BuildContext context, DateTime date) {
+    const labels = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    final idx = date.weekday % 7;
+    return labels[idx];
+  }
+
   void _onPageChanged(DateTimeRange range) {
-    // The 15th of the visible range always falls in the focused month,
-    // even when the grid shows trailing/leading days from adjacent months.
     final mid = range.start.add(const Duration(days: 15));
     final newRange = (year: mid.year, month: mid.month);
     final current = ref.read(visibleMonthProvider);
@@ -257,10 +368,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
 class _MonthNavigator extends StatelessWidget {
   final CalendarController controller;
+  final AgendaViewMode viewMode;
   final MonthRange initialMonth;
 
   const _MonthNavigator({
     required this.controller,
+    required this.viewMode,
     required this.initialMonth,
   });
 
@@ -273,12 +386,24 @@ class _MonthNavigator extends StatelessWidget {
           'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
           'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
         ];
+        const days = [
+          'domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado',
+        ];
+
         final String label;
-        if (range != null) {
+        if (viewMode == AgendaViewMode.day && range != null) {
+          final d = range.start;
+          final dayName = days[d.weekday % 7];
+          label = '$dayName, ${d.day} de ${months[d.month - 1]} ${d.year}';
+        } else if (viewMode == AgendaViewMode.week && range != null) {
+          final start = range.start;
+          final end = range.end.subtract(const Duration(days: 1));
+          String fmt(DateTime d) => '${d.day}/${d.month}';
+          label = '${fmt(start)} – ${fmt(end)} ${start.year}';
+        } else if (range != null) {
           final mid = range.start.add(const Duration(days: 15));
           label = '${months[mid.month - 1]} ${mid.year}';
         } else {
-          // Fallback for initial render before onPageChanged fires.
           label = '${months[initialMonth.month - 1]} ${initialMonth.year}';
         }
 

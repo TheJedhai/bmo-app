@@ -171,6 +171,73 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   );
 }
 
+/// Builds an event tile for multi-day views (week/day body).
+///
+/// Shows title and time; in short tiles, only title with ellipsis.
+/// Wrapped in [Consumer] so calendar color changes reflect immediately.
+Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
+  final ke = event as KalenderCalendarEvent;
+  return Consumer(
+    builder: (context, ref, _) {
+      final calendarsById = ref.watch(calendarsByIdProvider);
+      final calendar = calendarsById[ke.source.calendarId];
+      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+      final durationMinutes = ke.end.difference(ke.start).inMinutes;
+      final isShort = durationMinutes <= 30;
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(4),
+          border: Border(
+            left: BorderSide(color: color, width: 3),
+          ),
+        ),
+        child: isShort
+            ? Text(
+                ke.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: BmoColors.textPrimary,
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    ke.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                  if (ke.startTime != null)
+                    Text(
+                      _formatTime(ke.startTime!),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 9,
+                        color: BmoColors.textMuted,
+                      ),
+                    ),
+                ],
+              ),
+      );
+    },
+  );
+}
+
 Color _hexToColor(String hex) {
   final cleaned = hex.replaceFirst('#', '');
   if (cleaned.length == 6) {
