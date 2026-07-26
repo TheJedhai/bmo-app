@@ -1,0 +1,139 @@
+import 'package:flutter/material.dart';
+import 'package:kalender/kalender_extensions.dart';
+import 'package:kalender/src/models/providers/calendar_provider.dart';
+import 'package:kalender/src/theme/kalender_theme.dart';
+
+/// The week number builder.
+///
+/// The [visibleDateTimeRange] is the range of dates that the week number will be displayed for.
+/// The [style] is used to style the week number.
+typedef WeekNumberBuilder = Widget Function(
+  DateTimeRange visibleDateTimeRange,
+  WeekNumberStyle? style,
+);
+
+/// The style of the [WeekNumber].
+class WeekNumberStyle {
+  /// Creates a new [WeekNumberStyle].
+  const WeekNumberStyle({
+    this.textStyle,
+    this.visualDensity,
+    this.tooltip,
+    this.padding,
+    this.alignment,
+  });
+
+  /// The [TextStyle] used by the [WeekNumber] widget to display the week number.
+  final TextStyle? textStyle;
+
+  /// The [VisualDensity] used by the [WeekNumber] widget.
+  final VisualDensity? visualDensity;
+
+  /// The tooltip used by the [WeekNumber] widget.
+  final String? tooltip;
+
+  /// The padding around by the [WeekNumber] widget.
+  final EdgeInsets? padding;
+
+  /// The alignment of the week number within its available cell.
+  final AlignmentGeometry? alignment;
+
+  /// Creates a copy of this style with the given fields replaced with the new values.
+  WeekNumberStyle copyWith({
+    TextStyle? textStyle,
+    VisualDensity? visualDensity,
+    String? tooltip,
+    EdgeInsets? padding,
+    AlignmentGeometry? alignment,
+  }) {
+    return WeekNumberStyle(
+      textStyle: textStyle ?? this.textStyle,
+      visualDensity: visualDensity ?? this.visualDensity,
+      tooltip: tooltip ?? this.tooltip,
+      padding: padding ?? this.padding,
+      alignment: alignment ?? this.alignment,
+    );
+  }
+
+  /// Returns a copy of this style where the non-null fields of [other] replace the matching fields.
+  WeekNumberStyle merge(WeekNumberStyle? other) {
+    if (other == null) return this;
+    return WeekNumberStyle(
+      textStyle: other.textStyle ?? textStyle,
+      visualDensity: other.visualDensity ?? visualDensity,
+      tooltip: other.tooltip ?? tooltip,
+      padding: other.padding ?? padding,
+      alignment: other.alignment ?? alignment,
+    );
+  }
+
+  /// Linearly interpolates between [a] and [b]. Fields that cannot be interpolated switch at the midpoint.
+  static WeekNumberStyle? lerp(WeekNumberStyle? a, WeekNumberStyle? b, double t) {
+    if (identical(a, b)) return a;
+    return WeekNumberStyle(
+      textStyle: TextStyle.lerp(a?.textStyle, b?.textStyle, t),
+      visualDensity: t < 0.5 ? a?.visualDensity : b?.visualDensity,
+      tooltip: t < 0.5 ? a?.tooltip : b?.tooltip,
+      padding: EdgeInsets.lerp(a?.padding, b?.padding, t),
+      alignment: AlignmentGeometry.lerp(a?.alignment, b?.alignment, t),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is WeekNumberStyle &&
+        other.textStyle == textStyle &&
+        other.visualDensity == visualDensity &&
+        other.tooltip == tooltip &&
+        other.padding == padding &&
+        other.alignment == alignment;
+  }
+
+  @override
+  int get hashCode => Object.hash(textStyle, visualDensity, tooltip, padding, alignment);
+}
+
+/// A widget that displays the week number.
+class WeekNumber extends StatelessWidget {
+  /// The range of dates that the week number will be displayed for.
+  final DateTimeRange visibleDateTimeRange;
+
+  /// The style used by the [WeekNumber].
+  final WeekNumberStyle? weekNumberStyle;
+
+  const WeekNumber({super.key, required this.visibleDateTimeRange, this.weekNumberStyle});
+  static WeekNumber builder(DateTimeRange visibleDateTimeRange, WeekNumberStyle? weekNumberStyle) {
+    return WeekNumber(visibleDateTimeRange: visibleDateTimeRange, weekNumberStyle: weekNumberStyle);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final internalDateTime = InternalDateTimeRange(
+      start: InternalDateTime.fromExternal(visibleDateTimeRange.start, location: context.location),
+      end: InternalDateTime.fromExternal(visibleDateTimeRange.end, location: context.location),
+    );
+    final (start, end) = internalDateTime.weekNumbers;
+    final weekNumber = start.toString() + ((end == null) ? '' : ' - $end');
+
+    final style = (KalenderTheme.of(context).weekNumberStyle ?? const WeekNumberStyle()).merge(weekNumberStyle);
+    final padding = style.padding ?? const EdgeInsets.symmetric(horizontal: 4);
+
+    return Align(
+      alignment: style.alignment ?? Alignment.center,
+      child: Padding(
+        padding: padding,
+        child: IconButton.filledTonal(
+          tooltip: style.tooltip,
+          onPressed: null,
+          visualDensity: style.visualDensity ?? VisualDensity.compact,
+          icon: Text(
+            weekNumber,
+            style: style.textStyle,
+          ),
+        ),
+      ),
+    );
+  }
+}

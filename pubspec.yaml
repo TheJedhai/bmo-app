@@ -58,6 +58,10 @@ dependencies:
   go_router: ^14.0.0
   kalender: 0.23.0
 
+dependency_overrides:
+  kalender:
+    path: packages/kalender
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
