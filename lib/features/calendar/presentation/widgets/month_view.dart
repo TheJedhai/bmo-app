@@ -195,6 +195,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
       dropTargetTile: kalenderDropTargetTile,
       tileWhenDraggingBuilder: kalenderTileWhenDragging,
       feedbackTileBuilder: kalenderFeedbackTile,
+      verticalResizeHandle: _resizeHandleVertical,
+      horizontalResizeHandle: _resizeHandleHorizontal,
     );
 
     final multiDayTileComponents = TileComponents(
@@ -202,6 +204,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
       dropTargetTile: kalenderDropTargetTile,
       tileWhenDraggingBuilder: kalenderTileWhenDragging,
       feedbackTileBuilder: kalenderFeedbackTile,
+      verticalResizeHandle: _resizeHandleVertical,
+      horizontalResizeHandle: _resizeHandleHorizontal,
     );
 
     final overlayBuilders = OverlayBuilders(
@@ -231,12 +235,26 @@ class _MonthViewState extends ConsumerState<MonthView> {
             viewConfiguration: _viewConfig,
             callbacks: CalendarCallbacks(
               onPageChanged: _onPageChanged,
-              onTapped: widget.viewMode == AgendaViewMode.month
-                  ? (date) => widget.onDayTap(date)
-                  : null,
+              onTapped: (date) {
+                if (widget.viewMode == AgendaViewMode.month) {
+                  widget.onDayTap(date);
+                } else {
+                  _calendarController.selectedEvent.value = null;
+                }
+              },
               onEventTapped: (event, _) {
                 final ke = event as KalenderCalendarEvent;
-                widget.onEventEdit(ke.source);
+                if (widget.viewMode == AgendaViewMode.month) {
+                  // Month view: tap opens edit modal directly.
+                  widget.onEventEdit(ke.source);
+                } else {
+                  // Day/week view: 1st tap selects, 2nd tap opens edit.
+                  if (_calendarController.selectedEvent.value?.id == ke.id) {
+                    widget.onEventEdit(ke.source);
+                  } else {
+                    _calendarController.selectEvent(ke);
+                  }
+                }
               },
               onEventChanged: _onEventChanged,
               onEventCreate: _onEventCreate,
@@ -353,6 +371,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 allowResizing: true,
                 allowRescheduling: true,
                 allowEventCreation: true,
+                inputMode: InputMode.imprecise,
               ),
               snapping: const CalendarSnapping(
                 snapIntervalMinutes: 15,
@@ -883,4 +902,14 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
   }
 }
 
+/// Vertical resize handle — visible on dark theme via accentGreen.
+const Widget _resizeHandleVertical = SizedBox(
+  width: 4,
+  child: ColoredBox(color: BmoColors.accentGreen),
+);
 
+/// Horizontal resize handle — visible on dark theme via accentGreen.
+const Widget _resizeHandleHorizontal = SizedBox(
+  height: 4,
+  child: ColoredBox(color: BmoColors.accentGreen),
+);
