@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/identity/identity_provider.dart';
 import '../../../../core/identity/identity_state.dart';
+import 'models/calendar_event.dart';
 
 /// Keys for shared_preferences storage.
 const _kVisibilityPrefix = 'hidden_calendars_';
@@ -70,3 +71,14 @@ final calendarVisibilityProvider =
     StateNotifierProvider<CalendarVisibilityNotifier, Set<int>>(
   (ref) => CalendarVisibilityNotifier(ref),
 );
+
+/// Shared filter: removes events whose calendar is hidden.
+/// Use this everywhere — no inline copies.
+List<CalendarEvent> filterVisibleEvents(
+  List<CalendarEvent> events,
+  Set<int> hiddenCalendarIds,
+) {
+  return events
+      .where((e) => !hiddenCalendarIds.contains(e.calendarId))
+      .toList();
+}

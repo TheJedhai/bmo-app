@@ -63,24 +63,37 @@ class _MonthViewState extends ConsumerState<MonthView> {
       }
     });
 
+    // Listen for visibility toggles — re-filter current month events
+    // without re-fetching, keeping CalendarView stable.
+    ref.listen(calendarVisibilityProvider, (_, __) {
+      _applyFilter();
+    });
+
     return _buildCalendar();
   }
 
-  /// Fetches events for [range] and pushes them to the kalender
-  /// events controller. Never triggers a widget rebuild.
+  /// Fetches events for [range], then applies visibility filter.
+  /// Never triggers a widget rebuild.
   Future<void> _fetchEventsForMonth(MonthRange range) async {
     try {
       final notifier = ref.read(eventsProvider(range).notifier);
       await notifier.refresh();
       if (!mounted) return;
-      final events =
-          ref.read(eventsProvider(range)).valueOrNull ?? const <app.CalendarEvent>[];
-      final visibility = ref.read(calendarVisibilityProvider);
-      final visible = events.where((e) => !visibility.contains(e.calendarId)).toList();
-      _syncEvents(visible);
+      _applyFilter();
     } catch (_) {
       // Fetch failed — keep previous events visible.
     }
+  }
+
+  /// Reads current month events, applies visibility filter, pushes to controller.
+  /// Safe to call from either listener (month change or visibility toggle).
+  void _applyFilter() {
+    final monthRange = ref.read(visibleMonthProvider);
+    final events =
+        ref.read(eventsProvider(monthRange)).valueOrNull ?? const <app.CalendarEvent>[];
+    final visibility = ref.read(calendarVisibilityProvider);
+    final visible = filterVisibleEvents(events, visibility);
+    _syncEvents(visible);
   }
 
   void _syncEvents(List<app.CalendarEvent> events) {
