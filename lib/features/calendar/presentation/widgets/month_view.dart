@@ -506,6 +506,31 @@ class _MonthNavigator extends StatelessWidget {
     required this.initialMonth,
   });
 
+  String _fallbackLabel(AgendaViewMode mode) {
+    final now = DateTime.now();
+    const months = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+    ];
+    const days = [
+      'domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado',
+    ];
+
+    switch (mode) {
+      case AgendaViewMode.day:
+        final dayName = days[now.weekday % 7];
+        return '$dayName, ${now.day} de ${months[now.month - 1]} ${now.year}';
+      case AgendaViewMode.week:
+        final weekStart = now.subtract(Duration(days: now.weekday % 7));
+        final weekEnd = weekStart.add(const Duration(days: 6));
+        String fmt(DateTime d) => '${d.day}/${d.month}';
+        return '${fmt(weekStart)} – ${fmt(weekEnd)} ${weekStart.year}';
+      case AgendaViewMode.month:
+      case AgendaViewMode.agenda:
+        return '${months[now.month - 1]} ${now.year}';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<DateTimeRange?>(
@@ -533,7 +558,8 @@ class _MonthNavigator extends StatelessWidget {
           final mid = range.start.add(const Duration(days: 15));
           label = '${months[mid.month - 1]} ${mid.year}';
         } else {
-          label = '${months[initialMonth.month - 1]} ${initialMonth.year}';
+          // Fallback when visibleDateTimeRange is still null on first render.
+          label = _fallbackLabel(viewMode);
         }
 
         return Padding(
