@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
@@ -257,6 +259,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 bodyComponents: MultiDayBodyComponents(
                   timelineStringBuilder: _buildTimelineLabel,
                   hourLines: _buildHourLines,
+                  timeIndicator: _buildTimeIndicator,
                 ),
               ),
               multiDayComponentStyles: MultiDayComponentStyles(
@@ -473,6 +476,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
     }
 
     return Stack(children: positionedLines);
+  }
+
+  /// Builds the time indicator (red now-line) with a time badge.
+  static Widget _buildTimeIndicator(
+    TimeOfDayRange timeOfDayRange,
+    double heightPerMinute,
+    TimeIndicatorStyle? style,
+    Location? location,
+  ) {
+    return _BmoTimeIndicator(
+      timeOfDayRange: timeOfDayRange,
+      heightPerMinute: heightPerMinute,
+      style: style,
+    );
   }
 
   void _onPageChanged(DateTimeRange range) {
@@ -697,6 +714,110 @@ class _TodayButton extends StatelessWidget {
             color: BmoColors.accentGreen,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Time indicator (red now-line) with a time badge showing the current time
+/// next to the red circle, Apple Calendar style.
+class _BmoTimeIndicator extends StatefulWidget {
+  final TimeOfDayRange timeOfDayRange;
+  final double heightPerMinute;
+  final TimeIndicatorStyle? style;
+
+  const _BmoTimeIndicator({
+    required this.timeOfDayRange,
+    required this.heightPerMinute,
+    this.style,
+  });
+
+  @override
+  State<_BmoTimeIndicator> createState() => _BmoTimeIndicatorState();
+}
+
+class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
+  late Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final nowTimeOfDay = TimeOfDay.fromDateTime(now);
+
+    final startMinutes = widget.timeOfDayRange.start.hour * 60 + widget.timeOfDayRange.start.minute;
+    final endMinutes = widget.timeOfDayRange.end.hour * 60 + widget.timeOfDayRange.end.minute;
+    final nowMinutes = nowTimeOfDay.hour * 60 + nowTimeOfDay.minute;
+
+    if (nowMinutes < startMinutes || nowMinutes >= endMinutes) {
+      return const SizedBox.shrink();
+    }
+
+    final top = (nowMinutes - startMinutes) * widget.heightPerMinute;
+
+    final lineColor = widget.style?.lineColor ?? Theme.of(context).colorScheme.error;
+    final thickness = widget.style?.thickness ?? 1;
+    final circleColor = widget.style?.circleColor ?? lineColor;
+    final circleWidth = widget.style?.circleSize?.width ?? 10;
+    final circleHeight = widget.style?.circleSize?.height ?? 10;
+
+    final timeString =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+    // Offset so the circle center aligns with the left edge of the day column.
+    const circleCenterOffset = 1.0;
+
+    return IgnorePointer(
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Horizontal line across full width.
+          PositionedDirectional(
+            top: top,
+            start: 0,
+            end: 0,
+            child: Container(height: thickness, color: lineColor),
+          ),
+          // Circle + time badge at left edge.
+          PositionedDirectional(
+            top: top - circleHeight / 2,
+            start: -(circleWidth / 2) + circleCenterOffset,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: circleWidth,
+                  height: circleHeight,
+                  decoration: BoxDecoration(
+                    color: circleColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  timeString,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: circleColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
