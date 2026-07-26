@@ -13,7 +13,14 @@ class KalenderCalendarEvent extends CalendarEvent {
   KalenderCalendarEvent({
     required super.dateTimeRange,
     required this.source,
-  }) : super(id: '${source.id}_${source.occurrenceDate.toIso8601String()}');
+  }) : super(
+          id: '${source.id}_${source.occurrenceDate.toIso8601String()}',
+          // Recurring events are not draggable/resizable — we don't support
+          // per-occurrence editing, so dragging one occurrence would move all.
+          interaction: source.isRecurring
+              ? EventInteraction.allowNone()
+              : EventInteraction.allowAll(),
+        );
 
   String get title => source.title ?? '(sem título)';
   bool get allDay => source.allDay;
@@ -184,6 +191,7 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
       final color = _hexToColor(calendar?.color ?? '#8BC9A3');
       final durationMinutes = ke.end.difference(ke.start).inMinutes;
       final isShort = durationMinutes <= 30;
+      final isRecurring = ke.source.isRecurring;
 
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
@@ -196,31 +204,63 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
           ),
         ),
         child: isShort
-            ? Text(
-                ke.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: BmoColors.textPrimary,
-                ),
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Expanded(
+                    child: Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (isRecurring)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(
+                        Icons.repeat,
+                        size: 10,
+                        color: BmoColors.textMuted.withValues(alpha: 0.5),
+                      ),
+                    ),
+                ],
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    ke.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: BmoColors.textPrimary,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ke.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (isRecurring)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2),
+                          child: Icon(
+                            Icons.repeat,
+                            size: 10,
+                            color: BmoColors.textMuted.withValues(alpha: 0.5),
+                          ),
+                        ),
+                    ],
                   ),
                   if (ke.startTime != null)
                     Text(
