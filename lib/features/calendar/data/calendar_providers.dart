@@ -5,6 +5,7 @@ import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
 import 'calendar_client.dart';
 import 'calendar_repository.dart';
+import 'calendar_visibility_provider.dart';
 import 'models/calendar.dart';
 import 'models/calendar_event.dart';
 
@@ -276,5 +277,6 @@ final upcomingEventsProvider = FutureProvider.autoDispose
   final events = await repo.listEvents(start: now, end: end);
   // Backend returns events sorted by (occurrence_date, start_time, id).
   // Dart sort is not stable, so trusting backend order preserves intra-day ordering.
-  return events.take(limit).toList();
+  final hiddenCalendarIds = ref.watch(calendarVisibilityProvider);
+  return filterVisibleEvents(events, hiddenCalendarIds).take(limit).toList();
 });

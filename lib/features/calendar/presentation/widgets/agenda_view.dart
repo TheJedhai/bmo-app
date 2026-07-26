@@ -77,13 +77,11 @@ class FullAgendaView extends ConsumerWidget {
       loading: () => const _LoadingWidget(),
       error: (_, _) => const _AgendaErrorWidget(),
       data: (events) {
-        final visibility = ref.watch(calendarVisibilityProvider);
-        final visible = filterVisibleEvents(events, visibility);
-        if (visible.isEmpty) return const _EmptyAgenda();
+        if (events.isEmpty) return const _EmptyAgenda();
 
         // Group by day.
         final grouped = <DateTime, List<CalendarEvent>>{};
-        for (final e in visible) {
+        for (final e in events) {
           final day = DateTime(e.occurrenceDate.year,
               e.occurrenceDate.month, e.occurrenceDate.day);
           (grouped[day] ??= []).add(e);
