@@ -78,9 +78,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
   ViewConfiguration _buildViewConfig(AgendaViewMode mode, MonthRange initial) {
     final initialDate = DateTime(initial.year, initial.month, 1);
     final timeRange = TimeOfDayRange(
-      start: TimeOfDay(hour: 6, minute: 0),
-      end: TimeOfDay(hour: 23, minute: 0),
+      start: const TimeOfDay(hour: 0, minute: 0),
+      end: const TimeOfDay(hour: 24, minute: 0),
     );
+    const heightPerMinute = 0.9;
 
     switch (mode) {
       case AgendaViewMode.day:
@@ -89,9 +90,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           initialDateTime: initialDate,
           firstDayOfWeek: DateTime.sunday,
           timeOfDayRange: timeRange,
-          // ponytail: jump to roughly current hour on first open;
-          // fine-grained scroll-to-now handled by animateToDateTime if needed.
-          initialTimeOfDay: const TimeOfDay(hour: 8, minute: 0),
+          initialHeightPerMinute: heightPerMinute,
         );
       case AgendaViewMode.week:
         return MultiDayViewConfiguration.week(
@@ -99,7 +98,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           initialDateTime: initialDate,
           firstDayOfWeek: DateTime.sunday,
           timeOfDayRange: timeRange,
-          initialTimeOfDay: const TimeOfDay(hour: 8, minute: 0),
+          initialHeightPerMinute: heightPerMinute,
         );
       case AgendaViewMode.month:
         return MonthViewConfiguration.singleMonth(
@@ -187,9 +186,16 @@ class _MonthViewState extends ConsumerState<MonthView> {
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: CalendarView(
-            eventsController: _eventsController,
+            padding: const EdgeInsets.only(right: 4, bottom: 84),
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                colorScheme: Theme.of(context).colorScheme.copyWith(
+                  secondaryContainer: BmoColors.accentGreen,
+                  onSecondaryContainer: BmoColors.screenBg,
+                ),
+              ),
+              child: CalendarView(
+              eventsController: _eventsController,
             calendarController: _calendarController,
             viewConfiguration: _viewConfig,
             callbacks: CalendarCallbacks(
@@ -235,6 +241,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
               multiDayComponents: const MultiDayComponents(
                 headerComponents: MultiDayHeaderComponents(
                   dayHeaderStringBuilder: _buildShortDayName,
+                  weekNumberBuilder: _buildEmptyWeekNumber,
                 ),
               ),
               multiDayComponentStyles: MultiDayComponentStyles(
@@ -250,12 +257,15 @@ class _MonthViewState extends ConsumerState<MonthView> {
                       fontSize: 10,
                       color: BmoColors.textMuted,
                     ),
+                    mainAxisAlignment: MainAxisAlignment.start,
                   ),
                 ),
                 bodyStyles: MultiDayBodyComponentStyles(
                   timeIndicatorStyle: TimeIndicatorStyle(
                     lineColor: BmoColors.accentRed.withValues(alpha: 0.8),
+                    thickness: 2,
                     circleColor: BmoColors.accentRed,
+                    circleSize: const Size(12, 12),
                   ),
                   hourLinesStyle: HourLinesStyle(
                     color: BmoColors.textMuted.withValues(alpha: 0.08),
@@ -274,6 +284,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
               ),
             ),
             header: CalendarHeader(
+              multiDayTileComponents: TileComponents(
+                tileBuilder: kalenderAllDayTileBuilder,
+              ),
               multiDayHeaderConfiguration: const MultiDayHeaderConfiguration(
                 showTiles: true,
                 tileHeight: 22,
@@ -291,6 +304,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 showMultiDayEvents: false,
                 minimumTileHeight: 18,
                 horizontalPadding: EdgeInsets.only(left: 2, right: 4),
+                eventLayoutStrategy: sideBySideLayoutStrategy,
+                scrollPhysics: ClampingScrollPhysics(),
+                pageScrollPhysics: NeverScrollableScrollPhysics(),
               ),
               interaction: CalendarInteraction(
                 allowResizing: true,
@@ -303,6 +319,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
             ),
             locale: 'pt_BR',
           ),
+          ), // Theme
           ),
         ),
       ],
@@ -385,8 +402,15 @@ class _MonthViewState extends ConsumerState<MonthView> {
     return labels[idx];
   }
 
+  static Widget _buildEmptyWeekNumber(DateTimeRange range, dynamic style) {
+    return const SizedBox.shrink();
+  }
+
   void _onPageChanged(DateTimeRange range) {
-    final mid = range.start.add(const Duration(days: 15));
+    // Pick a date inside the visible range regardless of view mode:
+    // day view (1 day) → use start; week (7 days) → add 3; month (~30 days) → add 15.
+    final daysInRange = range.duration.inDays;
+    final mid = range.start.add(Duration(days: daysInRange ~/ 2));
     final newRange = (year: mid.year, month: mid.month);
     final current = ref.read(visibleMonthProvider);
     if (newRange != current) {
@@ -505,30 +529,80 @@ class _MonthNavigator extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 22),
-                color: BmoColors.textSecondary,
-                onPressed: () => controller.animateToPreviousPage(),
+              // Today button
+              _TodayButton(
+                onPressed: () => controller.animateToDate(DateTime.now()),
               ),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'PressStart2P',
-                  fontSize: 12,
-                  color: BmoColors.textPrimary,
+              const SizedBox(width: 4),
+              // Navigation arrows + label
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.chevron_left, size: 22),
+                      color: BmoColors.textSecondary,
+                      onPressed: () => controller.animateToPreviousPage(),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    Flexible(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'PressStart2P',
+                          fontSize: 12,
+                          color: BmoColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, size: 22),
+                      color: BmoColors.textSecondary,
+                      onPressed: () => controller.animateToNextPage(),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 22),
-                color: BmoColors.textSecondary,
-                onPressed: () => controller.animateToNextPage(),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+class _TodayButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  const _TodayButton({required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 28,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          backgroundColor: BmoColors.accentGreen.withValues(alpha: 0.15),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        child: const Text(
+          'Hoje',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: BmoColors.accentGreen,
+          ),
+        ),
+      ),
     );
   }
 }

@@ -264,7 +264,9 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
                   ),
                   if (ke.startTime != null)
                     Text(
-                      _formatTime(ke.startTime!),
+                      ke.endTime != null
+                          ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
+                          : _formatTime(ke.startTime!),
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 9,
@@ -273,6 +275,42 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
                     ),
                 ],
               ),
+      );
+    },
+  );
+}
+
+/// Builds an all-day event tile for the multi-day header.
+///
+/// Same visual language as the month view all-day chips: solid color with
+/// calendar accent, white text. Wrapped in [Consumer] so calendar color
+/// changes reflect immediately.
+Widget kalenderAllDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
+  final ke = event as KalenderCalendarEvent;
+  return Consumer(
+    builder: (context, ref, _) {
+      final calendarsById = ref.watch(calendarsByIdProvider);
+      final calendar = calendarsById[ke.source.calendarId];
+      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          ke.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: BmoColors.screenBg,
+          ),
+        ),
       );
     },
   );

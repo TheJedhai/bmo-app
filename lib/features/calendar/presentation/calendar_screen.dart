@@ -146,27 +146,23 @@ class _ViewModeToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _ToggleChip(
+          _TextChip(
             label: 'Dia',
-            icon: Icons.today,
             active: mode == AgendaViewMode.day,
             onTap: () => onChanged(AgendaViewMode.day),
           ),
-          _ToggleChip(
+          _TextChip(
             label: 'Semana',
-            icon: Icons.view_week,
             active: mode == AgendaViewMode.week,
             onTap: () => onChanged(AgendaViewMode.week),
           ),
-          _ToggleChip(
+          _TextChip(
             label: 'Mês',
-            icon: Icons.calendar_month,
             active: mode == AgendaViewMode.month,
             onTap: () => onChanged(AgendaViewMode.month),
           ),
-          _ToggleChip(
+          _TextChip(
             label: 'Agenda',
-            icon: Icons.list_alt,
             active: mode == AgendaViewMode.agenda,
             onTap: () => onChanged(AgendaViewMode.agenda),
           ),
@@ -176,15 +172,13 @@ class _ViewModeToggle extends StatelessWidget {
   }
 }
 
-class _ToggleChip extends StatelessWidget {
+class _TextChip extends StatelessWidget {
   final String label;
-  final IconData icon;
   final bool active;
   final VoidCallback onTap;
 
-  const _ToggleChip({
+  const _TextChip({
     required this.label,
-    required this.icon,
     required this.active,
     required this.onTap,
   });
@@ -195,17 +189,21 @@ class _ToggleChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(7),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
           color: active
               ? BmoColors.accentGreen.withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
         ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: active ? BmoColors.accentGreen : BmoColors.textMuted,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? BmoColors.accentGreen : BmoColors.textMuted,
+          ),
         ),
       ),
     );
