@@ -62,14 +62,20 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
     if (userId == null) return const [];
     final repo = ref.watch(calendarRepositoryProvider);
     final (start, end) = _monthBounds(arg.year, arg.month);
-    return repo.listEvents(start: start, end: end);
+    final events = await repo.listEvents(start: start, end: end);
+    final calendars = await ref.read(calendarsProvider.future);
+    return _enrichWithCalendars(events, calendars);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     final repo = ref.read(calendarRepositoryProvider);
     final (start, end) = _monthBounds(arg.year, arg.month);
-    state = await AsyncValue.guard(() => repo.listEvents(start: start, end: end));
+    state = await AsyncValue.guard(() async {
+      final events = await repo.listEvents(start: start, end: end);
+      final calendars = await ref.read(calendarsProvider.future);
+      return _enrichWithCalendars(events, calendars);
+    });
   }
 
   Future<CalendarEvent> create({
@@ -226,8 +232,52 @@ final upcomingEventsProvider = FutureProvider.autoDispose
   final now = DateTime.now();
   // 365 days keeps us safely under backend's 370-day range limit.
   final end = now.add(const Duration(days: 365));
-  final all = await repo.listEvents(start: now, end: end);
+  final events = await repo.listEvents(start: now, end: end);
+  final calendars = await ref.watch(calendarsProvider.future);
+  final enriched = _enrichWithCalendars(events, calendars);
   // Backend returns events sorted by (occurrence_date, start_time, id).
   // Dart sort is not stable, so trusting backend order preserves intra-day ordering.
-  return all.take(limit).toList();
+  return enriched.take(limit).toList();
 });
+
+// ============================================================
+// Enrichment helper
+// ============================================================
+
+/// Enriches events with their [Calendar] by joining on [CalendarEvent.calendarId].
+List<CalendarEvent> _enrichWithCalendars(
+  List<CalendarEvent> events,
+  List<Calendar> calendars,
+) {
+  final byId = <int, Calendar>{};
+  for (final c in calendars) {
+    byId[c.id] = c;
+  }
+  return [
+    for (final e in events)
+      if (byId.containsKey(e.calendarId))
+        CalendarEvent(
+          id: e.id,
+          calendarId: e.calendarId,
+          title: e.title,
+          notes: e.notes,
+          allDay: e.allDay,
+          occurrenceDate: e.occurrenceDate,
+          startTime: e.startTime,
+          endTime: e.endTime,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          recurrenceType: e.recurrenceType,
+          recurrenceInterval: e.recurrenceInterval,
+          recurrenceDays: e.recurrenceDays,
+          recurrenceEnd: e.recurrenceEnd,
+          reminderMinutesBefore: e.reminderMinutesBefore,
+          reminderSent: e.reminderSent,
+          createdAt: e.createdAt,
+          updatedAt: e.updatedAt,
+          calendar: byId[e.calendarId],
+        )
+      else
+        e,
+  ];
+}
