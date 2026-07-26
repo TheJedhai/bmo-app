@@ -383,7 +383,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     repo.updateEvent(
       source.id,
-      occurrenceDate: source.allDay ? newDate : null,
+      occurrenceDate: newDate,
       startTime: source.allDay ? null : newStartTime,
       endTime: source.allDay ? null : newEndTime,
     ).then((_) {
