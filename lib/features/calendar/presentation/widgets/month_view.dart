@@ -179,10 +179,16 @@ class _MonthViewState extends ConsumerState<MonthView> {
   Widget _buildCalendar() {
     final tileComponents = TileComponents(
       tileBuilder: kalenderMonthTileBuilder,
+      dropTargetTile: kalenderDropTargetTile,
+      tileWhenDraggingBuilder: kalenderTileWhenDragging,
+      feedbackTileBuilder: kalenderFeedbackTile,
     );
 
     final multiDayTileComponents = TileComponents(
       tileBuilder: kalenderMultiDayTileBuilder,
+      dropTargetTile: kalenderDropTargetTile,
+      tileWhenDraggingBuilder: kalenderTileWhenDragging,
+      feedbackTileBuilder: kalenderFeedbackTile,
     );
 
     final overlayBuilders = OverlayBuilders(
@@ -863,4 +869,5 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
     );
   }
 }
+
 
