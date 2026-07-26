@@ -54,9 +54,6 @@ class KalenderCalendarEvent extends CalendarEvent {
         source.calendar?.color,
       );
 
-  @override
-  bool layoutEquals(CalendarEvent other) =>
-      super.layoutEquals(other) && other is KalenderCalendarEvent && other == this;
 }
 
 /// Converts a list of app [app.CalendarEvent]s to kalender events.
@@ -94,6 +91,16 @@ List<KalenderCalendarEvent> toKalenderEvents(List<app.CalendarEvent> events) {
       source: e,
     );
   }).toList();
+}
+
+/// Strips seconds from a "HH:mm:ss" time string, returning "HH:mm".
+/// Passes through strings that are already "HH:mm".
+String _formatTime(String time) {
+  final parts = time.split(':');
+  if (parts.length >= 2) {
+    return '${parts[0]}:${parts[1]}';
+  }
+  return time;
 }
 
 /// Builds an event tile for the month view.
@@ -155,7 +162,7 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
           ),
           if (ke.startTime != null)
             Text(
-              ke.startTime!,
+              _formatTime(ke.startTime!),
               style: const TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 9,
