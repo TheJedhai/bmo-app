@@ -12,11 +12,13 @@ import 'kalender_events.dart';
 class MonthView extends ConsumerStatefulWidget {
   final AgendaViewMode viewMode;
   final void Function(DateTime day) onDayTap;
+  final void Function(DateTime start, DateTime end) onCreateFromRange;
 
   const MonthView({
     super.key,
     required this.viewMode,
     required this.onDayTap,
+    required this.onCreateFromRange,
   });
 
   @override
@@ -184,6 +186,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 final ke = event as KalenderCalendarEvent;
                 widget.onDayTap(ke.source.occurrenceDate);
               },
+              onEventChanged: _onEventChanged,
+              onEventCreate: _onEventCreate,
             ),
             components: CalendarComponents(
               monthComponents: MonthComponents(
@@ -275,6 +279,14 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 minimumTileHeight: 18,
                 horizontalPadding: EdgeInsets.only(left: 2, right: 4),
               ),
+              interaction: CalendarInteraction(
+                allowResizing: true,
+                allowRescheduling: true,
+                allowEventCreation: true,
+              ),
+              snapping: const CalendarSnapping(
+                snapIntervalMinutes: 15,
+              ),
             ),
             locale: 'pt_BR',
           ),
@@ -282,6 +294,76 @@ class _MonthViewState extends ConsumerState<MonthView> {
         ),
       ],
     );
+  }
+
+  /// Handles drag/resize completion: PATCH event with optimistic rollback.
+  ///
+  /// The kalender controller already shows the moved tile (optimistic UI).
+  /// We persist via PATCH. On failure, re-apply filter from provider state
+  /// to roll back the kalender controller to the last known-good position.
+  void _onEventChanged(CalendarEvent event, CalendarEvent updatedEvent) {
+    final ke = event as KalenderCalendarEvent;
+    final source = ke.source;
+
+    // Recurring events blocked from drag/resize (commit 3 guard).
+    if (source.isRecurring) return;
+
+    final newStart = updatedEvent.start;
+    final newEnd = updatedEvent.end;
+
+    // Snapshot kalender events for rollback: if the PATCH fails we need to
+    // restore the tile positions. The provider hasn't been mutated yet, so
+    // _applyFilter() will push the old state back.
+    final monthRange = (
+      year: source.occurrenceDate.year,
+      month: source.occurrenceDate.month,
+    );
+
+    // Build API params.
+    final newDate = '${newStart.year}-'
+        '${newStart.month.toString().padLeft(2, '0')}-'
+        '${newStart.day.toString().padLeft(2, '0')}';
+    final newStartTime = '${newStart.hour.toString().padLeft(2, '0')}:'
+        '${newStart.minute.toString().padLeft(2, '0')}';
+    final newEndTime = '${newEnd.hour.toString().padLeft(2, '0')}:'
+        '${newEnd.minute.toString().padLeft(2, '0')}';
+
+    final repo = ref.read(calendarRepositoryProvider);
+    final notifier = ref.read(eventsProvider(monthRange).notifier);
+
+    repo.updateEvent(
+      source.id,
+      occurrenceDate: source.allDay ? newDate : null,
+      startTime: source.allDay ? null : newStartTime,
+      endTime: source.allDay ? null : newEndTime,
+    ).then((_) {
+      // Server accepted — refresh provider to sync.
+      if (mounted) notifier.refresh();
+    }).catchError((e) {
+      // Rollback: re-filter from unchanged provider state.
+      if (mounted) {
+        _applyFilter();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao mover evento: $e'),
+            backgroundColor: BmoColors.accentRed,
+          ),
+        );
+      }
+    });
+  }
+
+  /// Intercepts create-by-drag: captures the time range and opens the
+  /// creation modal instead of using kalender's internal creation.
+  CalendarEvent? _onEventCreate(CalendarEvent event) {
+    // Schedule after frame so the drag cancels cleanly.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        widget.onCreateFromRange(event.start, event.end);
+      }
+    });
+    // Return null to cancel kalender's internal creation.
+    return null;
   }
 
   static String _buildShortDayName(BuildContext context, DateTime date) {

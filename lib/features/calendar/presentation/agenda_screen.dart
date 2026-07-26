@@ -78,6 +78,8 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 ref.read(viewModeProvider.notifier).state =
                     AgendaViewMode.agenda;
               },
+              onCreateFromRange: (start, end) =>
+                  _openCreateModalForRange(start, end),
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openCreateModal,
@@ -92,6 +94,23 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
     final result = await showEventFormModal(
       context,
       initialDate: ref.read(selectedDayProvider),
+    );
+    if (result != null && mounted) {
+      final month = ref.read(visibleMonthProvider);
+      ref.read(eventsProvider(month).notifier).refresh();
+    }
+  }
+
+  void _openCreateModalForRange(DateTime start, DateTime end) async {
+    final startTime =
+        '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
+    final endTime =
+        '${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}';
+    final result = await showEventFormModal(
+      context,
+      initialDate: start,
+      initialStartTime: startTime,
+      initialEndTime: endTime,
     );
     if (result != null && mounted) {
       final month = ref.read(visibleMonthProvider);

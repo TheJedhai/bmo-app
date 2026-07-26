@@ -22,26 +22,42 @@ const _reminderPresets = [
 /// Show a modal to create or edit a calendar event.
 ///
 /// [event] null = create mode; non-null = edit mode (targets master `id`).
+/// [initialStartTime]/[initialEndTime] pre-fill time fields (HH:MM) in create
+/// mode, used when creating from a drag gesture in week/day views.
 /// Returns the created/updated [CalendarEvent], or null if dismissed.
 Future<CalendarEvent?> showEventFormModal(
   BuildContext context, {
   CalendarEvent? event,
   DateTime? initialDate,
+  String? initialStartTime,
+  String? initialEndTime,
 }) {
   return showModalBottomSheet<CalendarEvent>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _EventFormSheet(event: event, initialDate: initialDate),
+    builder: (_) => _EventFormSheet(
+      event: event,
+      initialDate: initialDate,
+      initialStartTime: initialStartTime,
+      initialEndTime: initialEndTime,
+    ),
   );
 }
 
 class _EventFormSheet extends ConsumerStatefulWidget {
   final CalendarEvent? event;
   final DateTime? initialDate;
+  final String? initialStartTime;
+  final String? initialEndTime;
 
-  const _EventFormSheet({this.event, this.initialDate});
+  const _EventFormSheet({
+    this.event,
+    this.initialDate,
+    this.initialStartTime,
+    this.initialEndTime,
+  });
 
   @override
   ConsumerState<_EventFormSheet> createState() => _EventFormSheetState();
@@ -103,6 +119,21 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     } else {
       _startDate = widget.initialDate ?? DateTime.now();
       _endDate = _startDate;
+      // Pre-fill times from drag gesture (week/day view create-by-drag).
+      if (widget.initialStartTime != null) {
+        final parts = widget.initialStartTime!.split(':');
+        _startTime = TimeOfDay(
+          hour: int.tryParse(parts[0]) ?? 9,
+          minute: int.tryParse(parts[1]) ?? 0,
+        );
+      }
+      if (widget.initialEndTime != null) {
+        final parts = widget.initialEndTime!.split(':');
+        _endTime = TimeOfDay(
+          hour: int.tryParse(parts[0]) ?? 10,
+          minute: int.tryParse(parts[1]) ?? 0,
+        );
+      }
     }
   }
 
