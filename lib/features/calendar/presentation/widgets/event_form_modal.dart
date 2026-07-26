@@ -134,7 +134,9 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
             data: (calendars) {
               // Set default calendar on first load.
               _selectedCalendar ??= (_isEditing
-                  ? (widget.event?.calendar ??
+                  ? (calendars
+                          .where((c) => c.id == widget.event?.calendarId)
+                          .firstOrNull ??
                       calendars.where((c) => c.isDefault).firstOrNull ??
                       calendars.firstOrNull)
                   : calendars.where((c) => c.isDefault).firstOrNull ??

@@ -29,8 +29,11 @@ class AgendaView extends ConsumerWidget {
       loading: () => const _LoadingWidget(),
       error: (_, _) => const _AgendaErrorWidget(),
       data: (events) {
+        final visibility = ref.watch(calendarVisibilityProvider);
         final filtered = events
-            .where((e) => e.occurrenceDate == _dateOnly(selectedDay))
+            .where((e) =>
+                e.occurrenceDate == _dateOnly(selectedDay) &&
+                !visibility.contains(e.calendarId))
             .toList()
           ..sort((a, b) {
             // All-day first, then by startTime.
@@ -75,7 +78,7 @@ class FullAgendaView extends ConsumerWidget {
       error: (_, _) => const _AgendaErrorWidget(),
       data: (events) {
         final visibility = ref.watch(calendarVisibilityProvider);
-        final visible = events.where((e) => !visibility.contains(e.calendarId)).toList();
+        final visible = filterVisibleEvents(events, visibility);
         if (visible.isEmpty) return const _EmptyAgenda();
 
         // Group by day.
@@ -204,7 +207,7 @@ class _DayGroup extends StatelessWidget {
   }
 }
 
-class _EventTile extends StatelessWidget {
+class _EventTile extends ConsumerWidget {
   final CalendarEvent event;
   final VoidCallback onTap;
   final bool showDivider;
@@ -215,17 +218,13 @@ class _EventTile extends StatelessWidget {
     this.showDivider = false,
   });
 
-  Color get _color {
-    final hex = event.calendar?.color ?? '#8BC9A3';
-    final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length == 6) {
-      return Color(int.parse('FF$cleaned', radix: 16));
-    }
-    return const Color(0xFF8BC9A3);
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final calendarsById = ref.watch(calendarsByIdProvider);
+    final calendar = calendarsById[event.calendarId];
+    final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+    final calendarName = calendar?.name;
+
     return Column(
       children: [
         InkWell(
@@ -240,7 +239,7 @@ class _EventTile extends StatelessWidget {
                   width: 4,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: _color,
+                    color: color,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -310,21 +309,21 @@ class _EventTile extends StatelessWidget {
                   ),
                 ),
                 // Calendar name badge
-                if (event.calendar != null)
+                if (calendarName != null)
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: _color.withValues(alpha: 0.15),
+                      color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      event.calendar!.name,
+                      calendarName,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 9,
                         fontWeight: FontWeight.w600,
-                        color: _color,
+                        color: color,
                       ),
                     ),
                   ),
@@ -356,6 +355,14 @@ class _EventTile extends StatelessWidget {
       ],
     );
   }
+}
+
+Color _hexToColor(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length == 6) {
+    return Color(int.parse('FF$cleaned', radix: 16));
+  }
+  return const Color(0xFF8BC9A3);
 }
 
 class _EmptyDay extends StatelessWidget {

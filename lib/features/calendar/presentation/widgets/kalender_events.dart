@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart' as app;
 
 /// Wraps our [app.CalendarEvent] model so it can be rendered by kalender.
@@ -18,17 +20,6 @@ class KalenderCalendarEvent extends CalendarEvent {
   String? get startTime => source.startTime;
   String? get endTime => source.endTime;
 
-  Color get calendarColor {
-    final hex = source.calendar?.color ?? '#8BC9A3';
-    final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length == 6) {
-      return Color(int.parse('FF$cleaned', radix: 16));
-    }
-    return const Color(0xFF8BC9A3);
-  }
-
-  String get calendarName => source.calendar?.name ?? '';
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -39,8 +30,7 @@ class KalenderCalendarEvent extends CalendarEvent {
           other.source.title == source.title &&
           other.source.allDay == source.allDay &&
           other.source.startTime == source.startTime &&
-          other.source.endTime == source.endTime &&
-          other.source.calendar?.color == source.calendar?.color);
+          other.source.endTime == source.endTime);
 
   @override
   int get hashCode => Object.hash(
@@ -51,7 +41,6 @@ class KalenderCalendarEvent extends CalendarEvent {
         source.allDay,
         source.startTime,
         source.endTime,
-        source.calendar?.color,
       );
 
 }
@@ -105,73 +94,87 @@ String _formatTime(String time) {
 
 /// Builds an event tile for the month view.
 ///
-/// All-day: filled chip with calendar color, no time label.
-/// Timed: subtle background (color at low opacity) + left color bar + time label.
+/// Wrapped in [Consumer] so calendar color/name changes reflect immediately
+/// without re-fetching events.
 Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   final ke = event as KalenderCalendarEvent;
-  final color = ke.calendarColor;
-  final isAllDay = ke.allDay;
+  return Consumer(
+    builder: (context, ref, _) {
+      final calendarsById = ref.watch(calendarsByIdProvider);
+      final calendar = calendarsById[ke.source.calendarId];
+      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+      final isAllDay = ke.allDay;
 
-  if (isAllDay) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        ke.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: BmoColors.screenBg,
-        ),
-      ),
-    );
-  }
-
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(3),
-      border: Border(
-        left: BorderSide(color: color, width: 3),
-      ),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              ke.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: BmoColors.textPrimary,
-              ),
+      if (isAllDay) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: Text(
+            ke.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: BmoColors.screenBg,
             ),
           ),
-          if (ke.startTime != null)
-            Text(
-              _formatTime(ke.startTime!),
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 9,
-                fontWeight: FontWeight.w400,
-                color: BmoColors.textMuted,
+        );
+      }
+
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(3),
+          border: Border(
+            left: BorderSide(color: color, width: 3),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  ke.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: BmoColors.textPrimary,
+                  ),
+                ),
               ),
-            ),
-        ],
-      ),
-    ),
+              if (ke.startTime != null)
+                Text(
+                  _formatTime(ke.startTime!),
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 9,
+                    fontWeight: FontWeight.w400,
+                    color: BmoColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
   );
+}
+
+Color _hexToColor(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length == 6) {
+    return Color(int.parse('FF$cleaned', radix: 16));
+  }
+  return const Color(0xFF8BC9A3);
 }

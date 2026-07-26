@@ -46,22 +46,13 @@ class CalendarDashCard extends ConsumerWidget {
   }
 }
 
-class _EventRow extends StatelessWidget {
+class _EventRow extends ConsumerWidget {
   final CalendarEvent event;
 
   const _EventRow({required this.event});
 
-  Color get _color {
-    final hex = event.calendar?.color ?? '#8BC9A3';
-    final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length == 6) {
-      return Color(int.parse('FF$cleaned', radix: 16));
-    }
-    return const Color(0xFF8BC9A3);
-  }
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final isToday = event.occurrenceDate.year == now.year &&
         event.occurrenceDate.month == now.month &&
@@ -82,6 +73,10 @@ class _EventRow extends StatelessWidget {
         ? ''
         : (event.startTime ?? '');
 
+    final calendarsById = ref.watch(calendarsByIdProvider);
+    final calendar = calendarsById[event.calendarId];
+    final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -91,7 +86,7 @@ class _EventRow extends StatelessWidget {
             width: 3,
             height: 28,
             decoration: BoxDecoration(
-              color: _color,
+              color: color,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -196,4 +191,12 @@ class _EmptyContent extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _hexToColor(String hex) {
+  final cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length == 6) {
+    return Color(int.parse('FF$cleaned', radix: 16));
+  }
+  return const Color(0xFF8BC9A3);
 }
