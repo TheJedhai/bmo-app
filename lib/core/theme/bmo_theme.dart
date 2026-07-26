@@ -12,6 +12,18 @@ class BmoColors {
   static const accentYellow = Color(0xFFE8D8A0);      // detalhes
   static const accentBlue = Color(0xFF8FB8E8);        // accents dos cards da
   static const accentRed = Color(0xFFE8938A);         // dashboard (botões coloridos do BMO)
+
+  /// 8-color palette for calendars. Chosen for contrast on dark [screenBg].
+  static const calendarPalette = [
+    accentGreen,                          // #B8E0C2
+    accentBlue,                           // #8FB8E8
+    accentYellow,                         // #E8D8A0
+    accentRed,                            // #E8938A
+    Color(0xFFC4B5FD),                    // violet
+    Color(0xFFF0A87C),                    // orange
+    Color(0xFF67E8CD),                    // teal
+    Color(0xFFF472B6),                    // pink
+  ];
 }
 
 class BmoTheme {

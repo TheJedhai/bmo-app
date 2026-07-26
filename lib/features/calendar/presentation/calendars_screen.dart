@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
+import '../../../core/widgets/calendar_color_picker.dart';
 import '../data/calendar_providers.dart';
 import '../data/models/calendar.dart';
 
@@ -278,18 +279,6 @@ class _CalendarFormSheetState extends ConsumerState<_CalendarFormSheet> {
 
   bool get _isEditing => widget.calendar != null;
 
-  // ponytail: inline palette until Commit 3 centralizes it in BmoTheme.
-  static const _palette = [
-    Color(0xFFB8E0C2), // accentGreen
-    Color(0xFF8FB8E8), // accentBlue
-    Color(0xFFE8D8A0), // accentYellow
-    Color(0xFFE8938A), // accentRed
-    Color(0xFFC4B5FD), // violet
-    Color(0xFFF0A87C), // orange
-    Color(0xFF67E8CD), // teal
-    Color(0xFFF472B6), // pink
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -399,28 +388,9 @@ class _CalendarFormSheetState extends ConsumerState<_CalendarFormSheet> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Wrap(
-                  spacing: 10,
-                  children: _palette.map((color) {
-                    final selected = _selectedColor.toARGB32() == color.toARGB32();
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedColor = color),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: selected
-                              ? Border.all(
-                                  color: BmoColors.textPrimary,
-                                  width: 2.5,
-                                )
-                              : null,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                CalendarColorPicker(
+                  selectedColor: _selectedColor,
+                  onChanged: (c) => setState(() => _selectedColor = c),
                 ),
                 const SizedBox(height: 20),
 
