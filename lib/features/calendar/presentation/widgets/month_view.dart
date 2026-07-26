@@ -10,6 +10,7 @@ import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
 import '../calendar_screen.dart';
 import 'kalender_events.dart';
+import 'resize_handles.dart';
 
 class MonthView extends ConsumerStatefulWidget {
   final AgendaViewMode viewMode;
@@ -43,6 +44,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
     _calendarController = CalendarController();
     _eventsController = DefaultEventsController();
 
+    // Sync kalender-level selection to a Riverpod provider so tile builders
+    // can react to selection state changes.
+    _calendarController.selectedEvent.addListener(_onSelectedEventChanged);
+
     final initialMonth = ref.read(visibleMonthProvider);
     _viewConfig = _buildViewConfig(widget.viewMode, initialMonth);
 
@@ -71,6 +76,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   @override
   void dispose() {
+    _calendarController.selectedEvent.removeListener(_onSelectedEventChanged);
     _eventsSubscription?.close();
     _calendarController.dispose();
     _eventsController.dispose();
@@ -197,6 +203,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
       feedbackTileBuilder: kalenderFeedbackTile,
       verticalResizeHandle: _resizeHandleVertical,
       horizontalResizeHandle: _resizeHandleHorizontal,
+      resizeHandlePositioner: BmoResizeHandlePositioner.call,
     );
 
     final multiDayTileComponents = TileComponents(
@@ -206,6 +213,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
       feedbackTileBuilder: kalenderFeedbackTile,
       verticalResizeHandle: _resizeHandleVertical,
       horizontalResizeHandle: _resizeHandleHorizontal,
+      resizeHandlePositioner: BmoResizeHandlePositioner.call,
     );
 
     final overlayBuilders = OverlayBuilders(
@@ -384,6 +392,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
         ),
       ],
     );
+  }
+
+  /// Syncs kalender selection state to [selectedEventIdProvider] so tile
+  /// builders can render a selected-state highlight.
+  void _onSelectedEventChanged() {
+    final id = _calendarController.selectedEvent.value?.id;
+    ref.read(selectedEventIdProvider.notifier).state = id;
   }
 
   /// Handles drag/resize completion: PATCH event with optimistic rollback.
