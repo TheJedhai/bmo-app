@@ -148,6 +148,19 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   Widget _buildDayHeader(DateTime date, MonthDayHeaderStyle? style) {
     final isToday = _isToday(date);
+    final currentMonth = ref.read(visibleMonthProvider);
+    final isInFocusedMonth =
+        date.year == currentMonth.year && date.month == currentMonth.month;
+
+    Color textColor;
+    if (isToday) {
+      textColor = BmoColors.screenBg;
+    } else if (isInFocusedMonth) {
+      textColor = BmoColors.textPrimary;
+    } else {
+      textColor = BmoColors.textMuted;
+    }
+
     return Container(
       margin: const EdgeInsets.only(top: 2, bottom: 1),
       alignment: Alignment.center,
@@ -165,7 +178,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
             fontFamily: 'Inter',
             fontSize: 11,
             fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
-            color: isToday ? BmoColors.screenBg : BmoColors.textPrimary,
+            color: textColor,
           ),
         ),
       ),
