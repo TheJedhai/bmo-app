@@ -293,22 +293,24 @@ Widget kalenderAllDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
       final calendar = calendarsById[ke.source.calendarId];
       final color = _hexToColor(calendar?.color ?? '#8BC9A3');
 
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          ke.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: BmoColors.screenBg,
+      return ClipRect(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: Text(
+            ke.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: BmoColors.screenBg,
+            ),
           ),
         ),
       );
