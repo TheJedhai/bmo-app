@@ -36,6 +36,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
       firstDayOfWeek: DateTime.sunday,
       showWeekNumbers: false,
     );
+
+    // Schedule initial event fetch after first frame so the listener in
+    // build() is already set up.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fetchEventsForMonth(initialMonth);
+    });
   }
 
   @override
@@ -47,17 +53,31 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   @override
   Widget build(BuildContext context) {
-    final monthRange = ref.watch(visibleMonthProvider);
-    final eventsAsync = ref.watch(eventsProvider(monthRange));
+    // Listen for month changes — triggers event fetch without rebuilding
+    // the CalendarView subtree. visibleMonthProvider is written by
+    // _onPageChanged but never watched here.
+    ref.listen(visibleMonthProvider, (prev, next) {
+      if (prev != next) {
+        _fetchEventsForMonth(next);
+      }
+    });
 
-    return eventsAsync.when(
-      loading: () => const _LoadingWidget(),
-      error: (_, _) => const _ErrorWidget(),
-      data: (events) {
-        _syncEvents(events);
-        return _buildCalendar();
-      },
-    );
+    return _buildCalendar();
+  }
+
+  /// Fetches events for [range] and pushes them to the kalender
+  /// events controller. Never triggers a widget rebuild.
+  Future<void> _fetchEventsForMonth(MonthRange range) async {
+    try {
+      final notifier = ref.read(eventsProvider(range).notifier);
+      await notifier.refresh();
+      if (!mounted) return;
+      final events =
+          ref.read(eventsProvider(range)).valueOrNull ?? const <app.CalendarEvent>[];
+      _syncEvents(events);
+    } catch (_) {
+      // Fetch failed — keep previous events visible.
+    }
   }
 
   void _syncEvents(List<app.CalendarEvent> events) {
@@ -75,9 +95,14 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     return Column(
       children: [
-        _MonthNavigator(controller: _calendarController),
+        _MonthNavigator(
+          controller: _calendarController,
+          initialMonth: ref.read(visibleMonthProvider),
+        ),
         Expanded(
-          child: CalendarView(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: CalendarView(
             eventsController: _eventsController,
             calendarController: _calendarController,
             viewConfiguration: _viewConfig,
@@ -130,6 +155,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
             ),
             locale: 'pt_BR',
           ),
+          ),
         ),
       ],
     );
@@ -148,9 +174,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   Widget _buildDayHeader(DateTime date, MonthDayHeaderStyle? style) {
     final isToday = _isToday(date);
-    final currentMonth = ref.read(visibleMonthProvider);
-    final isInFocusedMonth =
-        date.year == currentMonth.year && date.month == currentMonth.month;
+    // Use the controller's own visible range — not visibleMonthProvider —
+    // so dimming stays in sync with the actual rendered page, even during
+    // transitions when the provider may have already advanced.
+    final range = _calendarController.visibleDateTimeRange.value;
+    final isInFocusedMonth = range != null &&
+        date.year == range.start.add(const Duration(days: 15)).year &&
+        date.month == range.start.add(const Duration(days: 15)).month;
 
     Color textColor;
     if (isToday) {
@@ -211,22 +241,29 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
 class _MonthNavigator extends StatelessWidget {
   final CalendarController controller;
+  final MonthRange initialMonth;
 
-  const _MonthNavigator({required this.controller});
+  const _MonthNavigator({
+    required this.controller,
+    required this.initialMonth,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<DateTimeRange?>(
       valueListenable: controller.visibleDateTimeRange,
       builder: (context, range, _) {
-        String label = '';
+        const months = [
+          'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+          'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+        ];
+        final String label;
         if (range != null) {
           final mid = range.start.add(const Duration(days: 15));
-          const months = [
-            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-          ];
           label = '${months[mid.month - 1]} ${mid.year}';
+        } else {
+          // Fallback for initial render before onPageChanged fires.
+          label = '${months[initialMonth.month - 1]} ${initialMonth.year}';
         }
 
         return Padding(
@@ -260,34 +297,3 @@ class _MonthNavigator extends StatelessWidget {
   }
 }
 
-class _LoadingWidget extends StatelessWidget {
-  const _LoadingWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: CircularProgressIndicator(
-        color: BmoColors.accentGreen,
-        strokeWidth: 2,
-      ),
-    );
-  }
-}
-
-class _ErrorWidget extends StatelessWidget {
-  const _ErrorWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'Erro ao carregar eventos',
-        style: TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 13,
-          color: BmoColors.textMuted,
-        ),
-      ),
-    );
-  }
-}
