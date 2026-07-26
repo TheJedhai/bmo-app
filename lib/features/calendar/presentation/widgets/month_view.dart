@@ -24,7 +24,6 @@ class MonthView extends ConsumerStatefulWidget {
 class _MonthViewState extends ConsumerState<MonthView> {
   late final CalendarController _calendarController;
   late final DefaultEventsController _eventsController;
-  final Map<String, List<Color>> _dayMarkers = {};
 
   @override
   void initState() {
@@ -39,9 +38,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
     _eventsController.dispose();
     super.dispose();
   }
-
-  String _dateKey(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -63,23 +59,17 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   void _syncEvents(List<app.CalendarEvent> events) {
     _eventsController.replaceEvents(toKalenderEvents(events));
-    _dayMarkers.clear();
-    for (final e in events) {
-      final key = _dateKey(e.occurrenceDate);
-      final color = _parseColor(e.calendar?.color ?? '#8BC9A3');
-      (_dayMarkers[key] ??= []).add(color);
-    }
-  }
-
-  Color _parseColor(String hex) {
-    final cleaned = hex.replaceFirst('#', '');
-    if (cleaned.length == 6) {
-      return Color(int.parse('FF$cleaned', radix: 16));
-    }
-    return const Color(0xFF8BC9A3);
   }
 
   Widget _buildCalendar() {
+    final tileComponents = TileComponents(
+      tileBuilder: kalenderMonthTileBuilder,
+    );
+
+    final overlayBuilders = OverlayBuilders(
+      multiDayPortalOverlayButtonStringBuilder: (context, count) => '+$count mais',
+    );
+
     return CalendarView(
       eventsController: _eventsController,
       calendarController: _calendarController,
@@ -98,8 +88,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
       components: CalendarComponents(
         monthComponents: MonthComponents(
           bodyComponents: MonthBodyComponents(
-            monthDayCellBuilder: _buildDayCell,
+            monthDayCellBuilder:
+                MonthDayCell.shadeAdjacentMonths(color: BmoColors.screenBg.withValues(alpha: 0.4)),
             monthDayHeaderBuilder: _buildDayHeader,
+            overlayBuilders: overlayBuilders,
           ),
           headerComponents: MonthHeaderComponents(
             weekDayHeaderBuilder: _buildWeekDayHeader,
@@ -110,83 +102,39 @@ class _MonthViewState extends ConsumerState<MonthView> {
             monthDayHeaderStyle: const MonthDayHeaderStyle(
               numberTextStyle: TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 12,
+                fontSize: 11,
                 color: BmoColors.textPrimary,
               ),
-              margin: EdgeInsets.only(top: 4, bottom: 2),
+              margin: EdgeInsets.only(top: 2, bottom: 1),
             ),
           ),
           headerStyles: MonthHeaderComponentStyles(
             weekDayHeaderStyle: const WeekDayHeaderStyle(
-              padding: EdgeInsets.symmetric(vertical: 6),
+              padding: EdgeInsets.symmetric(vertical: 4),
             ),
           ),
         ),
       ),
       header: const CalendarHeader(),
-      body: const CalendarBody(),
-      locale: 'pt_BR',
-    );
-  }
-
-  Widget _buildDayCell(MonthDayCellDetails details) {
-    final markers = _dayMarkers[_dateKey(details.date)] ?? const <Color>[];
-    final uniqueMarkers = markers.toSet().toList();
-
-    return GestureDetector(
-      onTap: () => widget.onDayTap(details.date),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          color: details.isToday
-              ? BmoColors.accentGreen.withValues(alpha: 0.15)
-              : null,
-        ),
-        child: Stack(
-          children: [
-            if (uniqueMarkers.isNotEmpty)
-              Positioned(
-                bottom: 2,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    for (final c in uniqueMarkers.take(4))
-                      Container(
-                        width: 5,
-                        height: 5,
-                        margin: const EdgeInsets.symmetric(horizontal: 1),
-                        decoration: BoxDecoration(
-                          color: c,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    if (uniqueMarkers.length > 4)
-                      Text(
-                        '+${uniqueMarkers.length - 4}',
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 8,
-                          color: BmoColors.textMuted,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
+      body: CalendarBody(
+        monthTileComponents: tileComponents,
+        monthBodyConfiguration: const MonthBodyConfiguration(
+          tileHeight: 20,
+          eventPadding: EdgeInsets.only(left: 1, right: 1, bottom: 1),
         ),
       ),
+      locale: 'pt_BR',
     );
   }
 
   Widget _buildDayHeader(DateTime date, MonthDayHeaderStyle? style) {
     final isToday = _isToday(date);
     return Container(
-      margin: const EdgeInsets.only(top: 4, bottom: 2),
+      margin: const EdgeInsets.only(top: 2, bottom: 1),
+      alignment: Alignment.center,
       child: Container(
-        width: style?.buttonSize?.width ?? 28,
-        height: style?.buttonSize?.height ?? 28,
+        width: 22,
+        height: 22,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: isToday ? BmoColors.accentGreen : null,
@@ -196,7 +144,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           '${date.day}',
           style: TextStyle(
             fontFamily: 'Inter',
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
             color: isToday ? BmoColors.screenBg : BmoColors.textPrimary,
           ),
