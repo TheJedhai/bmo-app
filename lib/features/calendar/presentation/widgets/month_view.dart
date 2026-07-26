@@ -59,6 +59,19 @@ class _MonthViewState extends ConsumerState<MonthView> {
     if (widget.viewMode != oldWidget.viewMode) {
       final current = ref.read(visibleMonthProvider);
       _viewConfig = _buildViewConfig(widget.viewMode, current);
+      // Scroll to current time when switching to day/week view.
+      if (widget.viewMode == AgendaViewMode.day ||
+          widget.viewMode == AgendaViewMode.week) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _calendarController.animateToDateTime(
+              DateTime.now(),
+              pageDuration: Duration.zero,
+              scrollDuration: const Duration(milliseconds: 300),
+            );
+          }
+        });
+      }
     }
   }
 
@@ -117,7 +130,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     // Listen for visibility toggles — re-filter current month events
     // without re-fetching, keeping CalendarView stable.
-    ref.listen(calendarVisibilityProvider, (_, __) {
+    ref.listen(calendarVisibilityProvider, (_, _) {
       _applyFilter();
     });
 
