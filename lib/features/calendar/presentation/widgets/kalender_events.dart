@@ -13,14 +13,38 @@ class KalenderCalendarEvent extends CalendarEvent {
   KalenderCalendarEvent({
     required super.dateTimeRange,
     required this.source,
+    EventInteraction? interaction,
   }) : super(
           id: '${source.id}_${source.occurrenceDate.toIso8601String()}',
           // Recurring events are not draggable/resizable — we don't support
           // per-occurrence editing, so dragging one occurrence would move all.
-          interaction: source.isRecurring
-              ? EventInteraction.allowNone()
-              : EventInteraction.allowAll(),
+          interaction: interaction ??
+              (source.isRecurring
+                  ? EventInteraction.allowNone()
+                  : EventInteraction.allowAll()),
         );
+
+  /// Creates a provisional event shown during drag-to-create.
+  ///
+  /// The dummy [source] has id=-1 and calendarId=-1 so it never matches a real
+  /// event or calendar. It is NOT added to the EventsController — kalender
+  /// renders it from the controller's newEvent/selectedEvent while the gesture
+  /// is active, and clears it when the drag ends or is cancelled.
+  factory KalenderCalendarEvent.provisional({
+    required DateTimeRange dateTimeRange,
+  }) {
+    final dummySource = app.CalendarEvent(
+      id: -1,
+      calendarId: -1,
+      title: 'Novo evento',
+      occurrenceDate: dateTimeRange.start,
+    );
+    return KalenderCalendarEvent(
+      dateTimeRange: dateTimeRange,
+      source: dummySource,
+      interaction: EventInteraction.allowNone(),
+    );
+  }
 
   String get title => source.title ?? '(sem título)';
   bool get allDay => source.allDay;

@@ -217,6 +217,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
               },
               onEventChanged: _onEventChanged,
               onEventCreate: _onEventCreate,
+              onEventCreated: _onEventCreated,
             ),
             components: CalendarComponents(
               monthComponents: MonthComponents(
@@ -248,10 +249,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
                   ),
                 ),
               ),
-              multiDayComponents: const MultiDayComponents(
-                headerComponents: MultiDayHeaderComponents(
+              multiDayComponents: MultiDayComponents(
+                headerComponents: const MultiDayHeaderComponents(
                   dayHeaderStringBuilder: _buildShortDayName,
                   weekNumberBuilder: _buildAllDayLabel,
+                ),
+                bodyComponents: const MultiDayBodyComponents(
+                  timelineStringBuilder: _buildTimelineLabel,
                 ),
               ),
               multiDayComponentStyles: MultiDayComponentStyles(
@@ -278,7 +282,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
                     circleSize: const Size(12, 12),
                   ),
                   hourLinesStyle: HourLinesStyle(
-                    color: BmoColors.textMuted.withValues(alpha: 0.08),
+                    color: BmoColors.textMuted.withValues(alpha: 0.15),
+                    thickness: 1,
                   ),
                   timelineStyle: TimelineStyle(
                     textStyle: TextStyle(
@@ -288,7 +293,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
                     ),
                   ),
                   daySeparatorStyle: DaySeparatorStyle(
-                    color: BmoColors.textMuted.withValues(alpha: 0.1),
+                    color: BmoColors.textMuted.withValues(alpha: 0.12),
+                    width: 1,
                   ),
                 ),
               ),
@@ -393,17 +399,21 @@ class _MonthViewState extends ConsumerState<MonthView> {
     });
   }
 
-  /// Intercepts create-by-drag: captures the time range and opens the
-  /// creation modal instead of using kalender's internal creation.
+  /// Returns a provisional [KalenderCalendarEvent] so kalender can draw the
+  /// tile while the user drags. The dummy event is NOT persisted — it lives
+  /// only in the controller's newEvent/selectedEvent and is cleared when the
+  /// drag ends or is cancelled.
   CalendarEvent? _onEventCreate(CalendarEvent event) {
-    // Schedule after frame so the drag cancels cleanly.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        widget.onCreateFromRange(event.start, event.end);
-      }
-    });
-    // Return null to cancel kalender's internal creation.
-    return null;
+    return KalenderCalendarEvent.provisional(
+      dateTimeRange: event.dateTimeRange,
+    );
+  }
+
+  /// Called when the drag-to-create gesture completes. Opens the creation
+  /// modal with the final time range. If the user saves, the POST creates
+  /// the real event; if cancelled, nothing remains.
+  void _onEventCreated(CalendarEvent event) {
+    widget.onCreateFromRange(event.start, event.end);
   }
 
   static String _buildShortDayName(BuildContext context, DateTime date) {
@@ -413,19 +423,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
   }
 
   static Widget _buildAllDayLabel(DateTimeRange range, dynamic style) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Text(
-        'dia todo',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 10,
-          color: BmoColors.textMuted,
-        ),
-      ),
-    );
+    return const SizedBox.shrink();
+  }
+
+  static String _buildTimelineLabel(BuildContext context, TimeOfDay time) {
+    if (time.minute != 0) return '';
+    return time.format(context);
   }
 
   void _onPageChanged(DateTimeRange range) {
