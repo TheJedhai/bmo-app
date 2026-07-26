@@ -143,9 +143,11 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   return Consumer(
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
+      final selectedEventId = ref.watch(selectedEventIdProvider);
       final calendar = calendarsById[ke.source.calendarId];
       final color = _hexToColor(calendar?.color ?? '#8BC9A3');
       final isAllDay = ke.allDay;
+      final isSelected = selectedEventId == ke.id;
 
       if (isAllDay) {
         return Container(
@@ -154,6 +156,9 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
           decoration: BoxDecoration(
             color: color.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(3),
+            border: isSelected
+                ? Border.all(color: BmoColors.textPrimary, width: 1.5)
+                : null,
           ),
           child: Text(
             ke.title,
@@ -172,10 +177,21 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
+          color: isSelected
+              ? color.withValues(alpha: 0.25)
+              : color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(3),
           border: Border(
-            left: BorderSide(color: color, width: 3),
+            left: BorderSide(color: color, width: isSelected ? 4 : 3),
+            top: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
+            right: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
+            bottom: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
           ),
         ),
         child: Padding(
@@ -228,20 +244,33 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
   return Consumer(
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
+      final selectedEventId = ref.watch(selectedEventIdProvider);
       final calendar = calendarsById[ke.source.calendarId];
       final color = _hexToColor(calendar?.color ?? '#8BC9A3');
       final durationMinutes = ke.end.difference(ke.start).inMinutes;
       final isShort = durationMinutes <= 30;
       final isRecurring = ke.source.isRecurring;
+      final isSelected = selectedEventId == ke.id;
 
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.15),
+          color: isSelected
+              ? color.withValues(alpha: 0.25)
+              : color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(4),
           border: Border(
-            left: BorderSide(color: color, width: 3),
+            left: BorderSide(color: color, width: isSelected ? 4 : 3),
+            top: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
+            right: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
+            bottom: isSelected
+                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+                : BorderSide.none,
           ),
         ),
         child: isShort

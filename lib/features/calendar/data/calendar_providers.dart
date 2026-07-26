@@ -262,6 +262,12 @@ final visibleMonthProvider = StateProvider<MonthRange>((ref) {
   return (year: now.year, month: now.month);
 });
 
+/// The ID of the currently selected calendar event (kalender-level selection).
+///
+/// Updated by MonthView whenever [CalendarController.selectedEvent] changes.
+/// Read by tile builders to render a selected-state highlight.
+final selectedEventIdProvider = StateProvider<String?>((ref) => null);
+
 // ============================================================
 // Upcoming events (dashboard card + agenda view)
 // ============================================================
