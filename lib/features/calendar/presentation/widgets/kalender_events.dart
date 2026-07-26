@@ -42,7 +42,7 @@ class KalenderCalendarEvent extends CalendarEvent {
     return KalenderCalendarEvent(
       dateTimeRange: dateTimeRange,
       source: dummySource,
-      interaction: EventInteraction.allowNone(),
+      interaction: EventInteraction.allowAll(),
     );
   }
 
