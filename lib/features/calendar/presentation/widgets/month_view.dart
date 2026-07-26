@@ -834,6 +834,9 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
 
     // Offset so the circle center aligns with the left edge of the day column.
     const circleCenterOffset = 1.0;
+    // Push Row left so time text sits in the ruler, circle on the border.
+    // "HH:MM" at fontSize 10 Inter w700 ≈ 28px; circle half = 6px; gap = 5px.
+    final rulerOffset = 28.0 + 5.0 + circleWidth / 2 - circleCenterOffset;
 
     return IgnorePointer(
       child: Stack(
@@ -846,22 +849,13 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
             end: 0,
             child: Container(height: thickness, color: lineColor),
           ),
-          // Circle + time badge at left edge.
+          // Time badge in ruler, circle on border.
           PositionedDirectional(
             top: top - circleHeight / 2,
-            start: -(circleWidth / 2) + circleCenterOffset,
+            start: -rulerOffset,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: circleWidth,
-                  height: circleHeight,
-                  decoration: BoxDecoration(
-                    color: circleColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 5),
                 Text(
                   timeString,
                   style: TextStyle(
@@ -869,6 +863,15 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: circleColor,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Container(
+                  width: circleWidth,
+                  height: circleHeight,
+                  decoration: BoxDecoration(
+                    color: circleColor,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ],
