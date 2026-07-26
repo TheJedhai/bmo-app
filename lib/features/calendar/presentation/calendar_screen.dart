@@ -26,7 +26,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final viewMode = ref.watch(viewModeProvider);
-    final selectedDay = ref.watch(selectedDayProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -55,22 +54,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
       body: viewMode == AgendaViewMode.agenda
-          ? Column(
-              children: [
-                _AgendaHeader(
-                  selectedDay: selectedDay,
-                  onBackToMonth: () => ref
-                      .read(viewModeProvider.notifier)
-                      .state = AgendaViewMode.month,
-                ),
-                Expanded(
-                  child: AgendaView(
-                    selectedDay: selectedDay,
-                    onEventTap: (event) => _openEditModal(event),
-                  ),
-                ),
-              ],
-            )
+          ? _buildAgendaBody()
           : MonthView(
               viewMode: viewMode,
               onDayTap: (day) {
@@ -87,6 +71,25 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         foregroundColor: BmoColors.screenBg,
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildAgendaBody() {
+    final selectedDay = ref.watch(selectedDayProvider);
+    return Column(
+      children: [
+        _AgendaHeader(
+          selectedDay: selectedDay,
+          onBackToMonth: () =>
+              ref.read(viewModeProvider.notifier).state = AgendaViewMode.month,
+        ),
+        Expanded(
+          child: AgendaView(
+            selectedDay: selectedDay,
+            onEventTap: (event) => _openEditModal(event),
+          ),
+        ),
+      ],
     );
   }
 

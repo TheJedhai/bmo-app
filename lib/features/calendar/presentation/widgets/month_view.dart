@@ -33,7 +33,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
   late ViewConfiguration _viewConfig;
 
   /// Cancels the current eventsProvider listener. Replaced when month changes.
-  ProviderSubscription<AsyncValue<List<CalendarEvent>>>? _eventsSubscription;
+  ProviderSubscription<AsyncValue<List<app.CalendarEvent>>>? _eventsSubscription;
 
   @override
   void initState() {
@@ -160,11 +160,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// and syncs to the calendar controller — without rebuilding CalendarView.
   void _listenToEvents(MonthRange range) {
     _eventsSubscription?.close();
-    // listenManual expects ProviderListenable<T>, but AsyncNotifierFamilyProvider
-    // (returned by eventsProvider(range)) doesn't statically satisfy the bound in
-    // riverpod 2.6.1 — the runtime type does implement it. Cast to dynamic to bypass.
     _eventsSubscription = ref.listenManual(
-      eventsProvider(range) as dynamic,
+      eventsProvider(range),
       (_, _) => _applyFilter(),
     );
   }
