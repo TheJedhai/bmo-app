@@ -254,8 +254,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
                   dayHeaderStringBuilder: _buildShortDayName,
                   weekNumberBuilder: _buildAllDayLabel,
                 ),
-                bodyComponents: const MultiDayBodyComponents(
+                bodyComponents: MultiDayBodyComponents(
                   timelineStringBuilder: _buildTimelineLabel,
+                  hourLines: _buildHourLines,
                 ),
               ),
               multiDayComponentStyles: MultiDayComponentStyles(
@@ -429,6 +430,49 @@ class _MonthViewState extends ConsumerState<MonthView> {
   static String _buildTimelineLabel(BuildContext context, TimeOfDay time) {
     if (time.minute != 0) return '';
     return time.format(context);
+  }
+
+  /// Draws hour lines at 60-minute intervals only (no half-hour lines).
+  ///
+  /// kalender's default [HourLines] uses a dynamic segment duration that drops
+  /// to 30 minutes at certain zoom levels. Apple Calendar only shows full-hour
+  /// lines, so we lock the segment duration at 60.
+  static Widget _buildHourLines(
+    double heightPerMinute,
+    TimeOfDayRange timeOfDayRange,
+    HourLinesStyle? style,
+    TimelineStyle? timelineStyle,
+  ) {
+    const segmentDuration = 60;
+    final segments = timeOfDayRange.splitIntoSegments(segmentDuration);
+
+    final thickness = style?.thickness ?? 1;
+    final color = style?.color;
+    final indent = style?.indent ?? 0;
+    final endIndent = style?.endIndent ?? 0;
+
+    var previousXPosition = 0.0;
+    final positionedLines = <Widget>[];
+    for (final segment in segments) {
+      final rangeHeight = heightPerMinute * segment.duration.inMinutes;
+      final position = rangeHeight + previousXPosition;
+      previousXPosition = position;
+
+      positionedLines.add(
+        Positioned(
+          top: position,
+          left: 0,
+          right: 0,
+          child: Container(
+            margin: EdgeInsetsDirectional.only(start: indent, end: endIndent),
+            height: thickness,
+            color: color,
+          ),
+        ),
+      );
+    }
+
+    return Stack(children: positionedLines);
   }
 
   void _onPageChanged(DateTimeRange range) {
