@@ -196,7 +196,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
         ),
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.only(right: 4, bottom: 84),
+            padding: const EdgeInsets.only(right: 4, bottom: 0),
             child: Theme(
               data: Theme.of(context).copyWith(
                 colorScheme: Theme.of(context).colorScheme.copyWith(
