@@ -4,6 +4,7 @@ import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
+import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart';
 
 /// Dashboard card: próximos 5 eventos.
@@ -15,13 +16,15 @@ class CalendarDashCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final upcomingAsync = ref.watch(upcomingEventsProvider(5));
+    final visibility = ref.watch(calendarVisibilityProvider);
 
     return upcomingAsync.when(
       loading: () => const _LoadingContent(),
       error: (_, _) => const _EmptyContent(),
       data: (events) {
-        if (events.isEmpty) return const _EmptyContent();
-        return _buildContent(events);
+        final visible = filterVisibleEvents(events, visibility);
+        if (visible.isEmpty) return const _EmptyContent();
+        return _buildContent(visible);
       },
     );
   }
