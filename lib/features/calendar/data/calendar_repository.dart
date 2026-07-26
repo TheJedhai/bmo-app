@@ -9,6 +9,18 @@ class CalendarRepository {
 
   Future<List<Calendar>> listCalendars() => _client.listCalendars();
 
+  Future<Calendar> createCalendar({
+    required String name,
+    required String color,
+    int? userId,
+  }) =>
+      _client.createCalendar(name: name, color: color, userId: userId);
+
+  Future<Calendar> updateCalendar(int id, {String? name, String? color}) =>
+      _client.updateCalendar(id, name: name, color: color);
+
+  Future<int> deleteCalendar(int id) => _client.deleteCalendar(id);
+
   Future<List<CalendarEvent>> listEvents({
     required DateTime start,
     required DateTime end,

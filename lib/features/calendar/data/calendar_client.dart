@@ -44,6 +44,58 @@ class CalendarClient {
         .toList();
   }
 
+  Future<Calendar> createCalendar({
+    required String name,
+    required String color,
+    int? userId,
+  }) async {
+    final body = <String, dynamic>{
+      'name': name,
+      'color': color,
+    };
+    if (userId != null) {
+      body['user_id'] = userId;
+    }
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/calendars'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _ensureOk(response);
+    return Calendar.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<Calendar> updateCalendar(
+    int id, {
+    String? name,
+    String? color,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (color != null) body['color'] = color;
+    final response = await _client.patch(
+      Uri.parse('$_baseUrl/api/v1/calendars/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _ensureOk(response);
+    return Calendar.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Deletes calendar [id]. Returns the number of events moved to "Casa".
+  Future<int> deleteCalendar(int id) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/api/v1/calendars/$id'),
+    );
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    return decoded['events_moved'] as int? ?? 0;
+  }
+
   // -----------------------------------------------------------
   // Events
   // -----------------------------------------------------------

@@ -42,6 +42,43 @@ class CalendarsNotifier extends AsyncNotifier<List<Calendar>> {
   }
 
   CalendarRepository get repo => ref.read(calendarRepositoryProvider);
+
+  Future<Calendar> create({
+    required String name,
+    required String color,
+    required bool personal,
+  }) async {
+    final userId = ref.read(currentUserIdProvider);
+    final cal = await repo.createCalendar(
+      name: name,
+      color: color,
+      userId: personal ? userId : null,
+    );
+    final current = state.valueOrNull ?? const <Calendar>[];
+    state = AsyncData([...current, cal]);
+    return cal;
+  }
+
+  Future<Calendar> updateCalendar(
+    int id, {
+    String? name,
+    String? color,
+  }) async {
+    final cal = await repo.updateCalendar(id, name: name, color: color);
+    final current = state.valueOrNull ?? const <Calendar>[];
+    state = AsyncData([
+      for (final c in current)
+        if (c.id == id) cal else c,
+    ]);
+    return cal;
+  }
+
+  Future<int> delete(int id) async {
+    final moved = await repo.deleteCalendar(id);
+    final current = state.valueOrNull ?? const <Calendar>[];
+    state = AsyncData(current.where((c) => c.id != id).toList());
+    return moved;
+  }
 }
 
 final calendarsProvider =

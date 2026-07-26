@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
@@ -42,6 +43,13 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           _ViewModeToggle(
             mode: viewMode,
             onChanged: (m) => ref.read(viewModeProvider.notifier).state = m,
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.tune, size: 18),
+            color: BmoColors.textMuted,
+            tooltip: 'Gerenciar calendários',
+            onPressed: () => context.push('/calendarios'),
           ),
           const SizedBox(width: 8),
         ],
