@@ -103,15 +103,13 @@ class _BmoResizeHandles extends ResizeHandles {
         );
         final left = (size.width - touchWidth) / 2;
 
-        final pill = Center(
-          child: Container(
-            width: BmoResizeHandlePositioner._kPillWidth,
-            height: BmoResizeHandlePositioner._kPillHeight,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(
-                BmoResizeHandlePositioner._kPillRadius,
-              ),
+        final pill = Container(
+          width: BmoResizeHandlePositioner._kPillWidth,
+          height: BmoResizeHandlePositioner._kPillHeight,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(
+              BmoResizeHandlePositioner._kPillRadius,
             ),
           ),
         );
@@ -132,7 +130,12 @@ class _BmoResizeHandles extends ResizeHandles {
                     clipBehavior: Clip.none,
                     children: [
                       startResizeDetector,
-                      IgnorePointer(child: pill),
+                      IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: pill,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -149,7 +152,12 @@ class _BmoResizeHandles extends ResizeHandles {
                     clipBehavior: Clip.none,
                     children: [
                       endResizeDetector,
-                      IgnorePointer(child: pill),
+                      IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: pill,
+                        ),
+                      ),
                     ],
                   ),
                 ),

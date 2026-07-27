@@ -921,7 +921,13 @@ class _BmoTimeIndicatorState extends State<_BmoTimeIndicator> {
 /// The visual (a colored pill) is rendered by [BmoResizeHandlePositioner] on
 /// top of this widget with [IgnorePointer], so this widget only provides the
 /// hit-test area for the [Draggable] it becomes the child of.
-const Widget _resizeHandleVertical = SizedBox(width: 44, height: 20);
+const Widget _resizeHandleVertical = ColoredBox(
+  color: Colors.transparent,
+  child: SizedBox(width: 44, height: 20),
+);
 
 /// Horizontal resize handle — transparent touch target sized for easy grabbing.
-const Widget _resizeHandleHorizontal = SizedBox(width: 20, height: 44);
+const Widget _resizeHandleHorizontal = ColoredBox(
+  color: Colors.transparent,
+  child: SizedBox(width: 20, height: 44),
+);
