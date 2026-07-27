@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../missions/data/missions_providers.dart';
 import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/calendar_visibility_provider.dart';
@@ -416,7 +417,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     ref.read(selectedEventIdProvider.notifier).state = id;
   }
 
-  /// Handles drag/resize completion: PATCH event with optimistic rollback.
+  /// Handles drag/resize completion: PATCH event/task with optimistic rollback.
   ///
   /// The kalender controller already shows the moved tile (optimistic UI).
   /// We persist via PATCH. On failure, re-apply filter from provider state
@@ -425,28 +426,32 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final ke = event as KalenderCalendarEvent;
     final source = ke.source;
 
-    // Task drag handled in a later commit.
-    if (source is TaskItem) return;
-
-    final appEvent = (source as EventItem).event;
-
-    // Recurring events blocked from drag/resize (commit 3 guard).
-    if (appEvent.isRecurring) return;
-
     // kalender stores DateTimes in UTC. Convert to local so newDate,
     // newStartTime, and newEndTime reflect the user's wall-clock time.
     final newStart = updatedEvent.start.toLocal();
     final newEnd = updatedEvent.end.toLocal();
 
-    // Snapshot kalender events for rollback: if the PATCH fails we need to
-    // restore the tile positions. The provider hasn't been mutated yet, so
-    // _applyFilter() will push the old state back.
+    switch (source) {
+      case EventItem(event: final appEvent):
+        _onCalendarEventChanged(appEvent, newStart, newEnd);
+      case TaskItem(task: final task):
+        _onTaskChanged(task, newStart, newEnd);
+    }
+  }
+
+  void _onCalendarEventChanged(
+    app.CalendarEvent appEvent,
+    DateTime newStart,
+    DateTime newEnd,
+  ) {
+    // Recurring events blocked from drag/resize.
+    if (appEvent.isRecurring) return;
+
     final monthRange = (
       year: appEvent.occurrenceDate.year,
       month: appEvent.occurrenceDate.month,
     );
 
-    // Build API params.
     final newDate = '${newStart.year}-'
         '${newStart.month.toString().padLeft(2, '0')}-'
         '${newStart.day.toString().padLeft(2, '0')}';
@@ -464,15 +469,79 @@ class _MonthViewState extends ConsumerState<MonthView> {
       startTime: appEvent.allDay ? null : newStartTime,
       endTime: appEvent.allDay ? null : newEndTime,
     ).then((_) {
-      // Server accepted — refresh provider to sync.
       if (mounted) notifier.refresh();
     }).catchError((e) {
-      // Rollback: re-filter from unchanged provider state.
       if (mounted) {
         _applyFilter();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erro ao mover evento: $e'),
+            backgroundColor: BmoColors.accentRed,
+          ),
+        );
+      }
+    });
+  }
+
+  void _onTaskChanged(
+    Task task,
+    DateTime newStart,
+    DateTime newEnd,
+  ) {
+    final monthRange = (
+      year: task.dueDate?.year ?? DateTime.now().year,
+      month: task.dueDate?.month ?? DateTime.now().month,
+    );
+
+    final newDate = DateTime(newStart.year, newStart.month, newStart.day);
+    final isAllDay = newEnd.difference(newStart).inHours >= 23;
+    final hasTime = task.dueTime != null;
+
+    final missionsRepo = ref.read(missionsRepositoryProvider);
+    final notifier = ref.read(calendarTasksProvider(monthRange).notifier);
+
+    Future<void> patch;
+    if (isAllDay && hasTime) {
+      // Timed task dragged to all-day strip → clear time, keep date.
+      patch = missionsRepo.updateTask(
+        task.id,
+        dueDate: newDate,
+        clearDueTime: true,
+      );
+    } else if (!isAllDay && !hasTime) {
+      // All-day task dragged to timed slot → set time.
+      final newTime = '${newStart.hour.toString().padLeft(2, '0')}:'
+          '${newStart.minute.toString().padLeft(2, '0')}';
+      patch = missionsRepo.updateTask(
+        task.id,
+        dueDate: newDate,
+        dueTime: newTime,
+      );
+    } else if (!isAllDay && hasTime) {
+      // Timed task dragged to another timed slot → update date + time.
+      final newTime = '${newStart.hour.toString().padLeft(2, '0')}:'
+          '${newStart.minute.toString().padLeft(2, '0')}';
+      patch = missionsRepo.updateTask(
+        task.id,
+        dueDate: newDate,
+        dueTime: newTime,
+      );
+    } else {
+      // All-day task dragged within all-day strip → update date only.
+      patch = missionsRepo.updateTask(
+        task.id,
+        dueDate: newDate,
+      );
+    }
+
+    patch.then((_) {
+      if (mounted) notifier.refresh();
+    }).catchError((e) {
+      if (mounted) {
+        _applyFilter();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao mover missão: $e'),
             backgroundColor: BmoColors.accentRed,
           ),
         );
