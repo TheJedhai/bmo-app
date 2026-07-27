@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
@@ -38,6 +39,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
   /// Cancels the current eventsProvider listener. Replaced when month changes.
   ProviderSubscription<AsyncValue<List<app.CalendarEvent>>>? _eventsSubscription;
+  ProviderSubscription<AsyncValue<List<Task>>>? _tasksSubscription;
 
   @override
   void initState() {
@@ -79,6 +81,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
   void dispose() {
     _calendarController.selectedEvent.removeListener(_onSelectedEventChanged);
     _eventsSubscription?.close();
+    _tasksSubscription?.close();
     _calendarController.dispose();
     _eventsController.dispose();
     super.dispose();
@@ -157,23 +160,29 @@ class _MonthViewState extends ConsumerState<MonthView> {
     return _buildCalendar();
   }
 
-  /// Subscribes to eventsProvider for [range]. When events change (create/
-  /// edit/delete via modal, or SSE push), re-applies the visibility filter
-  /// and syncs to the calendar controller — without rebuilding CalendarView.
+  /// Subscribes to eventsProvider and calendarTasksProvider for [range].
+  /// When either changes (create/edit/delete via modal, or SSE push),
+  /// re-applies the visibility filter and syncs to the calendar controller
+  /// — without rebuilding CalendarView.
   void _listenToEvents(MonthRange range) {
     _eventsSubscription?.close();
     _eventsSubscription = ref.listenManual(
       eventsProvider(range),
       (_, _) => _applyFilter(),
     );
+    _tasksSubscription?.close();
+    _tasksSubscription = ref.listenManual(
+      calendarTasksProvider(range),
+      (_, _) => _applyFilter(),
+    );
   }
 
-  /// Fetches events for [range], then applies visibility filter.
+  /// Fetches events and tasks for [range], then applies visibility filter.
   /// Never triggers a widget rebuild.
   Future<void> _fetchEventsForMonth(MonthRange range) async {
     try {
-      final notifier = ref.read(eventsProvider(range).notifier);
-      await notifier.refresh();
+      await ref.read(eventsProvider(range).notifier).refresh();
+      await ref.read(calendarTasksProvider(range).notifier).refresh();
       if (!mounted) return;
       _applyFilter();
     } catch (_) {
@@ -181,15 +190,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
     }
   }
 
-  /// Reads current month events, applies visibility filter, pushes to controller.
+  /// Reads current month events + tasks, applies visibility filter, pushes to controller.
   /// Safe to call from either listener (month change or visibility toggle).
   void _applyFilter() {
     final monthRange = ref.read(visibleMonthProvider);
     final events =
         ref.read(eventsProvider(monthRange)).valueOrNull ?? const <app.CalendarEvent>[];
+    final tasks =
+        ref.read(calendarTasksProvider(monthRange)).valueOrNull ?? const <Task>[];
     final visibility = ref.read(calendarVisibilityProvider);
-    final visible = filterVisibleEvents(events, visibility);
-    final items = visible.map((e) => EventItem(e) as CalendarItem).toList();
+    final visibleEvents = filterVisibleEvents(events, visibility);
+    final items = <CalendarItem>[
+      for (final e in visibleEvents) EventItem(e),
+      for (final t in tasks) TaskItem(t),
+    ];
     _syncEvents(items);
   }
 

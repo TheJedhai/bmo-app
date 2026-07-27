@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
+import '../../../features/missions/data/missions_providers.dart';
+import '../../../features/missions/data/models/task.dart';
 import 'calendar_client.dart';
 import 'calendar_repository.dart';
 import 'calendar_visibility_provider.dart';
@@ -251,6 +253,44 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
 final eventsProvider = AsyncNotifierProvider.family<
     EventsNotifier, List<CalendarEvent>, MonthRange>(
   EventsNotifier.new,
+);
+
+// ============================================================
+// Tasks (missions) for calendar merge
+// ============================================================
+
+class CalendarTasksNotifier
+    extends FamilyAsyncNotifier<List<Task>, MonthRange> {
+  @override
+  Future<List<Task>> build(MonthRange arg) async {
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+    final repo = ref.watch(missionsRepositoryProvider);
+    final firstDay = DateTime(arg.year, arg.month, 1);
+    final lastDay = DateTime(arg.year, arg.month + 1, 0);
+    return repo.listTasks(
+      status: 'pending',
+      dueAfter: firstDay,
+      dueBefore: lastDay,
+    );
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncLoading();
+    final repo = ref.read(missionsRepositoryProvider);
+    final firstDay = DateTime(arg.year, arg.month, 1);
+    final lastDay = DateTime(arg.year, arg.month + 1, 0);
+    state = await AsyncValue.guard(() => repo.listTasks(
+          status: 'pending',
+          dueAfter: firstDay,
+          dueBefore: lastDay,
+        ));
+  }
+}
+
+final calendarTasksProvider = AsyncNotifierProvider.family<
+    CalendarTasksNotifier, List<Task>, MonthRange>(
+  CalendarTasksNotifier.new,
 );
 
 // ============================================================
