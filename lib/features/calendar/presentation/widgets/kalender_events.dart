@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../missions/data/missions_providers.dart';
 import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart' as app;
@@ -317,7 +318,7 @@ Widget _buildTaskMonthTile(
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _taskCheckbox(t),
+          _TaskCheckbox(t),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
@@ -366,7 +367,7 @@ Widget _buildTaskMonthTile(
       padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
       child: Row(
         children: [
-          _taskCheckbox(t),
+          _TaskCheckbox(t),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
@@ -403,19 +404,52 @@ Widget _buildTaskMonthTile(
 }
 
 /// Circular checkbox for mission tiles (Apple Reminders style).
-Widget _taskCheckbox(Task t) {
-  return Container(
-    width: 14,
-    height: 14,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      border: Border.all(
-        color: BmoColors.textPrimary.withValues(alpha: 0.4),
-        width: 1.5,
+///
+/// Tapping completes the task via the missions API and refreshes the calendar.
+class _TaskCheckbox extends ConsumerWidget {
+  final Task task;
+  const _TaskCheckbox(this.task);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return GestureDetector(
+      onTap: () => _completeTask(context, ref),
+      child: Container(
+        width: 14,
+        height: 14,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: BmoColors.textPrimary.withValues(alpha: 0.4),
+            width: 1.5,
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  Future<void> _completeTask(BuildContext context, WidgetRef ref) async {
+    try {
+      final repo = ref.read(missionsRepositoryProvider);
+      await repo.completeTask(task.id);
+      // Refresh tasks for current visible month.
+      final monthRange = ref.read(visibleMonthProvider);
+      ref.read(calendarTasksProvider(monthRange).notifier).refresh();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao concluir missão: $e'),
+            backgroundColor: BmoColors.accentRed,
+          ),
+        );
+      }
+    }
+  }
 }
+
+// ponytail: global lock on task completion — one at a time is fine,
+// add debounce if double-tap becomes an issue.
 
 /// Builds an event tile for multi-day views (week/day body).
 ///
@@ -584,7 +618,7 @@ Widget _buildTaskMultiDayTile(
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _taskCheckbox(t),
+              _TaskCheckbox(t),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
@@ -613,7 +647,7 @@ Widget _buildTaskMultiDayTile(
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _taskCheckbox(t),
+                  _TaskCheckbox(t),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -713,7 +747,7 @@ Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _taskCheckbox(t),
+          _TaskCheckbox(t),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
