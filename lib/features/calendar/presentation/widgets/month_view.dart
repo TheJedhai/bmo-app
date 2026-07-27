@@ -379,7 +379,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
                 allowResizing: true,
                 allowRescheduling: true,
                 allowEventCreation: true,
-                inputMode: InputMode.imprecise,
               ),
               snapping: const CalendarSnapping(
                 snapIntervalMinutes: 15,

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
@@ -67,85 +69,94 @@ class _BmoResizeHandles extends ResizeHandles {
 
   @override
   Widget build(BuildContext context) {
-    // Only show handles when this event is selected via the two-tap model.
-    // Kalender's hover still fires, but our handles paint nothing for
-    // unselected events — equivalent to the fork's InputMode.imprecise guard.
-    final container = ProviderScope.containerOf(context);
-    final selectedId = container.read(selectedEventIdProvider);
-    if (selectedId != event.id) return const SizedBox();
-
-    if (!showStart() && !showEnd()) return const SizedBox();
-
-    // Only vertical resizing — horizontal handles are disabled in imprecise
-    // mode and we don't use them.
+    // Only vertical resizing — horizontal handles are not used.
     if (axis != Axis.vertical) return const SizedBox();
 
-    // Calendar color for the pill.
-    final calendarsById = container.read(calendarsByIdProvider);
-    final ke = event as KalenderCalendarEvent;
-    final calendar = calendarsById[ke.source.calendarId];
-    final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+    // Wrap in Consumer so we react to selectedEventIdProvider and
+    // calendarsByIdProvider changes immediately, without waiting for
+    // a kalender-driven rebuild.
+    return Consumer(
+      builder: (context, ref, _) {
+        final selectedId = ref.watch(selectedEventIdProvider);
+        if (selectedId != event.id) return const SizedBox();
 
-    // Half of the touch target extends outside the tile so the visual sits
-    // right at the edge.
-    final touchWidth = BmoResizeHandlePositioner._kTouchWidth;
-    final touchHeight = BmoResizeHandlePositioner._kTouchHeight;
-    final halfTouchH = touchHeight / 2;
-    final left = (size.width - touchWidth) / 2;
+        // Calendar color for the pill.
+        final calendarsById = ref.watch(calendarsByIdProvider);
+        final ke = event as KalenderCalendarEvent;
+        final calendar = calendarsById[ke.source.calendarId];
+        final color = _hexToColor(calendar?.color ?? '#8BC9A3');
 
-    final pill = Center(
-      child: Container(
-        width: BmoResizeHandlePositioner._kPillWidth,
-        height: BmoResizeHandlePositioner._kPillHeight,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius:
-              BorderRadius.circular(BmoResizeHandlePositioner._kPillRadius),
-        ),
-      ),
-    );
+        // Touch-target dimensions — kept entirely inside the tile bounds.
+        //
+        // Clip.none lets us PAINT outside the tile but the parent's hit test
+        // rejects pointer positions outside the tile's render box. Half of
+        // the touch target was decorative and unreachable. By keeping the
+        // target fully inside the tile (top: 0 / bottom: 0), the full area
+        // is hittable.
+        final touchWidth = BmoResizeHandlePositioner._kTouchWidth;
+        // On short tiles (e.g. 30 min × 0.9 px/min ≈ 27 px), two 20 px
+        // handles would overlap. Clamp each to at most half the tile height.
+        final maxHandleHeight = (size.height / 2).floorToDouble();
+        final touchHeight = math.min(
+          BmoResizeHandlePositioner._kTouchHeight,
+          maxHandleHeight,
+        );
+        final left = (size.width - touchWidth) / 2;
 
-    // clipBehavior: Clip.none so the handle halves that extend beyond the tile
-    // edge remain hittable.
-    return Stack(
-      fit: StackFit.expand,
-      clipBehavior: Clip.none,
-      children: [
-        if (showStart())
-          Positioned(
-            top: -halfTouchH,
-            left: left,
-            width: touchWidth,
-            height: touchHeight,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeUpDown,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  startResizeDetector,
-                  IgnorePointer(child: pill),
-                ],
+        final pill = Center(
+          child: Container(
+            width: BmoResizeHandlePositioner._kPillWidth,
+            height: BmoResizeHandlePositioner._kPillHeight,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(
+                BmoResizeHandlePositioner._kPillRadius,
               ),
             ),
           ),
-        if (showEnd())
-          Positioned(
-            bottom: -halfTouchH,
-            left: left,
-            width: touchWidth,
-            height: touchHeight,
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeUpDown,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  endResizeDetector,
-                  IgnorePointer(child: pill),
-                ],
+        );
+
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.none,
+          children: [
+            if (showStart())
+              Positioned(
+                top: 0,
+                left: left,
+                width: touchWidth,
+                height: touchHeight,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpDown,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      startResizeDetector,
+                      IgnorePointer(child: pill),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-      ],
+            if (showEnd())
+              Positioned(
+                bottom: 0,
+                left: left,
+                width: touchWidth,
+                height: touchHeight,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.resizeUpDown,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      endResizeDetector,
+                      IgnorePointer(child: pill),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
