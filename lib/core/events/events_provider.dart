@@ -99,13 +99,16 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'task.deleted':
     case 'task.completed':
       _invalidateAllFamilyInstances(ref, tasksProvider);
+      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
     case 'folder.created':
     case 'folder.updated':
     case 'folder.deleted':
       ref.invalidate(foldersProvider);
       _invalidateAllFamilyInstances(ref, tasksProvider);
+      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
     case 'tasks.batch_updated':
       _invalidateAllFamilyInstances(ref, tasksProvider);
+      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
 
     // ---- Memories ----
     case 'memory.created':

@@ -82,3 +82,54 @@ List<CalendarEvent> filterVisibleEvents(
       .where((e) => !hiddenCalendarIds.contains(e.calendarId))
       .toList();
 }
+
+// ============================================================
+// Missions visibility
+// ============================================================
+
+const _kShowMissionsKey = 'show_missions_in_calendar_';
+
+/// Manages the "Missões" toggle in the calendar filter.
+///
+/// Persisted in shared_preferences per user. Defaults to true (shown).
+class MissionsCalendarVisibilityNotifier extends StateNotifier<bool> {
+  final Ref _ref;
+
+  MissionsCalendarVisibilityNotifier(this._ref) : super(true) {
+    _load();
+  }
+
+  void toggle() {
+    state = !state;
+    _save();
+  }
+
+  void _load() {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    if (prefs == null) return;
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    try {
+      state = prefs.getBool('$_kShowMissionsKey$userId') ?? true;
+    } catch (e) {
+      debugPrint('MissionsVisibility: load failed: $e');
+    }
+  }
+
+  void _save() {
+    final prefs = _ref.read(sharedPreferencesProvider);
+    if (prefs == null) return;
+    final userId = _ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    try {
+      prefs.setBool('$_kShowMissionsKey$userId', state);
+    } catch (e) {
+      debugPrint('MissionsVisibility: save failed: $e');
+    }
+  }
+}
+
+final missionsCalendarVisibilityProvider =
+    StateNotifierProvider<MissionsCalendarVisibilityNotifier, bool>(
+  (ref) => MissionsCalendarVisibilityNotifier(ref),
+);

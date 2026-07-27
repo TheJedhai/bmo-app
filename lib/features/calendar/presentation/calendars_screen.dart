@@ -50,6 +50,7 @@ class _CalendarsScreenState extends ConsumerState<CalendarsScreen> {
         ),
         data: (calendars) {
           final visibility = ref.watch(calendarVisibilityProvider);
+          final showMissions = ref.watch(missionsCalendarVisibilityProvider);
           final personal = calendars.where((c) => c.type == 'personal').toList();
           final shared = calendars.where((c) => c.type == 'shared').toList();
           return ListView(
@@ -77,7 +78,14 @@ class _CalendarsScreenState extends ConsumerState<CalendarsScreen> {
                   onEdit: () => _openForm(calendar: c),
                   onDelete: c.isDefault ? null : () => _confirmDelete(c),
                 )),
+                const SizedBox(height: 8),
               ],
+              _SectionHeader(title: 'Integrações'),
+              _MissionsRow(
+                isVisible: showMissions,
+                onToggle: () =>
+                    ref.read(missionsCalendarVisibilityProvider.notifier).toggle(),
+              ),
             ],
           );
         },
@@ -580,6 +588,69 @@ class _ToggleOption extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Row for the "Missões" visibility toggle in the calendar filter screen.
+///
+/// Uses the task chip color for the dot, no edit/delete actions.
+class _MissionsRow extends StatelessWidget {
+  final bool isVisible;
+  final VoidCallback onToggle;
+
+  const _MissionsRow({
+    required this.isVisible,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: BmoColors.screenBgElevated,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: BmoColors.textMuted.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: BmoColors.taskChipColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Missões',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: BmoColors.textPrimary,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              isVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              size: 18,
+            ),
+            color: isVisible ? BmoColors.textMuted : BmoColors.accentRed,
+            onPressed: onToggle,
+            tooltip: isVisible ? 'Ocultar' : 'Mostrar',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+        ],
       ),
     );
   }

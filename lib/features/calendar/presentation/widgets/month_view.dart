@@ -157,6 +157,9 @@ class _MonthViewState extends ConsumerState<MonthView> {
     ref.listen(calendarVisibilityProvider, (_, _) {
       _applyFilter();
     });
+    ref.listen(missionsCalendarVisibilityProvider, (_, _) {
+      _applyFilter();
+    });
 
     return _buildCalendar();
   }
@@ -200,10 +203,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final tasks =
         ref.read(calendarTasksProvider(monthRange)).valueOrNull ?? const <Task>[];
     final visibility = ref.read(calendarVisibilityProvider);
+    final showMissions = ref.read(missionsCalendarVisibilityProvider);
     final visibleEvents = filterVisibleEvents(events, visibility);
     final items = <CalendarItem>[
       for (final e in visibleEvents) EventItem(e),
-      for (final t in tasks) TaskItem(t),
+      if (showMissions)
+        for (final t in tasks) TaskItem(t),
     ];
     _syncEvents(items);
   }
