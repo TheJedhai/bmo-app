@@ -3,26 +3,37 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart' as app;
+import 'calendar_item.dart';
 
-/// Wraps our [app.CalendarEvent] model so it can be rendered by kalender.
+/// Wraps a [CalendarItem] so it can be rendered by kalender.
 class KalenderCalendarEvent extends CalendarEvent {
-  final app.CalendarEvent source;
+  final CalendarItem source;
 
   KalenderCalendarEvent({
     required super.dateTimeRange,
     required this.source,
     EventInteraction? interaction,
   }) : super(
-          id: '${source.id}_${source.occurrenceDate.toIso8601String()}',
-          // Recurring events are not draggable/resizable — we don't support
-          // per-occurrence editing, so dragging one occurrence would move all.
-          interaction: interaction ??
-              (source.isRecurring
-                  ? EventInteraction.allowNone()
-                  : EventInteraction.allowAll()),
+          id: switch (source) {
+            EventItem(event: final e) =>
+              'event_${e.id}_${e.occurrenceDate.toIso8601String()}',
+            TaskItem(task: final t) => 'task_${t.id}',
+          },
+          interaction: interaction ?? _defaultInteraction(source),
         );
+
+  static EventInteraction _defaultInteraction(CalendarItem source) => switch (source) {
+    EventItem(:final event) =>
+        event.isRecurring ? EventInteraction.allowNone() : EventInteraction.allowAll(),
+    TaskItem() => EventInteraction(
+        allowStartResize: false,
+        allowEndResize: false,
+        allowRescheduling: true,
+      ),
+  };
 
   /// Creates a provisional event shown during drag-to-create.
   ///
@@ -41,15 +52,30 @@ class KalenderCalendarEvent extends CalendarEvent {
     );
     return KalenderCalendarEvent(
       dateTimeRange: dateTimeRange,
-      source: dummySource,
+      source: EventItem(dummySource),
       interaction: EventInteraction.allowAll(),
     );
   }
 
-  String get title => source.title ?? '(sem título)';
-  bool get allDay => source.allDay;
-  String? get startTime => source.startTime;
-  String? get endTime => source.endTime;
+  String get title => switch (source) {
+    EventItem(:final event) => event.title ?? '(sem título)',
+    TaskItem(:final task) => task.title,
+  };
+
+  bool get allDay => switch (source) {
+    EventItem(:final event) => event.allDay,
+    TaskItem(:final task) => task.dueTime == null,
+  };
+
+  String? get startTime => switch (source) {
+    EventItem(:final event) => event.startTime,
+    TaskItem(:final task) => task.dueTime,
+  };
+
+  String? get endTime => switch (source) {
+    EventItem(:final event) => event.endTime,
+    TaskItem() => null,
+  };
 
   /// Returns a [KalenderCalendarEvent] copy with the given fields replaced.
   ///
@@ -71,57 +97,85 @@ class KalenderCalendarEvent extends CalendarEvent {
   bool operator ==(Object other) =>
       super == other &&
       other is KalenderCalendarEvent &&
-      other.source.title == source.title &&
-      other.source.allDay == source.allDay &&
-      other.source.startTime == source.startTime &&
-      other.source.endTime == source.endTime;
+      other.title == title &&
+      other.allDay == allDay &&
+      other.startTime == startTime &&
+      other.endTime == endTime;
 
   @override
   int get hashCode => Object.hash(
         super.hashCode,
-        source.title,
-        source.allDay,
-        source.startTime,
-        source.endTime,
+        title,
+        allDay,
+        startTime,
+        endTime,
       );
 
 }
 
-/// Converts a list of app [app.CalendarEvent]s to kalender events.
-List<KalenderCalendarEvent> toKalenderEvents(List<app.CalendarEvent> events) {
-  return events.map((e) {
-    final startDate = e.occurrenceDate;
-
-    DateTime start;
-    DateTime end;
-
-    if (!e.allDay && e.startTime != null && e.endTime != null) {
-      final startParts = e.startTime!.split(':');
-      final endParts = e.endTime!.split(':');
-      start = DateTime(
-        startDate.year,
-        startDate.month,
-        startDate.day,
-        int.tryParse(startParts[0]) ?? 0,
-        int.tryParse(startParts[1]) ?? 0,
-      );
-      end = DateTime(
-        startDate.year,
-        startDate.month,
-        startDate.day,
-        int.tryParse(endParts[0]) ?? 0,
-        int.tryParse(endParts[1]) ?? 0,
-      );
-    } else {
-      start = DateTime(startDate.year, startDate.month, startDate.day);
-      end = DateTime(startDate.year, startDate.month, startDate.day + 1);
-    }
-
-    return KalenderCalendarEvent(
-      dateTimeRange: DateTimeRange(start: start, end: end),
-      source: e,
-    );
+/// Converts a list of [CalendarItem]s to kalender events.
+List<KalenderCalendarEvent> toKalenderEvents(List<CalendarItem> items) {
+  return items.map((item) => switch (item) {
+    EventItem(:final event) => _toKalenderEvent(event),
+    TaskItem(:final task) => _toKalenderTaskEvent(task),
   }).toList();
+}
+
+KalenderCalendarEvent _toKalenderEvent(app.CalendarEvent e) {
+  final startDate = e.occurrenceDate;
+
+  DateTime start;
+  DateTime end;
+
+  if (!e.allDay && e.startTime != null && e.endTime != null) {
+    final startParts = e.startTime!.split(':');
+    final endParts = e.endTime!.split(':');
+    start = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+      int.tryParse(startParts[0]) ?? 0,
+      int.tryParse(startParts[1]) ?? 0,
+    );
+    end = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+      int.tryParse(endParts[0]) ?? 0,
+      int.tryParse(endParts[1]) ?? 0,
+    );
+  } else {
+    start = DateTime(startDate.year, startDate.month, startDate.day);
+    end = DateTime(startDate.year, startDate.month, startDate.day + 1);
+  }
+
+  return KalenderCalendarEvent(
+    dateTimeRange: DateTimeRange(start: start, end: end),
+    source: EventItem(e),
+  );
+}
+
+KalenderCalendarEvent _toKalenderTaskEvent(Task t) {
+  final dueDate = t.dueDate!;
+  DateTime start;
+  DateTime end;
+
+  if (t.dueTime != null) {
+    final parts = t.dueTime!.split(':');
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    start = DateTime(dueDate.year, dueDate.month, dueDate.day, hour, minute);
+    // Nominal 30 min duration for layout only — never persisted.
+    end = start.add(const Duration(minutes: 30));
+  } else {
+    start = DateTime(dueDate.year, dueDate.month, dueDate.day);
+    end = DateTime(dueDate.year, dueDate.month, dueDate.day + 1);
+  }
+
+  return KalenderCalendarEvent(
+    dateTimeRange: DateTimeRange(start: start, end: end),
+    source: TaskItem(t),
+  );
 }
 
 /// Strips seconds from a "HH:mm:ss" time string, returning "HH:mm".
@@ -144,88 +198,222 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
       final selectedEventId = ref.watch(selectedEventIdProvider);
-      final calendar = calendarsById[ke.source.calendarId];
-      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
-      final isAllDay = ke.allDay;
       final isSelected = selectedEventId == ke.id;
 
-      if (isAllDay) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(3),
-            border: isSelected
-                ? Border.all(color: BmoColors.textPrimary, width: 1.5)
-                : null,
-          ),
-          child: Text(
-            ke.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: BmoColors.screenBg,
+      return switch (ke.source) {
+        EventItem(event: final e) => _buildEventMonthTile(ke, e, calendarsById, isSelected),
+        TaskItem(task: final t) => _buildTaskMonthTile(ke, t, isSelected),
+      };
+    },
+  );
+}
+
+Widget _buildEventMonthTile(
+  KalenderCalendarEvent ke,
+  app.CalendarEvent e,
+  Map<int, dynamic> calendarsById,
+  bool isSelected,
+) {
+  final calendar = calendarsById[e.calendarId];
+  final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+  final isAllDay = e.allDay;
+
+  if (isAllDay) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(3),
+        border: isSelected
+            ? Border.all(color: BmoColors.textPrimary, width: 1.5)
+            : null,
+      ),
+      child: Text(
+        ke.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: BmoColors.screenBg,
+        ),
+      ),
+    );
+  }
+
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+    decoration: BoxDecoration(
+      color: isSelected
+          ? color.withValues(alpha: 0.25)
+          : color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(3),
+      border: Border(
+        left: BorderSide(color: color, width: isSelected ? 4 : 3),
+        top: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        right: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        bottom: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+      ),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              ke.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: BmoColors.textPrimary,
+              ),
             ),
           ),
-        );
-      }
-
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.25)
-              : color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(3),
-          border: Border(
-            left: BorderSide(color: color, width: isSelected ? 4 : 3),
-            top: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-            right: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-            bottom: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  ke.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BmoColors.textPrimary,
-                  ),
-                ),
+          if (ke.startTime != null)
+            Text(
+              _formatTime(ke.startTime!),
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 9,
+                fontWeight: FontWeight.w400,
+                color: BmoColors.textMuted,
               ),
-              if (ke.startTime != null)
-                Text(
-                  _formatTime(ke.startTime!),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 9,
-                    fontWeight: FontWeight.w400,
-                    color: BmoColors.textMuted,
-                  ),
-                ),
-            ],
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildTaskMonthTile(
+  KalenderCalendarEvent ke,
+  Task t,
+  bool isSelected,
+) {
+  final color = BmoColors.taskChipColor;
+
+  if (ke.allDay) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(3),
+        border: isSelected
+            ? Border.all(color: BmoColors.textPrimary, width: 1.5)
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _taskCheckbox(t),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              ke.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: BmoColors.screenBg,
+              ),
+            ),
           ),
-        ),
-      );
-    },
+          if (t.recurrenceType != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Icon(Icons.repeat, size: 10, color: BmoColors.screenBg.withValues(alpha: 0.7)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+    decoration: BoxDecoration(
+      color: isSelected
+          ? color.withValues(alpha: 0.25)
+          : color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(3),
+      border: Border(
+        left: BorderSide(color: color, width: isSelected ? 4 : 3),
+        top: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        right: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        bottom: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+      ),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+      child: Row(
+        children: [
+          _taskCheckbox(t),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              ke.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: BmoColors.textPrimary,
+              ),
+            ),
+          ),
+          if (ke.startTime != null)
+            Text(
+              _formatTime(ke.startTime!),
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 9,
+                fontWeight: FontWeight.w400,
+                color: BmoColors.textMuted,
+              ),
+            ),
+          if (t.recurrenceType != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Circular checkbox for mission tiles (Apple Reminders style).
+Widget _taskCheckbox(Task t) {
+  return Container(
+    width: 14,
+    height: 14,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      border: Border.all(
+        color: BmoColors.textPrimary.withValues(alpha: 0.4),
+        width: 1.5,
+      ),
+    ),
   );
 }
 
@@ -245,36 +433,81 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
       final selectedEventId = ref.watch(selectedEventIdProvider);
-      final calendar = calendarsById[ke.source.calendarId];
-      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
-      final durationMinutes = ke.end.difference(ke.start).inMinutes;
-      final isShort = durationMinutes <= 30;
-      final isRecurring = ke.source.isRecurring;
       final isSelected = selectedEventId == ke.id;
 
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? color.withValues(alpha: 0.25)
-              : color.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(4),
-          border: Border(
-            left: BorderSide(color: color, width: isSelected ? 4 : 3),
-            top: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-            right: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-            bottom: isSelected
-                ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-                : BorderSide.none,
-          ),
-        ),
-        child: isShort
-            ? Row(
+      return switch (ke.source) {
+        EventItem(event: final e) => _buildEventMultiDayTile(ke, e, calendarsById, isSelected),
+        TaskItem(task: final t) => _buildTaskMultiDayTile(ke, t, isSelected),
+      };
+    },
+  );
+}
+
+Widget _buildEventMultiDayTile(
+  KalenderCalendarEvent ke,
+  app.CalendarEvent e,
+  Map<int, dynamic> calendarsById,
+  bool isSelected,
+) {
+  final calendar = calendarsById[e.calendarId];
+  final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+  final durationMinutes = ke.end.difference(ke.start).inMinutes;
+  final isShort = durationMinutes <= 30;
+
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    decoration: BoxDecoration(
+      color: isSelected
+          ? color.withValues(alpha: 0.25)
+          : color.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(4),
+      border: Border(
+        left: BorderSide(color: color, width: isSelected ? 4 : 3),
+        top: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        right: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        bottom: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+      ),
+    ),
+    child: isShort
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: Text(
+                  ke.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: BmoColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (e.isRecurring)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(
+                    Icons.repeat,
+                    size: 10,
+                    color: BmoColors.textMuted.withValues(alpha: 0.5),
+                  ),
+                ),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Expanded(
@@ -284,13 +517,13 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: BmoColors.textPrimary,
                       ),
                     ),
                   ),
-                  if (isRecurring)
+                  if (e.isRecurring)
                     Padding(
                       padding: const EdgeInsets.only(left: 2),
                       child: Icon(
@@ -300,53 +533,119 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
                       ),
                     ),
                 ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              if (ke.startTime != null)
+                Text(
+                  ke.endTime != null
+                      ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
+                      : _formatTime(ke.startTime!),
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 9,
+                    color: BmoColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+  );
+}
+
+Widget _buildTaskMultiDayTile(
+  KalenderCalendarEvent ke,
+  Task t,
+  bool isSelected,
+) {
+  final color = BmoColors.taskChipColor;
+  final durationMinutes = ke.end.difference(ke.start).inMinutes;
+  final isShort = durationMinutes <= 30;
+
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+    decoration: BoxDecoration(
+      color: isSelected
+          ? color.withValues(alpha: 0.25)
+          : color.withValues(alpha: 0.15),
+      borderRadius: BorderRadius.circular(4),
+      border: Border(
+        left: BorderSide(color: color, width: isSelected ? 4 : 3),
+        top: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        right: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+        bottom: isSelected
+            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
+            : BorderSide.none,
+      ),
+    ),
+    child: isShort
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _taskCheckbox(t),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  ke.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: BmoColors.textPrimary,
+                  ),
+                ),
+              ),
+              if (t.recurrenceType != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 2),
+                  child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
+                ),
+            ],
+          )
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          ke.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: BmoColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      if (isRecurring)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 2),
-                          child: Icon(
-                            Icons.repeat,
-                            size: 10,
-                            color: BmoColors.textMuted.withValues(alpha: 0.5),
-                          ),
-                        ),
-                    ],
-                  ),
-                  if (ke.startTime != null)
-                    Text(
-                      ke.endTime != null
-                          ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                          : _formatTime(ke.startTime!),
+                  _taskCheckbox(t),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 9,
-                        color: BmoColors.textMuted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
                       ),
+                    ),
+                  ),
+                  if (t.recurrenceType != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
                     ),
                 ],
               ),
-      );
-    },
+              if (ke.startTime != null)
+                Text(
+                  _formatTime(ke.startTime!),
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 9,
+                    color: BmoColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
   );
 }
 
@@ -360,31 +659,83 @@ Widget kalenderAllDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   return Consumer(
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
-      final calendar = calendarsById[ke.source.calendarId];
-      final color = _hexToColor(calendar?.color ?? '#8BC9A3');
 
-      return ClipRect(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.85),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: Text(
-            ke.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: BmoColors.screenBg,
+      return switch (ke.source) {
+        EventItem(event: final e) => _buildEventAllDayTile(ke, e, calendarsById),
+        TaskItem(task: final t) => _buildTaskAllDayTile(ke, t),
+      };
+    },
+  );
+}
+
+Widget _buildEventAllDayTile(
+  KalenderCalendarEvent ke,
+  app.CalendarEvent e,
+  Map<int, dynamic> calendarsById,
+) {
+  final calendar = calendarsById[e.calendarId];
+  final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+
+  return ClipRect(
+    child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        ke.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: BmoColors.screenBg,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
+  final color = BmoColors.taskChipColor;
+
+  return ClipRect(
+    child: Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _taskCheckbox(t),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              ke.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: BmoColors.screenBg,
+              ),
             ),
           ),
-        ),
-      );
-    },
+          if (t.recurrenceType != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Icon(Icons.repeat, size: 10, color: BmoColors.screenBg.withValues(alpha: 0.7)),
+            ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -416,24 +767,18 @@ Color _hexToColor(String hex) {
 /// for existing events it uses the event's calendar color.
 Widget kalenderDropTargetTile(CalendarEvent event) {
   final ke = event as KalenderCalendarEvent;
-  // Provisional events have calendarId=-1 → use accentGreen.
-  final color = ke.source.calendarId == -1
-      ? const Color(0xFF8BC9A3)
-      : _hexToColor('#8BC9A3'); // Will be overridden in Consumer below for real events.
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
   final isShort = durationMinutes <= 30;
 
-  // For provisional events (drag-to-create), render directly without Consumer
-  // since there's no real calendar to look up.
-  if (ke.source.calendarId == -1) {
-    return _buildDropTargetContent(ke, color, isShort);
-  }
-
-  // For existing events, look up the calendar color.
-  return _CalendarColorConsumer(
-    calendarId: ke.source.calendarId,
-    builder: (calColor) => _buildDropTargetContent(ke, calColor, isShort),
-  );
+  return switch (ke.source) {
+    EventItem(event: final e) when e.calendarId == -1 =>
+      _buildDropTargetContent(ke, const Color(0xFF8BC9A3), isShort),
+    EventItem(event: final e) => _CalendarColorConsumer(
+        calendarId: e.calendarId,
+        builder: (calColor) => _buildDropTargetContent(ke, calColor, isShort),
+      ),
+    TaskItem() => _buildDropTargetContent(ke, BmoColors.taskChipColor, isShort),
+  };
 }
 
 Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isShort) {
@@ -492,20 +837,18 @@ Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isSho
 /// dragged. Drawn with reduced opacity so the user sees where the event was.
 Widget kalenderTileWhenDragging(CalendarEvent event) {
   final ke = event as KalenderCalendarEvent;
-  final color = ke.source.calendarId == -1
-      ? const Color(0xFF8BC9A3)
-      : _hexToColor('#8BC9A3');
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
   final isShort = durationMinutes <= 30;
 
-  if (ke.source.calendarId == -1) {
-    return _buildDraggingContent(ke, color, isShort);
-  }
-
-  return _CalendarColorConsumer(
-    calendarId: ke.source.calendarId,
-    builder: (calColor) => _buildDraggingContent(ke, calColor, isShort),
-  );
+  return switch (ke.source) {
+    EventItem(event: final e) when e.calendarId == -1 =>
+      _buildDraggingContent(ke, const Color(0xFF8BC9A3), isShort),
+    EventItem(event: final e) => _CalendarColorConsumer(
+        calendarId: e.calendarId,
+        builder: (calColor) => _buildDraggingContent(ke, calColor, isShort),
+      ),
+    TaskItem() => _buildDraggingContent(ke, BmoColors.taskChipColor, isShort),
+  };
 }
 
 Widget _buildDraggingContent(KalenderCalendarEvent ke, Color color, bool isShort) {
@@ -566,24 +909,20 @@ Widget _buildDraggingContent(KalenderCalendarEvent ke, Color color, bool isShort
 /// Renders the tile that follows the pointer during drag of an existing event.
 Widget kalenderFeedbackTile(CalendarEvent event, Size dropTargetWidgetSize) {
   final ke = event as KalenderCalendarEvent;
-  final color = ke.source.calendarId == -1
-      ? const Color(0xFF8BC9A3)
-      : _hexToColor('#8BC9A3');
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
   final isShort = durationMinutes <= 30;
 
-  if (ke.source.calendarId == -1) {
-    return Material(
-      child: _buildFeedbackContent(ke, color, isShort, dropTargetWidgetSize),
-    );
-  }
-
   return Material(
-    child: _CalendarColorConsumer(
-      calendarId: ke.source.calendarId,
-      builder: (calColor) =>
-          _buildFeedbackContent(ke, calColor, isShort, dropTargetWidgetSize),
-    ),
+    child: switch (ke.source) {
+      EventItem(event: final e) when e.calendarId == -1 =>
+        _buildFeedbackContent(ke, const Color(0xFF8BC9A3), isShort, dropTargetWidgetSize),
+      EventItem(event: final e) => _CalendarColorConsumer(
+          calendarId: e.calendarId,
+          builder: (calColor) =>
+              _buildFeedbackContent(ke, calColor, isShort, dropTargetWidgetSize),
+        ),
+      TaskItem() => _buildFeedbackContent(ke, BmoColors.taskChipColor, isShort, dropTargetWidgetSize),
+    },
   );
 }
 

@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../data/calendar_providers.dart';
-import '../data/models/calendar_event.dart';
+import 'widgets/calendar_item.dart';
 import 'widgets/event_form_modal.dart';
 import 'widgets/month_view.dart';
 
@@ -59,7 +59,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ref.read(viewModeProvider.notifier).state =
                     AgendaViewMode.day;
               },
-              onEventEdit: (event) => _openEditModal(event),
+              onEventEdit: (item) => _openEditModal(item),
               onCreateFromRange: (start, end) =>
                   _openCreateModalForRange(start, end),
             ),
@@ -100,7 +100,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     }
   }
 
-  void _openEditModal(CalendarEvent event) async {
+  void _openEditModal(CalendarItem item) async {
+    // Task detail bottom sheet handled in a later commit.
+    if (item is TaskItem) return;
+    final event = (item as EventItem).event;
     final result = await showEventFormModal(context, event: event);
     if (result != null && mounted) {
       final month = ref.read(visibleMonthProvider);

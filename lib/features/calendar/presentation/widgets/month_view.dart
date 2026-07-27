@@ -9,13 +9,14 @@ import '../../data/calendar_providers.dart';
 import '../../data/calendar_visibility_provider.dart';
 import '../../data/models/calendar_event.dart' as app;
 import '../calendar_screen.dart';
+import 'calendar_item.dart';
 import 'kalender_events.dart';
 import 'resize_handles.dart';
 
 class MonthView extends ConsumerStatefulWidget {
   final AgendaViewMode viewMode;
   final void Function(DateTime day) onDayTap;
-  final void Function(app.CalendarEvent event) onEventEdit;
+  final void Function(CalendarItem item) onEventEdit;
   final void Function(DateTime start, DateTime end) onCreateFromRange;
 
   const MonthView({
@@ -188,11 +189,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
         ref.read(eventsProvider(monthRange)).valueOrNull ?? const <app.CalendarEvent>[];
     final visibility = ref.read(calendarVisibilityProvider);
     final visible = filterVisibleEvents(events, visibility);
-    _syncEvents(visible);
+    final items = visible.map((e) => EventItem(e) as CalendarItem).toList();
+    _syncEvents(items);
   }
 
-  void _syncEvents(List<app.CalendarEvent> events) {
-    _eventsController.replaceEvents(toKalenderEvents(events));
+  void _syncEvents(List<CalendarItem> items) {
+    _eventsController.replaceEvents(toKalenderEvents(items));
   }
 
   Widget _buildCalendar() {
@@ -409,8 +411,13 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final ke = event as KalenderCalendarEvent;
     final source = ke.source;
 
+    // Task drag handled in a later commit.
+    if (source is TaskItem) return;
+
+    final appEvent = (source as EventItem).event;
+
     // Recurring events blocked from drag/resize (commit 3 guard).
-    if (source.isRecurring) return;
+    if (appEvent.isRecurring) return;
 
     // kalender stores DateTimes in UTC. Convert to local so newDate,
     // newStartTime, and newEndTime reflect the user's wall-clock time.
@@ -421,8 +428,8 @@ class _MonthViewState extends ConsumerState<MonthView> {
     // restore the tile positions. The provider hasn't been mutated yet, so
     // _applyFilter() will push the old state back.
     final monthRange = (
-      year: source.occurrenceDate.year,
-      month: source.occurrenceDate.month,
+      year: appEvent.occurrenceDate.year,
+      month: appEvent.occurrenceDate.month,
     );
 
     // Build API params.
@@ -438,10 +445,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final notifier = ref.read(eventsProvider(monthRange).notifier);
 
     repo.updateEvent(
-      source.id,
+      appEvent.id,
       occurrenceDate: newDate,
-      startTime: source.allDay ? null : newStartTime,
-      endTime: source.allDay ? null : newEndTime,
+      startTime: appEvent.allDay ? null : newStartTime,
+      endTime: appEvent.allDay ? null : newEndTime,
     ).then((_) {
       // Server accepted — refresh provider to sync.
       if (mounted) notifier.refresh();

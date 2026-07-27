@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
+import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
+import 'calendar_item.dart';
 import 'kalender_events.dart';
 
 /// Custom [ResizeHandlePositioner] that centers resize handles on the top and
@@ -83,8 +85,11 @@ class _BmoResizeHandles extends ResizeHandles {
         // Calendar color for the pill.
         final calendarsById = ref.watch(calendarsByIdProvider);
         final ke = event as KalenderCalendarEvent;
-        final calendar = calendarsById[ke.source.calendarId];
-        final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+        final color = switch (ke.source) {
+          EventItem(event: final e) => _hexToColor(
+              calendarsById[e.calendarId]?.color ?? '#8BC9A3'),
+          TaskItem() => BmoColors.taskChipColor,
+        };
 
         // Touch-target dimensions — kept entirely inside the tile bounds.
         //
