@@ -229,10 +229,14 @@ class CalendarClient {
       body['reminder_minutes_before'] = reminderMinutesBefore;
     }
 
-    if (scope != null) body['scope'] = scope;
+    final uri = Uri.parse('$_baseUrl/api/v1/events/$id').replace(
+      queryParameters: {
+        if (scope != null) 'scope': scope,
+      },
+    );
 
     final response = await _client.patch(
-      Uri.parse('$_baseUrl/api/v1/events/$id'),
+      uri,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
