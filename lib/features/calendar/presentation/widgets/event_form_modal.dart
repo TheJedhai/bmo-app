@@ -6,6 +6,7 @@ import '../../data/calendar_client.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar.dart';
 import '../../data/models/calendar_event.dart';
+import 'scope_dialog.dart';
 
 /// Presets de lembrete em minutos com rótulos pt-BR.
 const _reminderPresets = [
@@ -213,37 +214,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Recurring warning
-          if (_isEditing && widget.event!.isRecurring)
-            Container(
-              padding: const EdgeInsets.all(10),
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                color: BmoColors.accentYellow.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: BmoColors.accentYellow.withValues(alpha: 0.3),
-                ),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      size: 18, color: BmoColors.accentYellow),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Evento recorrente: alterações valem para todas as ocorrências.',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        color: BmoColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
           // Title field
           _buildTextField(
@@ -851,6 +821,18 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     );
     final notifier = ref.read(eventsProvider(monthRange).notifier);
 
+    // For recurring event edits, ask scope first.
+    String? scope;
+    String? scopeOccurrenceDate;
+    if (_isEditing && widget.event!.isRecurring) {
+      final chosen = await showScopeDialog(context, action: 'editar');
+      if (chosen == null || !mounted) return; // cancelled
+      scope = chosen == RecurrenceScope.this_ ? 'this' : 'all';
+      if (chosen == RecurrenceScope.this_) {
+        scopeOccurrenceDate = _formatDateISO(widget.event!.occurrenceDate);
+      }
+    }
+
     try {
       if (_isEditing) {
         final updated = await notifier.edit(
@@ -858,7 +840,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           title: title,
           notes: notes,
           allDay: _allDay,
-          occurrenceDate: _formatDateISO(_startDate),
+          occurrenceDate: scopeOccurrenceDate ?? _formatDateISO(_startDate),
           startTime: _allDay ? null : _formatTimeStr(_startTime),
           endTime: _allDay ? null : _formatTimeStr(_endTime),
           clearStartTime: _allDay,
@@ -875,6 +857,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
               _recurrenceEnd != null ? _formatDateISO(_recurrenceEnd!) : null,
           reminderMinutesBefore: _reminderMinutes,
           clearReminder: _reminderMinutes == null,
+          scope: scope,
         );
         if (mounted) Navigator.of(context).pop(updated);
       } else {
@@ -914,52 +897,70 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
   }
 
   void _delete() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: BmoColors.screenBgElevated,
-        title: const Text(
-          'Excluir evento?',
-          style: TextStyle(
-            fontFamily: 'PressStart2P',
-            fontSize: 13,
-            color: BmoColors.textPrimary,
-          ),
-        ),
-        content: Text(
-          widget.event!.isRecurring
-              ? 'Este é um evento recorrente. Todas as ocorrências serão removidas.'
-              : 'Esta ação não pode ser desfeita.',
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 13,
-            color: BmoColors.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: TextButton.styleFrom(foregroundColor: BmoColors.accentRed),
-            child: const Text('Excluir'),
-          ),
-        ],
-      ),
-    );
+    final event = widget.event!;
 
-    if (confirm != true || !mounted) return;
+    String? scope;
+    String? occurrenceDate;
+
+    if (event.isRecurring) {
+      // Recurring: ask scope instead of simple confirm.
+      final chosen = await showScopeDialog(context, action: 'excluir');
+      if (chosen == null || !mounted) return; // cancelled
+      scope = chosen == RecurrenceScope.this_ ? 'this' : 'all';
+      if (chosen == RecurrenceScope.this_) {
+        occurrenceDate = _formatDateISO(event.occurrenceDate);
+      }
+    } else {
+      // Non-recurring: simple confirm.
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: BmoColors.screenBgElevated,
+          title: const Text(
+            'Excluir evento?',
+            style: TextStyle(
+              fontFamily: 'PressStart2P',
+              fontSize: 13,
+              color: BmoColors.textPrimary,
+            ),
+          ),
+          content: const Text(
+            'Esta ação não pode ser desfeita.',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 13,
+              color: BmoColors.textSecondary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              style:
+                  TextButton.styleFrom(foregroundColor: BmoColors.accentRed),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
+    }
 
     final monthRange = (
-      year: widget.event!.occurrenceDate.year,
-      month: widget.event!.occurrenceDate.month,
+      year: event.occurrenceDate.year,
+      month: event.occurrenceDate.month,
     );
     final notifier = ref.read(eventsProvider(monthRange).notifier);
 
     try {
-      await notifier.delete(widget.event!.id);
+      await notifier.delete(
+        event.id,
+        scope: scope,
+        occurrenceDate: occurrenceDate,
+      );
       if (mounted) Navigator.of(context).pop(null);
     } catch (e) {
       if (mounted) {
