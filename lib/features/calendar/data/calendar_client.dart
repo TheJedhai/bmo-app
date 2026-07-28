@@ -188,6 +188,7 @@ class CalendarClient {
     String? recurrenceEnd,
     int? reminderMinutesBefore,
     bool clearReminder = false,
+    String? scope,
   }) async {
     final body = <String, dynamic>{};
     if (calendarId != null) body['calendar_id'] = calendarId;
@@ -228,6 +229,8 @@ class CalendarClient {
       body['reminder_minutes_before'] = reminderMinutesBefore;
     }
 
+    if (scope != null) body['scope'] = scope;
+
     final response = await _client.patch(
       Uri.parse('$_baseUrl/api/v1/events/$id'),
       headers: {'Content-Type': 'application/json'},
@@ -239,10 +242,14 @@ class CalendarClient {
     );
   }
 
-  Future<void> deleteEvent(int id) async {
-    final response = await _client.delete(
-      Uri.parse('$_baseUrl/api/v1/events/$id'),
+  Future<void> deleteEvent(int id, {String? scope, String? occurrenceDate}) async {
+    final uri = Uri.parse('$_baseUrl/api/v1/events/$id').replace(
+      queryParameters: {
+        if (scope != null) 'scope': scope,
+        if (occurrenceDate != null) 'occurrence_date': occurrenceDate,
+      },
     );
+    final response = await _client.delete(uri);
     _ensureOk(response);
   }
 

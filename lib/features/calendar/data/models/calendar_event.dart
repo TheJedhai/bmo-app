@@ -34,6 +34,7 @@ final class CalendarEvent {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final Calendar? calendar;
+  final int? recurrenceParentId;
 
   const CalendarEvent({
     required this.id,
@@ -55,6 +56,7 @@ final class CalendarEvent {
     this.createdAt,
     this.updatedAt,
     this.calendar,
+    this.recurrenceParentId,
   });
 
   bool get isRecurring => recurrenceType != RecurrenceType.none;
@@ -99,6 +101,7 @@ final class CalendarEvent {
       calendar: json['calendar'] is Map<String, dynamic>
           ? Calendar.fromJson(json['calendar'] as Map<String, dynamic>)
           : null,
+      recurrenceParentId: json['recurrence_parent_id'] as int?,
     );
   }
 

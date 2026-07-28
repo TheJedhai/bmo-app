@@ -80,6 +80,7 @@ class CalendarRepository {
     String? recurrenceEnd,
     int? reminderMinutesBefore,
     bool clearReminder = false,
+    String? scope,
   }) =>
       _client.updateEvent(
         id,
@@ -101,7 +102,9 @@ class CalendarRepository {
         recurrenceEnd: recurrenceEnd,
         reminderMinutesBefore: reminderMinutesBefore,
         clearReminder: clearReminder,
+        scope: scope,
       );
 
-  Future<void> deleteEvent(int id) => _client.deleteEvent(id);
+  Future<void> deleteEvent(int id, {String? scope, String? occurrenceDate}) =>
+      _client.deleteEvent(id, scope: scope, occurrenceDate: occurrenceDate);
 }

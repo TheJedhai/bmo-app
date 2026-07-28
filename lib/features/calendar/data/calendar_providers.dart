@@ -180,6 +180,7 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
     String? recurrenceEnd,
     int? reminderMinutesBefore,
     bool clearReminder = false,
+    String? scope,
   }) async {
     final repo = ref.read(calendarRepositoryProvider);
     final updated = await repo.updateEvent(
@@ -202,13 +203,21 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
       recurrenceEnd: recurrenceEnd,
       reminderMinutesBefore: reminderMinutesBefore,
       clearReminder: clearReminder,
+      scope: scope,
     );
-    // Replace all occurrences of the master event.
+    // Refresh from server when scope is involved — the backend may return
+    // an override (scope=this) or updated master (scope=all), and the
+    // recurrence expansion changes.
+    if (scope != null) {
+      await refresh();
+      return updated;
+    }
+
+    // Replace all occurrences of the master event (non-recurring or legacy).
     final current = state.valueOrNull ?? const <CalendarEvent>[];
     state = AsyncData([
       for (final e in current)
         if (e.id == id)
-          // Keep occurrence_date from each instance, other fields from updated.
           CalendarEvent(
             id: updated.id,
             calendarId: updated.calendarId,
@@ -229,6 +238,7 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
             createdAt: updated.createdAt,
             updatedAt: updated.updatedAt,
             calendar: updated.calendar ?? e.calendar,
+            recurrenceParentId: updated.recurrenceParentId,
           )
         else
           e,
@@ -236,9 +246,15 @@ class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange
     return updated;
   }
 
-  Future<void> delete(int id) async {
+  Future<void> delete(int id, {String? scope, String? occurrenceDate}) async {
     final repo = ref.read(calendarRepositoryProvider);
-    await repo.deleteEvent(id);
+    await repo.deleteEvent(id, scope: scope, occurrenceDate: occurrenceDate);
+    // Refresh from server — scope=this creates an override cancellation,
+    // scope=all removes the entire series.
+    if (scope != null) {
+      await refresh();
+      return;
+    }
     final current = state.valueOrNull ?? const <CalendarEvent>[];
     state = AsyncData(current.where((e) => e.id != id).toList());
   }
