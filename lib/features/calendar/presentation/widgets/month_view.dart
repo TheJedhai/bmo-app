@@ -14,6 +14,7 @@ import '../calendar_screen.dart';
 import 'calendar_item.dart';
 import 'kalender_events.dart';
 import 'resize_handles.dart';
+import 'scope_dialog.dart';
 
 class MonthView extends ConsumerStatefulWidget {
   final AgendaViewMode viewMode;
@@ -449,9 +450,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
     DateTime newStart,
     DateTime newEnd,
   ) {
-    // Recurring events blocked from drag/resize.
-    if (appEvent.isRecurring) return;
-
     final monthRange = (
       year: appEvent.occurrenceDate.year,
       month: appEvent.occurrenceDate.month,
@@ -468,12 +466,60 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final repo = ref.read(calendarRepositoryProvider);
     final notifier = ref.read(eventsProvider(monthRange).notifier);
 
-    repo.updateEvent(
-      appEvent.id,
-      occurrenceDate: newDate,
-      startTime: appEvent.allDay ? null : newStartTime,
-      endTime: appEvent.allDay ? null : newEndTime,
-    ).then((_) {
+    Future<void> doPatch({String? scope, String? occurrenceDate, String? startDate}) {
+      return repo.updateEvent(
+        appEvent.id,
+        occurrenceDate: occurrenceDate ?? newDate,
+        startTime: appEvent.allDay ? null : newStartTime,
+        endTime: appEvent.allDay ? null : newEndTime,
+        startDate: startDate,
+        endDate: startDate != null
+            ? '${newEnd.year}-'
+                '${newEnd.month.toString().padLeft(2, '0')}-'
+                '${newEnd.day.toString().padLeft(2, '0')}'
+            : null,
+        scope: scope,
+      );
+    }
+
+    if (appEvent.isRecurring) {
+      // Ask scope before persisting.
+      showScopeDialog(context, action: 'mover').then((chosen) {
+        if (chosen == null) {
+          // Cancelled — revert tile position.
+          _applyFilter();
+          return;
+        }
+        final scope = chosen == RecurrenceScope.this_ ? 'this' : 'all';
+        final originalDate = '${appEvent.occurrenceDate.year}-'
+            '${appEvent.occurrenceDate.month.toString().padLeft(2, '0')}-'
+            '${appEvent.occurrenceDate.day.toString().padLeft(2, '0')}';
+        // Only send start_date when the date actually changed (drag vs resize).
+        final dateChanged = newDate != originalDate;
+
+        doPatch(
+          scope: scope,
+          occurrenceDate: scope == 'this' ? originalDate : null,
+          startDate: scope == 'this' && dateChanged ? newDate : null,
+        ).then((_) {
+          if (mounted) notifier.refresh();
+        }).catchError((e) {
+          if (mounted) {
+            _applyFilter();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Erro ao mover evento: $e'),
+                backgroundColor: BmoColors.accentRed,
+              ),
+            );
+          }
+        });
+      });
+      return;
+    }
+
+    // Non-recurring: direct patch.
+    doPatch().then((_) {
       if (mounted) notifier.refresh();
     }).catchError((e) {
       if (mounted) {

@@ -27,8 +27,7 @@ class KalenderCalendarEvent extends CalendarEvent {
         );
 
   static EventInteraction _defaultInteraction(CalendarItem source) => switch (source) {
-    EventItem(:final event) =>
-        event.isRecurring ? EventInteraction.allowNone() : EventInteraction.allowAll(),
+    EventItem() => EventInteraction.allowAll(),
     TaskItem() => EventInteraction(
         allowStartResize: false,
         allowEndResize: false,
@@ -291,6 +290,8 @@ Widget _buildEventMonthTile(
                 color: BmoColors.textMuted,
               ),
             ),
+          if (e.isRecurring || e.recurrenceParentId != null)
+            _buildRecurrenceIcon(e, BmoColors.textMuted),
         ],
       ),
     ),
@@ -526,15 +527,8 @@ Widget _buildEventMultiDayTile(
                   ),
                 ),
               ),
-              if (e.isRecurring)
-                Padding(
-                  padding: const EdgeInsets.only(left: 2),
-                  child: Icon(
-                    Icons.repeat,
-                    size: 10,
-                    color: BmoColors.textMuted.withValues(alpha: 0.5),
-                  ),
-                ),
+              if (e.isRecurring || e.recurrenceParentId != null)
+                _buildRecurrenceIcon(e, BmoColors.textMuted),
             ],
           )
         : Column(
@@ -557,15 +551,8 @@ Widget _buildEventMultiDayTile(
                       ),
                     ),
                   ),
-                  if (e.isRecurring)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: Icon(
-                        Icons.repeat,
-                        size: 10,
-                        color: BmoColors.textMuted.withValues(alpha: 0.5),
-                      ),
-                    ),
+                  if (e.isRecurring || e.recurrenceParentId != null)
+                    _buildRecurrenceIcon(e, BmoColors.textMuted),
                 ],
               ),
               if (ke.startTime != null)
@@ -769,6 +756,24 @@ Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
             ),
         ],
       ),
+    ),
+  );
+}
+
+/// Builds the recurrence/override icon for an event tile.
+///
+/// Normal recurring events show [Icons.repeat]. Override occurrences
+/// (individually modified with scope=this) show [Icons.repeat_one] and a
+/// slightly different color so they are distinguishable from the rest of
+/// the series.
+Widget _buildRecurrenceIcon(app.CalendarEvent e, Color color) {
+  final isOverride = e.recurrenceParentId != null;
+  return Padding(
+    padding: const EdgeInsets.only(left: 2),
+    child: Icon(
+      isOverride ? Icons.repeat_one : Icons.repeat,
+      size: 10,
+      color: isOverride ? color : color.withValues(alpha: 0.5),
     ),
   );
 }
