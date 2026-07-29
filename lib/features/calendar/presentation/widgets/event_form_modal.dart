@@ -904,8 +904,13 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
       // Recurring: ask scope instead of simple confirm.
       final chosen = await showScopeDialog(context, action: 'excluir');
       if (chosen == null || !mounted) return; // cancelled
-      scope = chosen == RecurrenceScope.this_ ? 'this' : 'all';
-      if (chosen == RecurrenceScope.this_) {
+      scope = switch (chosen) {
+        RecurrenceScope.this_ => 'this',
+        RecurrenceScope.thisAndFuture => 'this_and_future',
+        RecurrenceScope.all => 'all',
+      };
+      if (chosen == RecurrenceScope.this_ ||
+          chosen == RecurrenceScope.thisAndFuture) {
         occurrenceDate = _formatDateISO(event.occurrenceDate);
       }
     } else {
