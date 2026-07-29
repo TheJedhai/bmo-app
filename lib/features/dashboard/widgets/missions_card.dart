@@ -57,7 +57,7 @@ class _MissionsContent extends StatelessWidget {
         DashCard.highlightNumber('$pendingCount', accent),
         const SizedBox(height: 4),
         Text(
-          pendingCount == 1 ? 'tarefa pendente' : 'tarefas pendentes',
+          pendingCount == 1 ? 'missão pendente' : 'missões pendentes',
           style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 13,
