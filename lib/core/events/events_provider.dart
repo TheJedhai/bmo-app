@@ -12,6 +12,7 @@ import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
 import '../identity/identity_state.dart';
+import '../utils/provider_utils.dart';
 import 'events_client.dart';
 import 'rich_blocks_provider.dart';
 
@@ -98,17 +99,17 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'task.updated':
     case 'task.deleted':
     case 'task.completed':
-      _invalidateAllFamilyInstances(ref, tasksProvider);
-      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref, tasksProvider);
+      invalidateAllFamilyInstances(ref, calendarTasksProvider);
     case 'folder.created':
     case 'folder.updated':
     case 'folder.deleted':
       ref.invalidate(foldersProvider);
-      _invalidateAllFamilyInstances(ref, tasksProvider);
-      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref, tasksProvider);
+      invalidateAllFamilyInstances(ref, calendarTasksProvider);
     case 'tasks.batch_updated':
-      _invalidateAllFamilyInstances(ref, tasksProvider);
-      _invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref, tasksProvider);
+      invalidateAllFamilyInstances(ref, calendarTasksProvider);
 
     // ---- Memories ----
     case 'memory.created':
@@ -120,15 +121,15 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'article.created':
     case 'article.updated':
     case 'articles.batch_updated':
-      _invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
     case 'feed.created':
     case 'feed.updated':
       ref.invalidate(feedsProvider);
-      _invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref, articlesProvider);
     case 'feed.deleted':
       ref.invalidate(feedsProvider);
-      _invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref, articlesProvider);
       ref.invalidate(unreadCountProvider);
 
     // ---- Images ----
@@ -160,33 +161,16 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'calendar.event.created':
     case 'calendar.event.updated':
     case 'calendar.event.deleted':
-      _invalidateAllFamilyInstances(ref, eventsProvider);
+      invalidateAllFamilyInstances(ref, eventsProvider);
     case 'calendar.calendar.created':
     case 'calendar.calendar.updated':
     case 'calendar.calendar.deleted':
       ref.invalidate(calendarsProvider);
-      _invalidateAllFamilyInstances(ref, eventsProvider);
+      invalidateAllFamilyInstances(ref, eventsProvider);
 
     case 'connected':
       debugPrint('SSE connected');
       ref.read(sseGenerationProvider.notifier).state++;
 
-  }
-}
-
-/// Invalida todas as instâncias ativas de um provider `.family`.
-///
-/// Diferente de [Ref.invalidate] chamado diretamente na família — que pode não
-/// forçar o rebuild de todas as instâncias vivas, especialmente com
-/// `keepAlive: true` em [IndexedStack].
-///
-/// Percorre [ProviderContainer.getAllProviderElements] e invalida cada
-/// instância cujo `origin.from` seja a família recebida, garantindo refetch
-/// do backend em todos os widgets que a consomem.
-void _invalidateAllFamilyInstances(Ref ref, Object family) {
-  for (final element in ref.container.getAllProviderElements()) {
-    if (element.origin.from == family) {
-      ref.invalidate(element.origin);
-    }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../../core/utils/provider_utils.dart';
 import '../../data/calendar_client.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar.dart';
@@ -855,7 +856,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           clearReminder: _reminderMinutes == null,
           scope: scope,
         );
-        ref.invalidate(eventsProvider);
+        invalidateAllFamilyInstances(ref, eventsProvider);
         if (mounted) Navigator.of(context).pop(updated);
       } else {
         final created = await repo.createEvent(
@@ -876,7 +877,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
               _recurrenceEnd != null ? _formatDateISO(_recurrenceEnd!) : null,
           reminderMinutesBefore: _reminderMinutes,
         );
-        ref.invalidate(eventsProvider);
+        invalidateAllFamilyInstances(ref, eventsProvider);
         if (mounted) Navigator.of(context).pop(created);
       }
     } on CalendarApiException catch (e) {
@@ -960,7 +961,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
         scope: scope,
         occurrenceDate: occurrenceDate,
       );
-      ref.invalidate(eventsProvider);
+      invalidateAllFamilyInstances(ref, eventsProvider);
       if (mounted) Navigator.of(context).pop(null);
     } catch (e) {
       if (mounted) {

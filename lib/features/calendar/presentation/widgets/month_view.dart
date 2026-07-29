@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../../core/utils/provider_utils.dart';
 import '../../../missions/data/missions_providers.dart';
 import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
@@ -496,7 +497,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           occurrenceDate: scope == 'this' ? originalDate : null,
           startDate: scope == 'this' && dateChanged ? newDate : null,
         ).then((_) {
-          if (mounted) ref.invalidate(eventsProvider);
+          if (mounted) invalidateAllFamilyInstances(ref, eventsProvider);
         }).catchError((e) {
           if (mounted) {
             _applyFilter();
@@ -514,7 +515,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     // Non-recurring: direct patch.
     doPatch().then((_) {
-      if (mounted) ref.invalidate(eventsProvider);
+      if (mounted) invalidateAllFamilyInstances(ref, eventsProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();
@@ -574,7 +575,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     }
 
     patch.then((_) {
-      if (mounted) ref.invalidate(calendarTasksProvider);
+      if (mounted) invalidateAllFamilyInstances(ref, calendarTasksProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();
