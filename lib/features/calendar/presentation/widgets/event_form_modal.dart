@@ -815,11 +815,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     }
     recurrenceDays.addAll(_recurrenceDays.toList()..sort());
 
-    final monthRange = (
-      year: _startDate.year,
-      month: _startDate.month,
-    );
-    final notifier = ref.read(eventsProvider(monthRange).notifier);
+    final repo = ref.read(calendarRepositoryProvider);
 
     // For recurring event edits, ask scope first.
     String? scope;
@@ -835,7 +831,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
 
     try {
       if (_isEditing) {
-        final updated = await notifier.edit(
+        final updated = await repo.updateEvent(
           widget.event!.id,
           title: title,
           notes: notes,
@@ -859,9 +855,10 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           clearReminder: _reminderMinutes == null,
           scope: scope,
         );
+        ref.invalidate(eventsProvider);
         if (mounted) Navigator.of(context).pop(updated);
       } else {
-        final created = await notifier.create(
+        final created = await repo.createEvent(
           calendarId: _selectedCalendar!.id,
           title: title.isNotEmpty ? title : null,
           notes: notes.isNotEmpty ? notes : null,
@@ -879,6 +876,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
               _recurrenceEnd != null ? _formatDateISO(_recurrenceEnd!) : null,
           reminderMinutesBefore: _reminderMinutes,
         );
+        ref.invalidate(eventsProvider);
         if (mounted) Navigator.of(context).pop(created);
       }
     } on CalendarApiException catch (e) {
@@ -949,18 +947,15 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
       if (confirm != true || !mounted) return;
     }
 
-    final monthRange = (
-      year: event.occurrenceDate.year,
-      month: event.occurrenceDate.month,
-    );
-    final notifier = ref.read(eventsProvider(monthRange).notifier);
+    final repo = ref.read(calendarRepositoryProvider);
 
     try {
-      await notifier.delete(
+      await repo.deleteEvent(
         event.id,
         scope: scope,
         occurrenceDate: occurrenceDate,
       );
+      ref.invalidate(eventsProvider);
       if (mounted) Navigator.of(context).pop(null);
     } catch (e) {
       if (mounted) {

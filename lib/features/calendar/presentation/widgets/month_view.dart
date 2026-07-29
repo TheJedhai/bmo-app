@@ -450,11 +450,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
     DateTime newStart,
     DateTime newEnd,
   ) {
-    final monthRange = (
-      year: appEvent.occurrenceDate.year,
-      month: appEvent.occurrenceDate.month,
-    );
-
     final newDate = '${newStart.year}-'
         '${newStart.month.toString().padLeft(2, '0')}-'
         '${newStart.day.toString().padLeft(2, '0')}';
@@ -464,7 +459,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
         '${newEnd.minute.toString().padLeft(2, '0')}';
 
     final repo = ref.read(calendarRepositoryProvider);
-    final notifier = ref.read(eventsProvider(monthRange).notifier);
 
     Future<void> doPatch({String? scope, String? occurrenceDate, String? startDate}) {
       return repo.updateEvent(
@@ -502,7 +496,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           occurrenceDate: scope == 'this' ? originalDate : null,
           startDate: scope == 'this' && dateChanged ? newDate : null,
         ).then((_) {
-          if (mounted) notifier.refresh();
+          if (mounted) ref.invalidate(eventsProvider);
         }).catchError((e) {
           if (mounted) {
             _applyFilter();
@@ -520,7 +514,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     // Non-recurring: direct patch.
     doPatch().then((_) {
-      if (mounted) notifier.refresh();
+      if (mounted) ref.invalidate(eventsProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();
@@ -539,17 +533,11 @@ class _MonthViewState extends ConsumerState<MonthView> {
     DateTime newStart,
     DateTime newEnd,
   ) {
-    final monthRange = (
-      year: task.dueDate?.year ?? DateTime.now().year,
-      month: task.dueDate?.month ?? DateTime.now().month,
-    );
-
     final newDate = DateTime(newStart.year, newStart.month, newStart.day);
     final isAllDay = newEnd.difference(newStart).inHours >= 23;
     final hasTime = task.dueTime != null;
 
     final missionsRepo = ref.read(missionsRepositoryProvider);
-    final notifier = ref.read(calendarTasksProvider(monthRange).notifier);
 
     Future<void> patch;
     if (isAllDay && hasTime) {
@@ -586,7 +574,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     }
 
     patch.then((_) {
-      if (mounted) notifier.refresh();
+      if (mounted) ref.invalidate(calendarTasksProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();
