@@ -6,16 +6,15 @@ import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
-import 'calendar_item.dart';
-import 'kalender_events.dart';
 
 /// Custom [ResizeHandlePositioner] that centers resize handles on the top and
 /// bottom edges of the event tile, Apple Calendar style.
 ///
 /// Unlike the default kalender positioner (which places handles at corners for
 /// imprecise mode), this positions them centered on each edge for a cleaner
-/// look. The visual is a small rounded pill in the event's calendar color, with
-/// a touch target larger than the visible indicator.
+/// look. The visual is a small rounded pill in a high-contrast neutral tone
+/// that reads as "grabbable" against the colored selection frame, with a
+/// touch target larger than the visible indicator.
 ///
 /// Handles are only shown for the currently selected event (two-tap model).
 /// Hover alone does not show handles — the user must tap an event first.
@@ -27,13 +26,13 @@ class BmoResizeHandlePositioner {
   static const double _kTouchHeight = 20.0;
 
   /// The visible pill width.
-  static const double _kPillWidth = 20.0;
+  static const double _kPillWidth = 24.0;
 
   /// The visible pill height.
-  static const double _kPillHeight = 3.0;
+  static const double _kPillHeight = 5.0;
 
   /// The pill border radius.
-  static const double _kPillRadius = 2.0;
+  static const double _kPillRadius = 3.0;
 
   /// Returns a [ResizeHandles] instance for the given parameters.
   // ignore: long-parameter-list — signature required by kalender's ResizeHandlePositioner typedef
@@ -74,22 +73,12 @@ class _BmoResizeHandles extends ResizeHandles {
     // Only vertical resizing — horizontal handles are not used.
     if (axis != Axis.vertical) return const SizedBox();
 
-    // Wrap in Consumer so we react to selectedEventIdProvider and
-    // calendarsByIdProvider changes immediately, without waiting for
-    // a kalender-driven rebuild.
+    // Wrap in Consumer so we react to selectedEventIdProvider
+    // changes immediately, without waiting for a kalender-driven rebuild.
     return Consumer(
       builder: (context, ref, _) {
         final selectedId = ref.watch(selectedEventIdProvider);
         if (selectedId != event.id) return const SizedBox();
-
-        // Calendar color for the pill.
-        final calendarsById = ref.watch(calendarsByIdProvider);
-        final ke = event as KalenderCalendarEvent;
-        final color = switch (ke.source) {
-          EventItem(event: final e) => _hexToColor(
-              calendarsById[e.calendarId]?.color ?? '#8BC9A3'),
-          TaskItem() => BmoColors.taskChipColor,
-        };
 
         // Touch-target dimensions — kept entirely inside the tile bounds.
         //
@@ -112,10 +101,17 @@ class _BmoResizeHandles extends ResizeHandles {
           width: BmoResizeHandlePositioner._kPillWidth,
           height: BmoResizeHandlePositioner._kPillHeight,
           decoration: BoxDecoration(
-            color: color,
+            color: BmoColors.textPrimary,
             borderRadius: BorderRadius.circular(
               BmoResizeHandlePositioner._kPillRadius,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.35),
+                blurRadius: 2,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
         );
 
@@ -172,12 +168,4 @@ class _BmoResizeHandles extends ResizeHandles {
       },
     );
   }
-}
-
-Color _hexToColor(String hex) {
-  final cleaned = hex.replaceFirst('#', '');
-  if (cleaned.length == 6) {
-    return Color(int.parse('FF$cleaned', radix: 16));
-  }
-  return const Color(0xFF8BC9A3);
 }

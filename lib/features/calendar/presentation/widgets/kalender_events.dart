@@ -194,25 +194,21 @@ String _formatTime(String time) {
 /// without re-fetching events.
 Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   final ke = event as KalenderCalendarEvent;
-  return Consumer(
-    builder: (context, ref, _) {
-      final calendarsById = ref.watch(calendarsByIdProvider);
-      final selectedEventId = ref.watch(selectedEventIdProvider);
-      final isSelected = selectedEventId == ke.id;
-
-      return switch (ke.source) {
-        EventItem(event: final e) => _buildEventMonthTile(ke, e, calendarsById, isSelected),
-        TaskItem(task: final t) => _buildTaskMonthTile(ke, t, isSelected),
-      };
-    },
-  );
+  return switch (ke.source) {
+    EventItem(event: final e) => Consumer(
+      builder: (context, ref, _) {
+        final calendarsById = ref.watch(calendarsByIdProvider);
+        return _buildEventMonthTile(ke, e, calendarsById);
+      },
+    ),
+    TaskItem(task: final t) => _buildTaskMonthTile(ke, t),
+  };
 }
 
 Widget _buildEventMonthTile(
   KalenderCalendarEvent ke,
   app.CalendarEvent e,
   Map<int, dynamic> calendarsById,
-  bool isSelected,
 ) {
   final calendar = calendarsById[e.calendarId];
   final color = _hexToColor(calendar?.color ?? '#8BC9A3');
@@ -224,10 +220,7 @@ Widget _buildEventMonthTile(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
-        border: isSelected
-            ? Border.all(color: BmoColors.textPrimary, width: 1.5)
-            : null,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         ke.title,
@@ -246,20 +239,15 @@ Widget _buildEventMonthTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: isSelected
-          ? color.withValues(alpha: 0.25)
-          : color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(3),
-      border: isSelected
-          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
-          : null,
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(4),
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(width: isSelected ? 4 : 3, color: color),
+          Container(width: 3, color: color),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
@@ -303,7 +291,6 @@ Widget _buildEventMonthTile(
 Widget _buildTaskMonthTile(
   KalenderCalendarEvent ke,
   Task t,
-  bool isSelected,
 ) {
   final color = BmoColors.taskChipColor;
 
@@ -313,10 +300,7 @@ Widget _buildTaskMonthTile(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
-        border: isSelected
-            ? Border.all(color: BmoColors.textPrimary, width: 1.5)
-            : null,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -349,20 +333,15 @@ Widget _buildTaskMonthTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: isSelected
-          ? color.withValues(alpha: 0.25)
-          : color.withValues(alpha: 0.12),
-      borderRadius: BorderRadius.circular(3),
-      border: isSelected
-          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
-          : null,
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(4),
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(width: isSelected ? 4 : 3, color: color),
+          Container(width: 3, color: color),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
@@ -468,25 +447,21 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
     );
   }
   final ke = event;
-  return Consumer(
-    builder: (context, ref, _) {
-      final calendarsById = ref.watch(calendarsByIdProvider);
-      final selectedEventId = ref.watch(selectedEventIdProvider);
-      final isSelected = selectedEventId == ke.id;
-
-      return switch (ke.source) {
-        EventItem(event: final e) => _buildEventMultiDayTile(ke, e, calendarsById, isSelected),
-        TaskItem(task: final t) => _buildTaskMultiDayTile(ke, t, isSelected),
-      };
-    },
-  );
+  return switch (ke.source) {
+    EventItem(event: final e) => Consumer(
+      builder: (context, ref, _) {
+        final calendarsById = ref.watch(calendarsByIdProvider);
+        return _buildEventMultiDayTile(ke, e, calendarsById);
+      },
+    ),
+    TaskItem(task: final t) => _buildTaskMultiDayTile(ke, t),
+  };
 }
 
 Widget _buildEventMultiDayTile(
   KalenderCalendarEvent ke,
   app.CalendarEvent e,
   Map<int, dynamic> calendarsById,
-  bool isSelected,
 ) {
   final calendar = calendarsById[e.calendarId];
   final color = _hexToColor(calendar?.color ?? '#8BC9A3');
@@ -496,20 +471,15 @@ Widget _buildEventMultiDayTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: isSelected
-          ? color.withValues(alpha: 0.25)
-          : color.withValues(alpha: 0.15),
+      color: color.withValues(alpha: 0.15),
       borderRadius: BorderRadius.circular(4),
-      border: isSelected
-          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
-          : null,
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(width: isSelected ? 4 : 3, color: color),
+          Container(width: 3, color: color),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -582,7 +552,6 @@ Widget _buildEventMultiDayTile(
 Widget _buildTaskMultiDayTile(
   KalenderCalendarEvent ke,
   Task t,
-  bool isSelected,
 ) {
   final color = BmoColors.taskChipColor;
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
@@ -591,20 +560,15 @@ Widget _buildTaskMultiDayTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: isSelected
-          ? color.withValues(alpha: 0.25)
-          : color.withValues(alpha: 0.15),
+      color: color.withValues(alpha: 0.15),
       borderRadius: BorderRadius.circular(4),
-      border: isSelected
-          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
-          : null,
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(width: isSelected ? 4 : 3, color: color),
+          Container(width: 3, color: color),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -715,7 +679,7 @@ Widget _buildEventAllDayTile(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(
         ke.title,
@@ -741,7 +705,7 @@ Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
