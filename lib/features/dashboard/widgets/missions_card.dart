@@ -18,14 +18,7 @@ class MissionsCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(
-      tasksProvider(const (
-        status: 'pending',
-        folderId: null,
-        parentId: 0,
-        includeSubtasks: true,
-      )),
-    );
+    final tasksAsync = ref.watch(dashboardMissionsProvider);
 
     return tasksAsync.when(
       loading: () => const _LoadingState(),
