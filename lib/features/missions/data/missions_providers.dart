@@ -238,3 +238,80 @@ final tasksProvider =
     AsyncNotifierProvider.family<TasksNotifier, List<Task>, TasksFilter>(
   TasksNotifier.new,
 );
+
+// ============================================================
+// Dashboard — missões pendentes visíveis
+// ============================================================
+
+/// Tarefas pendentes que aparecem no card de Missões da dashboard:
+/// - Todas as tarefas da pasta padrão (isDefault == true)
+/// - Tarefas de outras pastas cujo dueDate é hoje ou já passou
+///
+/// A união é por id — uma tarefa da Geral que também está atrasada
+/// conta uma vez só.
+final dashboardMissionsProvider = Provider<AsyncValue<List<Task>>>((ref) {
+  final tasksAsync = ref.watch(
+    tasksProvider(const (
+      status: 'pending',
+      folderId: null,
+      parentId: 0,
+      includeSubtasks: true,
+    )),
+  );
+  final foldersAsync = ref.watch(foldersProvider);
+
+  if (tasksAsync is AsyncLoading || foldersAsync is AsyncLoading) {
+    return const AsyncLoading();
+  }
+
+  if (tasksAsync.hasError) {
+    return AsyncError(tasksAsync.error!, tasksAsync.stackTrace!);
+  }
+  if (foldersAsync.hasError) {
+    return AsyncError(foldersAsync.error!, foldersAsync.stackTrace!);
+  }
+
+  final tasks = tasksAsync.value ?? const [];
+  final folders = foldersAsync.value ?? const [];
+
+  final defaultFolder = folders.cast<Folder?>().firstWhere(
+        (f) => f?.isDefault == true,
+        orElse: () => null,
+      );
+
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  final seen = <int>{};
+  final result = <Task>[];
+
+  for (final task in tasks) {
+    if (seen.contains(task.id)) continue;
+
+    bool include = false;
+
+    // Na pasta padrão? Sempre conta.
+    if (defaultFolder != null && task.folderId == defaultFolder.id) {
+      include = true;
+    }
+
+    // Fora da pasta padrão: só conta se tem prazo vencido ou de hoje.
+    if (!include && task.dueDate != null) {
+      final dueDay = DateTime(
+        task.dueDate!.year,
+        task.dueDate!.month,
+        task.dueDate!.day,
+      );
+      if (!dueDay.isAfter(today)) {
+        include = true;
+      }
+    }
+
+    if (include) {
+      seen.add(task.id);
+      result.add(task);
+    }
+  }
+
+  return AsyncData(result);
+});
