@@ -89,7 +89,7 @@ class _AppShell extends ConsumerWidget {
                       bottom: BmoNavBar.totalBottomInset,
                       child: child,
                     ),
-                    const BmoNavBar(),
+                    BmoNavBar(currentLocation: currentLocation),
                   ],
                 ),
         );

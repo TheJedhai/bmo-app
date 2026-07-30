@@ -15,17 +15,16 @@ import '../theme/bmo_theme.dart';
 /// [BmoColors.textMuted]. Tap usa [GoRouter.go] para substituir em vez
 /// de empilhar.
 class BmoNavBar extends ConsumerWidget {
-  const BmoNavBar({super.key});
+  const BmoNavBar({super.key, required this.currentLocation});
 
   /// Altura total da pílula + margem inferior — usada como padding-bottom
   /// no conteúdo das features para evitar sobreposição.
   static const double totalBottomInset = 68 + 16;
 
+  final String currentLocation;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = GoRouter.of(context);
-    final currentLocation = router.state.uri.path;
-
     final features = ref.watch(enabledFeaturesProvider);
 
     final navSpecs = dashboardWidgets.where((s) {
@@ -70,7 +69,7 @@ class BmoNavBar extends ConsumerWidget {
                   isActive: currentLocation == spec.route,
                   onTap: () {
                     if (currentLocation == spec.route) return;
-                    router.go(spec.route!);
+                    GoRouter.of(context).go(spec.route!);
                   },
                 ),
                 if (spec != navSpecs.last)
