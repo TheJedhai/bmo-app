@@ -237,6 +237,18 @@ class _MonthViewState extends ConsumerState<MonthView> {
     _eventsController.replaceEvents(kalenderEvents);
     debugPrint('[_syncEvents] after replace: controller.events.length=${_eventsController.events.length} '
         'kalenderEvents.length=${kalenderEvents.length}');
+
+    // Clear orphaned selection: if the selected event was deleted (or removed
+    // by SSE / override), its id won't be in the new kalenderEvents list, but
+    // CalendarController.selectedEvent still holds the stale instance. Without
+    // this the kalender keeps rendering the selected-event overlay until the
+    // user taps elsewhere. Covers delete, SSE removal, and cancelled overrides.
+    final selectedId = _calendarController.selectedEvent.value?.id;
+    if (selectedId != null &&
+        !kalenderEvents.any((ke) => ke.id == selectedId)) {
+      _calendarController.deselectEvent();
+    }
+
     setState(() {});
   }
 
