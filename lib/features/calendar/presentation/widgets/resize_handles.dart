@@ -6,6 +6,8 @@ import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
+import 'calendar_item.dart';
+import 'kalender_events.dart';
 
 /// Custom [ResizeHandlePositioner] that centers resize handles on the top and
 /// bottom edges of the event tile, Apple Calendar style.
@@ -26,13 +28,13 @@ class BmoResizeHandlePositioner {
   static const double _kTouchHeight = 20.0;
 
   /// The visible pill width.
-  static const double _kPillWidth = 24.0;
+  static const double _kPillWidth = 18.0;
 
   /// The visible pill height.
-  static const double _kPillHeight = 5.0;
+  static const double _kPillHeight = 4.0;
 
-  /// The pill border radius.
-  static const double _kPillRadius = 3.0;
+  /// The pill border radius (full capsule).
+  static const double _kPillRadius = 2.0;
 
   /// Returns a [ResizeHandles] instance for the given parameters.
   // ignore: long-parameter-list — signature required by kalender's ResizeHandlePositioner typedef
@@ -80,6 +82,23 @@ class _BmoResizeHandles extends ResizeHandles {
         final selectedId = ref.watch(selectedEventIdProvider);
         if (selectedId != event.id) return const SizedBox();
 
+        // Resolve the event's color for handle tinting.
+        final ke = event as KalenderCalendarEvent;
+        final eventColor = switch (ke.source) {
+          EventItem(event: final e) => () {
+              final calendarsById = ref.watch(calendarsByIdProvider);
+              final calendar = calendarsById[e.calendarId];
+              final hex = calendar?.color ?? '#8BC9A3';
+              final cleaned = hex.replaceFirst('#', '');
+              if (cleaned.length == 6) {
+                return Color(int.parse('FF$cleaned', radix: 16));
+              }
+              return const Color(0xFF8BC9A3);
+            }(),
+          TaskItem() => BmoColors.taskChipColor,
+        };
+        final pillColor = Color.lerp(eventColor, Colors.white, 0.55)!;
+
         // Touch-target dimensions — kept entirely inside the tile bounds.
         //
         // Clip.none lets us PAINT outside the tile but the parent's hit test
@@ -101,9 +120,13 @@ class _BmoResizeHandles extends ResizeHandles {
           width: BmoResizeHandlePositioner._kPillWidth,
           height: BmoResizeHandlePositioner._kPillHeight,
           decoration: BoxDecoration(
-            color: BmoColors.textPrimary,
+            color: pillColor,
             borderRadius: BorderRadius.circular(
               BmoResizeHandlePositioner._kPillRadius,
+            ),
+            border: Border.all(
+              color: BmoColors.screenBg.withValues(alpha: 0.6),
+              width: 1,
             ),
             boxShadow: [
               BoxShadow(

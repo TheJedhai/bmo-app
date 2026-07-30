@@ -451,18 +451,27 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
     EventItem(event: final e) => Consumer(
       builder: (context, ref, _) {
         final calendarsById = ref.watch(calendarsByIdProvider);
-        return _buildEventMultiDayTile(ke, e, calendarsById);
+        final selectedId = ref.watch(selectedEventIdProvider);
+        return _buildEventMultiDayTile(ke, e, calendarsById,
+            isSelected: selectedId == ke.id);
       },
     ),
-    TaskItem(task: final t) => _buildTaskMultiDayTile(ke, t),
+    TaskItem(task: final t) => Consumer(
+      builder: (context, ref, _) {
+        final selectedId = ref.watch(selectedEventIdProvider);
+        return _buildTaskMultiDayTile(ke, t,
+            isSelected: selectedId == ke.id);
+      },
+    ),
   };
 }
 
 Widget _buildEventMultiDayTile(
   KalenderCalendarEvent ke,
   app.CalendarEvent e,
-  Map<int, dynamic> calendarsById,
-) {
+  Map<int, dynamic> calendarsById, {
+  bool isSelected = false,
+}) {
   final calendar = calendarsById[e.calendarId];
   final color = _hexToColor(calendar?.color ?? '#8BC9A3');
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
@@ -471,8 +480,17 @@ Widget _buildEventMultiDayTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.15),
+      color: color.withValues(alpha: isSelected ? 0.32 : 0.15),
       borderRadius: BorderRadius.circular(4),
+      boxShadow: isSelected
+          ? [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 8,
+                offset: Offset.zero,
+              ),
+            ]
+          : null,
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
@@ -551,8 +569,9 @@ Widget _buildEventMultiDayTile(
 
 Widget _buildTaskMultiDayTile(
   KalenderCalendarEvent ke,
-  Task t,
-) {
+  Task t, {
+  bool isSelected = false,
+}) {
   final color = BmoColors.taskChipColor;
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
   final isShort = durationMinutes <= 30;
@@ -560,8 +579,17 @@ Widget _buildTaskMultiDayTile(
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.15),
+      color: color.withValues(alpha: isSelected ? 0.32 : 0.15),
       borderRadius: BorderRadius.circular(4),
+      boxShadow: isSelected
+          ? [
+              BoxShadow(
+                color: color.withValues(alpha: 0.35),
+                blurRadius: 8,
+                offset: Offset.zero,
+              ),
+            ]
+          : null,
     ),
     clipBehavior: Clip.antiAlias,
     child: IntrinsicHeight(
@@ -656,10 +684,13 @@ Widget kalenderAllDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
   return Consumer(
     builder: (context, ref, _) {
       final calendarsById = ref.watch(calendarsByIdProvider);
+      final selectedId = ref.watch(selectedEventIdProvider);
 
       return switch (ke.source) {
-        EventItem(event: final e) => _buildEventAllDayTile(ke, e, calendarsById),
-        TaskItem(task: final t) => _buildTaskAllDayTile(ke, t),
+        EventItem(event: final e) => _buildEventAllDayTile(ke, e, calendarsById,
+            isSelected: selectedId == ke.id),
+        TaskItem(task: final t) => _buildTaskAllDayTile(ke, t,
+            isSelected: selectedId == ke.id),
       };
     },
   );
@@ -668,8 +699,9 @@ Widget kalenderAllDayTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
 Widget _buildEventAllDayTile(
   KalenderCalendarEvent ke,
   app.CalendarEvent e,
-  Map<int, dynamic> calendarsById,
-) {
+  Map<int, dynamic> calendarsById, {
+  bool isSelected = false,
+}) {
   final calendar = calendarsById[e.calendarId];
   final color = _hexToColor(calendar?.color ?? '#8BC9A3');
 
@@ -678,8 +710,17 @@ Widget _buildEventAllDayTile(
       margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.85),
+        color: color.withValues(alpha: isSelected ? 1.0 : 0.85),
         borderRadius: BorderRadius.circular(4),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: Offset.zero,
+                ),
+              ]
+            : null,
       ),
       child: Text(
         ke.title,
@@ -696,7 +737,7 @@ Widget _buildEventAllDayTile(
   );
 }
 
-Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
+Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t, {bool isSelected = false}) {
   final color = BmoColors.taskChipColor;
 
   return ClipRect(
@@ -704,8 +745,17 @@ Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t) {
       margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.85),
+        color: color.withValues(alpha: isSelected ? 1.0 : 0.85),
         borderRadius: BorderRadius.circular(4),
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.35),
+                  blurRadius: 8,
+                  offset: Offset.zero,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -788,29 +838,16 @@ Widget kalenderDropTargetTile(CalendarEvent event) {
   return switch (ke.source) {
     EventItem(event: final e) when e.calendarId == -1 =>
       _buildDropTargetContent(ke, const Color(0xFF8BC9A3), isShort),
-    EventItem(event: final e) => _CalendarColorConsumer(
-        calendarId: e.calendarId,
-        builder: (calColor) => _buildDropTargetFrame(calColor),
-      ),
-    TaskItem() => _buildDropTargetFrame(BmoColors.taskChipColor),
+    EventItem() => const ColoredBox(color: Colors.transparent),
+    TaskItem() => const ColoredBox(color: Colors.transparent),
   };
 }
 
-/// Border-only frame for existing events selected or being dragged.
+/// Transparent placeholder for existing events.
 ///
 /// The real tile is rendered underneath by [kalenderMonthTileBuilder] /
-/// [kalenderMultiDayTileBuilder] and stays fully readable. This frame only
-/// marks the drop-target position without duplicating text.
-Widget _buildDropTargetFrame(Color color) {
-  return Container(
-    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: color, width: 2),
-    ),
-  );
-}
-
+/// [kalenderMultiDayTileBuilder] and stays fully readable. Selection is
+/// communicated by the tile itself, not by a border around it.
 Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isShort) {
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
