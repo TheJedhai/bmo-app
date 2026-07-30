@@ -961,8 +961,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
         scope: scope,
         occurrenceDate: occurrenceDate,
       );
-      debugPrint('[delete] delete ok ts=${DateTime.now().millisecondsSinceEpoch} '
-          'eventId=${event.id} scope=$scope occurrenceDate=$occurrenceDate');
       invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
       if (mounted) Navigator.of(context).pop(null);
     } catch (e) {

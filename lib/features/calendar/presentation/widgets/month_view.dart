@@ -44,10 +44,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
   ProviderSubscription<AsyncValue<List<app.CalendarEvent>>>? _eventsSubscription;
   ProviderSubscription<AsyncValue<List<Task>>>? _tasksSubscription;
 
-  /// DEBUG: range currently subscribed in _listenToEvents. Compare with
-  /// _applyFilter's visibleMonthProvider read to detect stale subscriptions.
-  MonthRange? _debugSubscribedRange;
-
   @override
   void initState() {
     super.initState();
@@ -175,16 +171,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// re-applies the visibility filter and syncs to the calendar controller
   /// — without rebuilding CalendarView.
   void _listenToEvents(MonthRange range) {
-    _debugSubscribedRange = range;
     _eventsSubscription?.close();
     _eventsSubscription = ref.listenManual(
       eventsProvider(range),
       (prev, next) {
-        debugPrint('[listenManual eventsProvider] FIRED '
-            'prev=${prev.runtimeType} next=${next.runtimeType} '
-            'next.isLoading=${next.isLoading} next.hasValue=${next.hasValue} '
-            'next.hasError=${next.hasError} '
-            'length=${next.valueOrNull?.length}');
         _applyFilter();
       },
     );
@@ -224,19 +214,12 @@ class _MonthViewState extends ConsumerState<MonthView> {
       if (showMissions)
         for (final t in tasks) TaskItem(t),
     ];
-    debugPrint('[_applyFilter] monthRange=(${monthRange.year},${monthRange.month}) '
-        'subscribedRange=(${_debugSubscribedRange?.year},${_debugSubscribedRange?.month}) '
-        'events=${events.length} visible=${visibleEvents.length} tasks=${tasks.length} '
-        'items=${items.length}');
     _syncEvents(items);
   }
 
   void _syncEvents(List<CalendarItem> items) {
     final kalenderEvents = toKalenderEvents(items);
-    debugPrint('[_syncEvents] before replace: controller.events.length=${_eventsController.events.length}');
     _eventsController.replaceEvents(kalenderEvents);
-    debugPrint('[_syncEvents] after replace: controller.events.length=${_eventsController.events.length} '
-        'kalenderEvents.length=${kalenderEvents.length}');
 
     // Clear orphaned selection: if the selected event was deleted (or removed
     // by SSE / override), its id won't be in the new kalenderEvents list, but
