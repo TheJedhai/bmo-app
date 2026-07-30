@@ -99,17 +99,17 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'task.updated':
     case 'task.deleted':
     case 'task.completed':
-      invalidateAllFamilyInstances(ref, tasksProvider);
-      invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref.container,tasksProvider);
+      invalidateAllFamilyInstances(ref.container,calendarTasksProvider);
     case 'folder.created':
     case 'folder.updated':
     case 'folder.deleted':
       ref.invalidate(foldersProvider);
-      invalidateAllFamilyInstances(ref, tasksProvider);
-      invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref.container,tasksProvider);
+      invalidateAllFamilyInstances(ref.container,calendarTasksProvider);
     case 'tasks.batch_updated':
-      invalidateAllFamilyInstances(ref, tasksProvider);
-      invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      invalidateAllFamilyInstances(ref.container,tasksProvider);
+      invalidateAllFamilyInstances(ref.container,calendarTasksProvider);
 
     // ---- Memories ----
     case 'memory.created':
@@ -121,15 +121,15 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'article.created':
     case 'article.updated':
     case 'articles.batch_updated':
-      invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref.container,articlesProvider);
       ref.invalidate(unreadCountProvider);
     case 'feed.created':
     case 'feed.updated':
       ref.invalidate(feedsProvider);
-      invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref.container,articlesProvider);
     case 'feed.deleted':
       ref.invalidate(feedsProvider);
-      invalidateAllFamilyInstances(ref, articlesProvider);
+      invalidateAllFamilyInstances(ref.container,articlesProvider);
       ref.invalidate(unreadCountProvider);
 
     // ---- Images ----
@@ -161,12 +161,12 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'calendar.event.created':
     case 'calendar.event.updated':
     case 'calendar.event.deleted':
-      invalidateAllFamilyInstances(ref, eventsProvider);
+      invalidateAllFamilyInstances(ref.container,eventsProvider);
     case 'calendar.calendar.created':
     case 'calendar.calendar.updated':
     case 'calendar.calendar.deleted':
       ref.invalidate(calendarsProvider);
-      invalidateAllFamilyInstances(ref, eventsProvider);
+      invalidateAllFamilyInstances(ref.container,eventsProvider);
 
     case 'connected':
       debugPrint('SSE connected');

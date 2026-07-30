@@ -44,6 +44,10 @@ class _MonthViewState extends ConsumerState<MonthView> {
   ProviderSubscription<AsyncValue<List<app.CalendarEvent>>>? _eventsSubscription;
   ProviderSubscription<AsyncValue<List<Task>>>? _tasksSubscription;
 
+  /// DEBUG: range currently subscribed in _listenToEvents. Compare with
+  /// _applyFilter's visibleMonthProvider read to detect stale subscriptions.
+  MonthRange? _debugSubscribedRange;
+
   @override
   void initState() {
     super.initState();
@@ -171,10 +175,18 @@ class _MonthViewState extends ConsumerState<MonthView> {
   /// re-applies the visibility filter and syncs to the calendar controller
   /// — without rebuilding CalendarView.
   void _listenToEvents(MonthRange range) {
+    _debugSubscribedRange = range;
     _eventsSubscription?.close();
     _eventsSubscription = ref.listenManual(
       eventsProvider(range),
-      (_, _) => _applyFilter(),
+      (prev, next) {
+        debugPrint('[listenManual eventsProvider] FIRED '
+            'prev=${prev.runtimeType} next=${next.runtimeType} '
+            'next.isLoading=${next.isLoading} next.hasValue=${next.hasValue} '
+            'next.hasError=${next.hasError} '
+            'length=${next.valueOrNull?.length}');
+        _applyFilter();
+      },
     );
     _tasksSubscription?.close();
     _tasksSubscription = ref.listenManual(
@@ -212,11 +224,20 @@ class _MonthViewState extends ConsumerState<MonthView> {
       if (showMissions)
         for (final t in tasks) TaskItem(t),
     ];
+    debugPrint('[_applyFilter] monthRange=(${monthRange.year},${monthRange.month}) '
+        'subscribedRange=(${_debugSubscribedRange?.year},${_debugSubscribedRange?.month}) '
+        'events=${events.length} visible=${visibleEvents.length} tasks=${tasks.length} '
+        'items=${items.length}');
     _syncEvents(items);
   }
 
   void _syncEvents(List<CalendarItem> items) {
-    _eventsController.replaceEvents(toKalenderEvents(items));
+    final kalenderEvents = toKalenderEvents(items);
+    debugPrint('[_syncEvents] before replace: controller.events.length=${_eventsController.events.length}');
+    _eventsController.replaceEvents(kalenderEvents);
+    debugPrint('[_syncEvents] after replace: controller.events.length=${_eventsController.events.length} '
+        'kalenderEvents.length=${kalenderEvents.length}');
+    setState(() {});
   }
 
   Widget _buildCalendar() {
@@ -497,7 +518,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
           occurrenceDate: scope == 'this' ? originalDate : null,
           startDate: scope == 'this' && dateChanged ? newDate : null,
         ).then((_) {
-          if (mounted) invalidateAllFamilyInstances(ref, eventsProvider);
+          if (mounted) invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
         }).catchError((e) {
           if (mounted) {
             _applyFilter();
@@ -515,7 +536,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
 
     // Non-recurring: direct patch.
     doPatch().then((_) {
-      if (mounted) invalidateAllFamilyInstances(ref, eventsProvider);
+      if (mounted) invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();
@@ -575,7 +596,7 @@ class _MonthViewState extends ConsumerState<MonthView> {
     }
 
     patch.then((_) {
-      if (mounted) invalidateAllFamilyInstances(ref, calendarTasksProvider);
+      if (mounted) invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),calendarTasksProvider);
     }).catchError((e) {
       if (mounted) {
         _applyFilter();

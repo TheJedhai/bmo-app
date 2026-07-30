@@ -856,7 +856,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           clearReminder: _reminderMinutes == null,
           scope: scope,
         );
-        invalidateAllFamilyInstances(ref, eventsProvider);
+        invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
         if (mounted) Navigator.of(context).pop(updated);
       } else {
         final created = await repo.createEvent(
@@ -877,7 +877,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
               _recurrenceEnd != null ? _formatDateISO(_recurrenceEnd!) : null,
           reminderMinutesBefore: _reminderMinutes,
         );
-        invalidateAllFamilyInstances(ref, eventsProvider);
+        invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
         if (mounted) Navigator.of(context).pop(created);
       }
     } on CalendarApiException catch (e) {
@@ -961,7 +961,9 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
         scope: scope,
         occurrenceDate: occurrenceDate,
       );
-      invalidateAllFamilyInstances(ref, eventsProvider);
+      debugPrint('[delete] delete ok ts=${DateTime.now().millisecondsSinceEpoch} '
+          'eventId=${event.id} scope=$scope occurrenceDate=$occurrenceDate');
+      invalidateAllFamilyInstances(ProviderScope.containerOf(ref.context),eventsProvider);
       if (mounted) Navigator.of(context).pop(null);
     } catch (e) {
       if (mounted) {
