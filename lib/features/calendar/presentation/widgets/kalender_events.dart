@@ -200,6 +200,14 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
       final selectedEventId = ref.watch(selectedEventIdProvider);
       final isSelected = selectedEventId == ke.id;
 
+      // Kalender renders the selected event in a separate overlay layer
+      // (MultiDayEventLayoutWidget.dropTargetWidget for month view and
+      // DayDropTargetColumn for day/week view) via dropTargetTile. If we
+      // also render the normal tile, both layers draw on top of each other
+      // and produce visible text overlap. Return an empty widget here so
+      // only the drop-target overlay is visible.
+      if (isSelected) return const SizedBox.shrink();
+
       return switch (ke.source) {
         EventItem(event: final e) => _buildEventMonthTile(ke, e, calendarsById, isSelected),
         TaskItem(task: final t) => _buildTaskMonthTile(ke, t, isSelected),
@@ -473,6 +481,11 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
       final calendarsById = ref.watch(calendarsByIdProvider);
       final selectedEventId = ref.watch(selectedEventIdProvider);
       final isSelected = selectedEventId == ke.id;
+
+      // Same rationale as kalenderMonthTileBuilder: the kalender renders a
+      // separate drop-target overlay for the selected event. Hiding the
+      // normal tile avoids double rendering and visible text overlap.
+      if (isSelected) return const SizedBox.shrink();
 
       return switch (ke.source) {
         EventItem(event: final e) => _buildEventMultiDayTile(ke, e, calendarsById, isSelected),
