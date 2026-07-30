@@ -250,48 +250,50 @@ Widget _buildEventMonthTile(
           ? color.withValues(alpha: 0.25)
           : color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(3),
-      border: Border(
-        left: BorderSide(color: color, width: isSelected ? 4 : 3),
-        top: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        right: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        bottom: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-      ),
+      border: isSelected
+          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
+          : null,
     ),
-    child: Padding(
-      padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Container(width: isSelected ? 4 : 3, color: color),
           Expanded(
-            child: Text(
-              ke.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: BmoColors.textPrimary,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (ke.startTime != null)
+                    Text(
+                      _formatTime(ke.startTime!),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w400,
+                        color: BmoColors.textMuted,
+                      ),
+                    ),
+                  if (e.isRecurring || e.recurrenceParentId != null)
+                    _buildRecurrenceIcon(e, BmoColors.textMuted),
+                ],
               ),
             ),
           ),
-          if (ke.startTime != null)
-            Text(
-              _formatTime(ke.startTime!),
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 9,
-                fontWeight: FontWeight.w400,
-                color: BmoColors.textMuted,
-              ),
-            ),
-          if (e.isRecurring || e.recurrenceParentId != null)
-            _buildRecurrenceIcon(e, BmoColors.textMuted),
         ],
       ),
     ),
@@ -351,53 +353,55 @@ Widget _buildTaskMonthTile(
           ? color.withValues(alpha: 0.25)
           : color.withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(3),
-      border: Border(
-        left: BorderSide(color: color, width: isSelected ? 4 : 3),
-        top: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        right: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        bottom: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-      ),
+      border: isSelected
+          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
+          : null,
     ),
-    child: Padding(
-      padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _TaskCheckbox(t),
-          const SizedBox(width: 4),
+          Container(width: isSelected ? 4 : 3, color: color),
           Expanded(
-            child: Text(
-              ke.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: BmoColors.textPrimary,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, right: 4, top: 1, bottom: 1),
+              child: Row(
+                children: [
+                  _TaskCheckbox(t),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  if (ke.startTime != null)
+                    Text(
+                      _formatTime(ke.startTime!),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 9,
+                        fontWeight: FontWeight.w400,
+                        color: BmoColors.textMuted,
+                      ),
+                    ),
+                  if (t.recurrenceType != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
+                    ),
+                ],
               ),
             ),
           ),
-          if (ke.startTime != null)
-            Text(
-              _formatTime(ke.startTime!),
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 9,
-                fontWeight: FontWeight.w400,
-                color: BmoColors.textMuted,
-              ),
-            ),
-          if (t.recurrenceType != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 2),
-              child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
-            ),
         ],
       ),
     ),
@@ -491,83 +495,87 @@ Widget _buildEventMultiDayTile(
 
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
       color: isSelected
           ? color.withValues(alpha: 0.25)
           : color.withValues(alpha: 0.15),
       borderRadius: BorderRadius.circular(4),
-      border: Border(
-        left: BorderSide(color: color, width: isSelected ? 4 : 3),
-        top: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        right: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        bottom: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
+      border: isSelected
+          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
+          : null,
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: isSelected ? 4 : 3, color: color),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: isShort
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            ke.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: BmoColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (e.isRecurring || e.recurrenceParentId != null)
+                          _buildRecurrenceIcon(e, BmoColors.textMuted),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                ke.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: BmoColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (e.isRecurring || e.recurrenceParentId != null)
+                              _buildRecurrenceIcon(e, BmoColors.textMuted),
+                          ],
+                        ),
+                        if (ke.startTime != null)
+                          Text(
+                            ke.endTime != null
+                                ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
+                                : _formatTime(ke.startTime!),
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 9,
+                              color: BmoColors.textMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     ),
-    child: isShort
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: Text(
-                  ke.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BmoColors.textPrimary,
-                  ),
-                ),
-              ),
-              if (e.isRecurring || e.recurrenceParentId != null)
-                _buildRecurrenceIcon(e, BmoColors.textMuted),
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Expanded(
-                    child: Text(
-                      ke.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: BmoColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  if (e.isRecurring || e.recurrenceParentId != null)
-                    _buildRecurrenceIcon(e, BmoColors.textMuted),
-                ],
-              ),
-              if (ke.startTime != null)
-                Text(
-                  ke.endTime != null
-                      ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                      : _formatTime(ke.startTime!),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 9,
-                    color: BmoColors.textMuted,
-                  ),
-                ),
-            ],
-          ),
   );
 }
 
@@ -582,91 +590,95 @@ Widget _buildTaskMultiDayTile(
 
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
       color: isSelected
           ? color.withValues(alpha: 0.25)
           : color.withValues(alpha: 0.15),
       borderRadius: BorderRadius.circular(4),
-      border: Border(
-        left: BorderSide(color: color, width: isSelected ? 4 : 3),
-        top: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        right: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
-        bottom: isSelected
-            ? BorderSide(color: color.withValues(alpha: 0.4), width: 1)
-            : BorderSide.none,
+      border: isSelected
+          ? Border.all(color: color.withValues(alpha: 0.4), width: 1)
+          : null,
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: isSelected ? 4 : 3, color: color),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: isShort
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _TaskCheckbox(t),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            ke.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: BmoColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        if (t.recurrenceType != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 2),
+                            child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _TaskCheckbox(t),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                ke.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: BmoColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (t.recurrenceType != null)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 2),
+                                child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
+                              ),
+                          ],
+                        ),
+                        if (ke.startTime != null)
+                          Text(
+                            _formatTime(ke.startTime!),
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 9,
+                              color: BmoColors.textMuted,
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
+          ),
+        ],
       ),
     ),
-    child: isShort
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _TaskCheckbox(t),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  ke.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BmoColors.textPrimary,
-                  ),
-                ),
-              ),
-              if (t.recurrenceType != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 2),
-                  child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
-                ),
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _TaskCheckbox(t),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      ke.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: BmoColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  if (t.recurrenceType != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: Icon(Icons.repeat, size: 10, color: BmoColors.textMuted.withValues(alpha: 0.5)),
-                    ),
-                ],
-              ),
-              if (ke.startTime != null)
-                Text(
-                  _formatTime(ke.startTime!),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 9,
-                    color: BmoColors.textMuted,
-                  ),
-                ),
-            ],
-          ),
   );
 }
 
