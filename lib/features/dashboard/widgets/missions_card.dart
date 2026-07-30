@@ -18,28 +18,49 @@ class MissionsCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tasksAsync = ref.watch(dashboardMissionsProvider);
+    final dashboardAsync = ref.watch(dashboardMissionsProvider);
+    final allTasksAsync = ref.watch(
+      tasksProvider(const (
+        status: 'pending',
+        folderId: null,
+        parentId: 0,
+        includeSubtasks: true,
+      )),
+    );
 
-    return tasksAsync.when(
-      loading: () => const _LoadingState(),
-      error: (_, _) => const _ErrorState(),
-      data: (tasks) => _MissionsContent(tasks: tasks, accent: accent),
+    if (dashboardAsync is AsyncLoading || allTasksAsync is AsyncLoading) {
+      return const _LoadingState();
+    }
+    if (dashboardAsync.hasError || allTasksAsync.hasError) {
+      return const _ErrorState();
+    }
+
+    final filteredTasks = dashboardAsync.value ?? const [];
+    final allTasks = allTasksAsync.value ?? const [];
+
+    return _MissionsContent(
+      pendingCount: filteredTasks.length,
+      allTasks: allTasks,
+      accent: accent,
     );
   }
 }
 
 class _MissionsContent extends StatelessWidget {
-  const _MissionsContent({required this.tasks, required this.accent});
+  const _MissionsContent({
+    required this.pendingCount,
+    required this.allTasks,
+    required this.accent,
+  });
 
-  final List<Task> tasks;
+  final int pendingCount;
+  final List<Task> allTasks;
   final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final pendingCount = tasks.length;
-
     final withDue =
-        tasks.where((t) => t.dueDate != null).toList()
+        allTasks.where((t) => t.dueDate != null).toList()
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
     final upcoming = withDue.take(3).toList();
 
