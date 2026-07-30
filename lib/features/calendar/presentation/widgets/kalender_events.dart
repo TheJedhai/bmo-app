@@ -200,14 +200,6 @@ Widget kalenderMonthTileBuilder(CalendarEvent event, DateTimeRange tileRange) {
       final selectedEventId = ref.watch(selectedEventIdProvider);
       final isSelected = selectedEventId == ke.id;
 
-      // Kalender renders the selected event in a separate overlay layer
-      // (MultiDayEventLayoutWidget.dropTargetWidget for month view and
-      // DayDropTargetColumn for day/week view) via dropTargetTile. If we
-      // also render the normal tile, both layers draw on top of each other
-      // and produce visible text overlap. Return an empty widget here so
-      // only the drop-target overlay is visible.
-      if (isSelected) return const SizedBox.shrink();
-
       return switch (ke.source) {
         EventItem(event: final e) => _buildEventMonthTile(ke, e, calendarsById, isSelected),
         TaskItem(task: final t) => _buildTaskMonthTile(ke, t, isSelected),
@@ -481,11 +473,6 @@ Widget kalenderMultiDayTileBuilder(CalendarEvent event, DateTimeRange tileRange)
       final calendarsById = ref.watch(calendarsByIdProvider);
       final selectedEventId = ref.watch(selectedEventIdProvider);
       final isSelected = selectedEventId == ke.id;
-
-      // Same rationale as kalenderMonthTileBuilder: the kalender renders a
-      // separate drop-target overlay for the selected event. Hiding the
-      // normal tile avoids double rendering and visible text overlap.
-      if (isSelected) return const SizedBox.shrink();
 
       return switch (ke.source) {
         EventItem(event: final e) => _buildEventMultiDayTile(ke, e, calendarsById, isSelected),
@@ -839,10 +826,25 @@ Widget kalenderDropTargetTile(CalendarEvent event) {
       _buildDropTargetContent(ke, const Color(0xFF8BC9A3), isShort),
     EventItem(event: final e) => _CalendarColorConsumer(
         calendarId: e.calendarId,
-        builder: (calColor) => _buildDropTargetContent(ke, calColor, isShort),
+        builder: (calColor) => _buildDropTargetFrame(calColor),
       ),
-    TaskItem() => _buildDropTargetContent(ke, BmoColors.taskChipColor, isShort),
+    TaskItem() => _buildDropTargetFrame(BmoColors.taskChipColor),
   };
+}
+
+/// Border-only frame for existing events selected or being dragged.
+///
+/// The real tile is rendered underneath by [kalenderMonthTileBuilder] /
+/// [kalenderMultiDayTileBuilder] and stays fully readable. This frame only
+/// marks the drop-target position without duplicating text.
+Widget _buildDropTargetFrame(Color color) {
+  return Container(
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: color, width: 2),
+    ),
+  );
 }
 
 Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isShort) {
