@@ -728,15 +728,51 @@ Widget _buildEventAllDayTile(
   Map<int, dynamic> calendarsById, {
   bool isSelected = false,
 }) {
-  if (isSelected) {
-    return const ColoredBox(
-      color: Colors.transparent,
-      child: SizedBox.expand(),
-    );
-  }
-
   final calendar = calendarsById[e.calendarId];
   final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+
+  if (isSelected) {
+    return ClipRect(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.32),
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.35),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: color),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  child: Text(
+                    ke.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   return ClipRect(
     child: Container(
@@ -762,14 +798,59 @@ Widget _buildEventAllDayTile(
 }
 
 Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t, {bool isSelected = false}) {
+  final color = BmoColors.taskChipColor;
+
   if (isSelected) {
-    return const ColoredBox(
-      color: Colors.transparent,
-      child: SizedBox.expand(),
+    return ClipRect(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.32),
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.35),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 3, color: color),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _TaskCheckbox(t),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          ke.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
-
-  final color = BmoColors.taskChipColor;
 
   return ClipRect(
     child: Container(
