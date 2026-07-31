@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/utils/file_download.dart';
+import '../data/image_filename.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
 import 'gallery_image_detail.dart';
@@ -209,7 +211,7 @@ class _ImageGrid extends StatelessWidget {
 // Thumbnail
 // ============================================================
 
-class _ImageThumbnail extends StatelessWidget {
+class _ImageThumbnail extends ConsumerStatefulWidget {
   final GalleryImage image;
   final VoidCallback onTap;
   final VoidCallback onDelete;
@@ -220,13 +222,40 @@ class _ImageThumbnail extends StatelessWidget {
     required this.onDelete,
   });
 
+  @override
+  ConsumerState<_ImageThumbnail> createState() => _ImageThumbnailState();
+}
+
+class _ImageThumbnailState extends ConsumerState<_ImageThumbnail> {
+  bool _isDownloading = false;
+
+  GalleryImage get _image => widget.image;
+
   String get _imageUrl =>
-      '${Env.bmoServerUrl}/api/v1/images/${image.id}/file';
+      '${Env.bmoServerUrl}/api/v1/images/${_image.id}/file';
+
+  Future<void> _download() async {
+    setState(() => _isDownloading = true);
+    try {
+      final bytes = await ref.read(imageBytesProvider(_image.id).future);
+      final mime = mimeTypeFromBytes(bytes);
+      final fileName = galleryImageFileName(_image, mime);
+      downloadBytes(bytes: bytes, fileName: fileName, mimeType: mime);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha no download: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: widget.onTap,
       child: Container(
         decoration: BoxDecoration(
           color: BmoColors.screenBg,
@@ -240,7 +269,7 @@ class _ImageThumbnail extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             // Image or placeholder
-            if (image.isDone)
+            if (widget.image.isDone)
               Image.network(
                 _imageUrl,
                 fit: BoxFit.cover,
@@ -250,11 +279,42 @@ class _ImageThumbnail extends StatelessWidget {
                 },
                 errorBuilder: (_, _, _) => _buildErrorPlaceholder(),
               )
-            else if (image.isGenerating)
+            else if (widget.image.isGenerating)
               _buildGeneratingPlaceholder()
             else
               _buildErrorPlaceholder(),
 
+            // Download button
+            if (widget.image.isDone)
+              Positioned(
+                top: 2,
+                right: 32,
+                child: _isDownloading
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Padding(
+                          padding: EdgeInsets.all(4),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: BmoColors.accentGreen,
+                          ),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: _download,
+                        child: Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.download,
+                            size: 14,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                      ),
+              ),
             // Popup menu
             Positioned(
               top: 2,
@@ -272,7 +332,7 @@ class _ImageThumbnail extends StatelessWidget {
                   minHeight: 28,
                 ),
                 onSelected: (value) {
-                  if (value == 'delete') onDelete();
+                  if (value == 'delete') widget.onDelete();
                 },
                 itemBuilder: (_) => const [
                   PopupMenuItem(
@@ -295,7 +355,7 @@ class _ImageThumbnail extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  image.mode,
+                  widget.image.mode,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: BmoColors.textSecondary,
                         fontSize: 10,

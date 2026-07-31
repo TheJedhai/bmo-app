@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/utils/file_download.dart';
+import '../data/image_filename.dart';
 import '../data/image_model.dart';
+import '../providers/images_provider.dart';
 
-/// Full-screen-ish detail view for a single gallery image.
+/// Full-resolution detail view for a single gallery image.
 ///
-/// Shows the image at full resolution via /images/{id}/file, with optional
-/// metadata (prompt, model, strength) below.  Includes a delete action.
-class GalleryImageDetail extends StatelessWidget {
+/// Shows the image via /images/{id}/file, with metadata and
+/// download/delete actions.
+class GalleryImageDetail extends ConsumerStatefulWidget {
   final GalleryImage image;
   final VoidCallback onDelete;
 
@@ -18,14 +22,41 @@ class GalleryImageDetail extends StatelessWidget {
     required this.onDelete,
   });
 
+  @override
+  ConsumerState<GalleryImageDetail> createState() =>
+      _GalleryImageDetailState();
+}
+
+class _GalleryImageDetailState extends ConsumerState<GalleryImageDetail> {
+  bool _isDownloading = false;
+
   String get _imageUrl =>
-      '${Env.bmoServerUrl}/api/v1/images/${image.id}/file';
+      '${Env.bmoServerUrl}/api/v1/images/${widget.image.id}/file';
+
+  Future<void> _download() async {
+    setState(() => _isDownloading = true);
+    try {
+      final bytes = await ref.read(imageBytesProvider(widget.image.id).future);
+      final mime = mimeTypeFromBytes(bytes);
+      final fileName = galleryImageFileName(widget.image, mime);
+      downloadBytes(bytes: bytes, fileName: fileName, mimeType: mime);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha no download: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final hasMeta =
-        image.prompt != null || image.model != null || image.strength != null;
+    final hasMeta = widget.image.prompt != null ||
+        widget.image.model != null ||
+        widget.image.strength != null;
 
     return Dialog(
       backgroundColor: BmoColors.screenBgElevated,
@@ -50,19 +81,38 @@ class GalleryImageDetail extends StatelessWidget {
               child: Row(
                 children: [
                   Text(
-                    image.mode == 'img2img' ? 'img2img' : 'txt2img',
+                    widget.image.mode == 'img2img' ? 'img2img' : 'txt2img',
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: BmoColors.accentGreen,
                         ),
                   ),
                   const Spacer(),
+                  if (widget.image.isDone)
+                    _isDownloading
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: BmoColors.accentGreen,
+                              ),
+                            ),
+                          )
+                        : IconButton(
+                            icon: Icon(Icons.download,
+                                color: BmoColors.textSecondary, size: 20),
+                            tooltip: 'Baixar',
+                            onPressed: _download,
+                          ),
                   IconButton(
                     icon: Icon(Icons.delete_outline,
                         color: BmoColors.textSecondary, size: 20),
                     tooltip: 'Apagar',
                     onPressed: () {
                       Navigator.of(context).pop();
-                      onDelete();
+                      widget.onDelete();
                     },
                   ),
                   IconButton(
@@ -78,7 +128,7 @@ class GalleryImageDetail extends StatelessWidget {
             Flexible(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: image.isDone
+                child: widget.image.isDone
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
@@ -110,22 +160,22 @@ class GalleryImageDetail extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (image.prompt != null && image.prompt!.isNotEmpty) ...[
+                    if (widget.image.prompt != null && widget.image.prompt!.isNotEmpty) ...[
                       _MetaRow(
                         label: 'Prompt',
-                        value: image.prompt!,
+                        value: widget.image.prompt!,
                         maxLines: 4,
                       ),
                     ],
-                    if (image.model != null && image.model!.isNotEmpty) ...[
+                    if (widget.image.model != null && widget.image.model!.isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      _MetaRow(label: 'Modelo', value: image.model!),
+                      _MetaRow(label: 'Modelo', value: widget.image.model!),
                     ],
-                    if (image.strength != null) ...[
+                    if (widget.image.strength != null) ...[
                       const SizedBox(height: 6),
                       _MetaRow(
                         label: 'Strength',
-                        value: image.strength!.toStringAsFixed(2),
+                        value: widget.image.strength!.toStringAsFixed(2),
                       ),
                     ],
                   ],

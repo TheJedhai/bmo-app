@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'image_model.dart';
 
 /// Builds a download filename for a [GalleryImage].
@@ -5,10 +7,10 @@ import 'image_model.dart';
 /// Without a prompt: `bmo-image-{id}.{ext}`.
 /// With a prompt:    `bmo-image-{id}-{slug}.{ext}` (slug truncated at ~40 chars).
 ///
-/// The [mimeType] (as reported by the server, e.g. `image/png`) determines the
-/// file extension. Falls back to `png` for unknown types.
+/// The [mimeType] (e.g. `image/png`) determines the file extension.
+/// Falls back to `png` for unknown types.
 String galleryImageFileName(GalleryImage image, String mimeType) {
-  final ext = _extFromMime(mimeType);
+  final ext = extFromMime(mimeType);
   final prompt = image.prompt;
   if (prompt == null || prompt.trim().isEmpty) {
     return 'bmo-image-${image.id}.$ext';
@@ -16,7 +18,32 @@ String galleryImageFileName(GalleryImage image, String mimeType) {
   return 'bmo-image-${image.id}-${_toSlug(prompt)}.$ext';
 }
 
-String _extFromMime(String mimeType) {
+/// Derives a MIME type from raw image bytes by reading magic bytes.
+///
+/// Falls back to `image/png` when the signature is unrecognised.
+String mimeTypeFromBytes(Uint8List bytes) {
+  if (bytes.length < 4) return 'image/png';
+  // PNG
+  if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+    return 'image/png';
+  }
+  // JPEG
+  if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  // WebP
+  if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+    return 'image/webp';
+  }
+  // GIF
+  if (bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38) {
+    return 'image/gif';
+  }
+  return 'image/png';
+}
+
+/// Maps a MIME type to its file extension. Falls back to `png`.
+String extFromMime(String mimeType) {
   switch (mimeType) {
     case 'image/jpeg':
       return 'jpg';
