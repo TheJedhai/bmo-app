@@ -6,6 +6,9 @@ import '../../../core/events/events_provider.dart';
 import '../../../core/events/rich_blocks_provider.dart';
 import '../../../core/events/rich_blocks_state.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/utils/file_download.dart';
+import '../../gallery/data/image_filename.dart';
+import '../../gallery/providers/images_provider.dart';
 import '../data/bmo_rich_block.dart';
 
 /// Renders a rich-content block of type "image" — now live.
@@ -44,6 +47,27 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
   /// inside [build] without mutating state during the build phase itself —
   /// the actual [setState] is deferred via [WidgetsBinding.addPostFrameCallback].
   RichBlockStatus? _lastLiveStatus;
+
+  bool _isDownloading = false;
+
+  Future<void> _downloadImage(int imageId) async {
+    setState(() => _isDownloading = true);
+    try {
+      final bytes = await ref.read(imageBytesProvider(imageId).future);
+      final mime = mimeTypeFromBytes(bytes);
+      final ext = extFromMime(mime);
+      final fileName = 'bmo-image-$imageId.$ext';
+      downloadBytes(bytes: bytes, fileName: fileName, mimeType: mime);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Falha no download: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
 
   // ---- image_id helpers ------------------------------------------------
 
@@ -220,20 +244,29 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
     // on to the error.
     final url = '${_imageUrlFor(imageId)}?cb=$_cacheBuster';
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        url,
-        key: ValueKey('img-$imageId-done-$_cacheBuster'),
-        width: double.infinity,
-        fit: BoxFit.contain,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return _buildLoading(context, loadingProgress);
-        },
-        errorBuilder: (context, error, stackTrace) =>
-            _buildImageError(imageId, error),
-      ),
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            url,
+            key: ValueKey('img-$imageId-done-$_cacheBuster'),
+            width: double.infinity,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return _buildLoading(context, loadingProgress);
+            },
+            errorBuilder: (context, error, stackTrace) =>
+                _buildImageError(imageId, error),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: _buildDownloadButton(imageId),
+        ),
+      ],
     );
   }
 
@@ -325,7 +358,8 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
   /// shows a loading placeholder while it loads.  Covers images that were
   /// already `done` before this session's SSE connection started.
   Widget _buildStatic() {
-    final url = _payloadImageId > 0 ? _imageUrlFor(_payloadImageId) : '';
+    final imageId = _payloadImageId;
+    final url = imageId > 0 ? _imageUrlFor(imageId) : '';
     if (url.isEmpty) return _buildPlaceholder(context);
 
     return ClipRRect(
@@ -335,11 +369,58 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
         width: double.infinity,
         fit: BoxFit.contain,
         loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
+          if (loadingProgress == null) {
+            return Stack(
+              children: [
+                child,
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: _buildDownloadButton(imageId),
+                ),
+              ],
+            );
+          }
           return _buildLoading(context, loadingProgress);
         },
         errorBuilder: (context, error, stackTrace) =>
             _buildPlaceholder(context),
+      ),
+    );
+  }
+
+  Widget _buildDownloadButton(int imageId) {
+    if (_isDownloading) {
+      return Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: BmoColors.screenBg.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(6),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: BmoColors.accentGreen,
+          ),
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: () => _downloadImage(imageId),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: BmoColors.screenBg.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Icon(
+          Icons.download,
+          size: 16,
+          color: BmoColors.accentGreen,
+        ),
       ),
     );
   }
