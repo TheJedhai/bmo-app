@@ -933,124 +933,148 @@ Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isSho
 
 /// Builds the selected-style tile for an existing calendar event.
 ///
-/// Apple Calendar style: solid calendar-color fill, dark text on top.
-/// No border, no shadow, no side bar — the whole tile is the color.
+/// Tinted background with glow shadow, 3px left accent bar, no border.
+/// Title in textPrimary, time in white 0.75 for legibility.
 Widget _buildSelectedEventContent(KalenderCalendarEvent ke, Color color, bool isShort) {
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(6),
+      color: color.withValues(alpha: 0.32),
+      borderRadius: BorderRadius.circular(4),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.35),
+          blurRadius: 8,
+        ),
+      ],
     ),
-    child: isShort
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: Text(
-                  ke.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BmoColors.screenBg,
-                  ),
-                ),
-              ),
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                ke.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: BmoColors.screenBg,
-                ),
-              ),
-              if (ke.startTime != null)
-                Text(
-                  ke.endTime != null
-                      ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                      : _formatTime(ke.startTime!),
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 9,
-                    color: BmoColors.screenBg.withValues(alpha: 0.75),
-                  ),
-                ),
-            ],
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: 3, color: color),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: isShort
+                  ? Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ke.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                        if (ke.startTime != null)
+                          Text(
+                            ke.endTime != null
+                                ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
+                                : _formatTime(ke.startTime!),
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 9,
+                              color: Colors.white.withValues(alpha: 0.75),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
           ),
+        ],
+      ),
+    ),
   );
 }
 
 /// Builds the selected-style tile for a task (mission).
 ///
-/// Same solid-fill approach as [_buildSelectedEventContent] but uses
-/// [BmoColors.taskChipColor] as the fill.
+/// Tinted background with glow shadow, 3px left accent bar, no border.
+/// Title in textPrimary, time in white 0.75 for legibility.
 Widget _buildSelectedTaskContent(KalenderCalendarEvent ke, Task t, bool isShort) {
   final color = BmoColors.taskChipColor;
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
-      color: color,
-      borderRadius: BorderRadius.circular(6),
+      color: color.withValues(alpha: 0.32),
+      borderRadius: BorderRadius.circular(4),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.35),
+          blurRadius: 8,
+        ),
+      ],
     ),
-    child: isShort
-        ? Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: Text(
-                  ke.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: BmoColors.screenBg,
-                  ),
-                ),
-              ),
-            ],
-          )
-        : Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                ke.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: BmoColors.screenBg,
-                ),
-              ),
-              if (ke.startTime != null)
-                Text(
-                  _formatTime(ke.startTime!),
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 9,
-                    color: BmoColors.screenBg.withValues(alpha: 0.75),
-                  ),
-                ),
-            ],
+    clipBehavior: Clip.antiAlias,
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: 3, color: color),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              child: isShort
+                  ? Text(
+                      ke.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: BmoColors.textPrimary,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          ke.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: BmoColors.textPrimary,
+                          ),
+                        ),
+                        if (ke.startTime != null)
+                          Text(
+                            _formatTime(ke.startTime!),
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 9,
+                              color: Colors.white.withValues(alpha: 0.75),
+                            ),
+                          ),
+                      ],
+                    ),
+            ),
           ),
+        ],
+      ),
+    ),
   );
 }
 
