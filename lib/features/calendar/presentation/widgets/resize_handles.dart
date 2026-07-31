@@ -6,8 +6,6 @@ import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/calendar_providers.dart';
-import 'calendar_item.dart';
-import 'kalender_events.dart';
 
 /// Custom [ResizeHandlePositioner] that centers resize handles on the top and
 /// bottom edges of the event tile, Apple Calendar style.
@@ -82,22 +80,7 @@ class _BmoResizeHandles extends ResizeHandles {
         final selectedId = ref.watch(selectedEventIdProvider);
         if (selectedId != event.id) return const SizedBox();
 
-        // Resolve the event's color for handle tinting.
-        final ke = event as KalenderCalendarEvent;
-        final eventColor = switch (ke.source) {
-          EventItem(event: final e) => () {
-              final calendarsById = ref.watch(calendarsByIdProvider);
-              final calendar = calendarsById[e.calendarId];
-              final hex = calendar?.color ?? '#8BC9A3';
-              final cleaned = hex.replaceFirst('#', '');
-              if (cleaned.length == 6) {
-                return Color(int.parse('FF$cleaned', radix: 16));
-              }
-              return const Color(0xFF8BC9A3);
-            }(),
-          TaskItem() => BmoColors.taskChipColor,
-        };
-        final pillColor = Color.lerp(eventColor, Colors.white, 0.55)!;
+        final pillColor = BmoColors.screenBg.withValues(alpha: 0.55);
 
         // Touch-target dimensions — kept entirely inside the tile bounds.
         //
