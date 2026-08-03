@@ -40,6 +40,17 @@ class _ChatMessageListState extends ConsumerState<ChatMessageList> {
   }
 
   @override
+  void didUpdateWidget(ChatMessageList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Auto-scroll when messages change from outside the listenManual path
+    // (e.g. coding chat uses a different provider family).
+    if (identical(oldWidget.messages, widget.messages)) return;
+    final isFirstMessage =
+        oldWidget.messages.isEmpty && widget.messages.isNotEmpty;
+    _scheduleAutoScroll(isFirstMessage: isFirstMessage);
+  }
+
+  @override
   void dispose() {
     _sub?.close();
     _controller.dispose();
