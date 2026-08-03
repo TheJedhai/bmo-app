@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/coding_providers.dart';
+import '../../data/models/folder_item.dart';
 
 /// Diálogo de navegação de pastas, read-only.
 ///
@@ -42,7 +43,7 @@ class _FolderPickerDialogState extends ConsumerState<FolderPickerDialog> {
     _currentPath = widget.initialPath ?? '';
   }
 
-  Future<List<String>> _loadSubfolders() async {
+  Future<List<FolderItem>> _loadSubfolders() async {
     final client = ref.read(codingClientProvider);
     try {
       final path = _currentPath.isEmpty ? null : _currentPath;
@@ -52,9 +53,9 @@ class _FolderPickerDialogState extends ConsumerState<FolderPickerDialog> {
     }
   }
 
-  void _navigateTo(String folder) {
+  void _navigateTo(FolderItem folder) {
     _pathStack.add(_currentPath);
-    _currentPath = _currentPath.isEmpty ? folder : '$_currentPath/$folder';
+    _currentPath = folder.path;
     setState(() {});
   }
 
@@ -99,7 +100,7 @@ class _FolderPickerDialogState extends ConsumerState<FolderPickerDialog> {
             const SizedBox(height: 8),
             // Lista de subpastas
             Expanded(
-              child: FutureBuilder<List<String>>(
+              child: FutureBuilder<List<FolderItem>>(
                 future: _loadSubfolders(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -137,7 +138,7 @@ class _FolderPickerDialogState extends ConsumerState<FolderPickerDialog> {
                           size: 20,
                         ),
                         title: Text(
-                          folders[index],
+                          folders[index].name,
                           style: const TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 13,

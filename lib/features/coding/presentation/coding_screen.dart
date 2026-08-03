@@ -17,7 +17,8 @@ class CodingScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
+      body: Builder(
+        builder: (context) => Column(
       children: [
         _Header(
           onNewProject: () => _openProjectForm(context, ref),
@@ -118,6 +119,7 @@ class CodingScreen extends ConsumerWidget {
           ),
         ),
       ],
+        ),
       ),
     );
   }

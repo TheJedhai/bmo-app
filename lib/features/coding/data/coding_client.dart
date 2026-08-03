@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'models/coding_project.dart';
 import 'models/coding_session.dart';
+import 'models/folder_item.dart';
 
 class CodingApiException implements Exception {
   final int statusCode;
@@ -84,7 +85,7 @@ class CodingClient {
   // Filesystem
   // ============================================================
 
-  Future<List<String>> listSubfolders(String? path) async {
+  Future<List<FolderItem>> listSubfolders(String? path) async {
     final params = <String, String>{};
     if (path != null && path.isNotEmpty) params['path'] = path;
 
@@ -94,7 +95,9 @@ class CodingClient {
     final response = await _client.get(uri);
     _ensureOk(response);
     final list = jsonDecode(response.body) as List<dynamic>;
-    return list.map((e) => e.toString()).toList();
+    return list
+        .map((e) => FolderItem.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ============================================================
@@ -126,7 +129,7 @@ class CodingClient {
 
   Future<CodingSession> updateSession(
       int projectId, String sessionId, Map<String, dynamic> data) async {
-    final response = await _client.patch(
+    final response = await _client.put(
       Uri.parse(
           '$_baseUrl/api/v1/coding/projects/$projectId/sessions/$sessionId'),
       headers: {'Content-Type': 'application/json'},

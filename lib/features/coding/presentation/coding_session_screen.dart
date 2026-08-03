@@ -19,7 +19,8 @@ class CodingSessionScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
+      body: Builder(
+        builder: (context) => Column(
         children: [
           _Header(
             projectId: projectId,
@@ -63,9 +64,13 @@ class CodingSessionScreen extends ConsumerWidget {
               ),
             ),
             data: (sessions) {
-              // Ordena por updated_at decrescente (mais recente primeiro)
+              // Ordena por updated_at decrescente, fallback para created_at
               final sorted = List<CodingSession>.from(sessions)
-                ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+                ..sort((a, b) {
+                  final aTime = a.updatedAt ?? a.createdAt;
+                  final bTime = b.updatedAt ?? b.createdAt;
+                  return bTime.compareTo(aTime);
+                });
 
               if (sorted.isEmpty) {
                 return Center(
@@ -110,6 +115,7 @@ class CodingSessionScreen extends ConsumerWidget {
           ),
         ),
       ],
+        ),
       ),
     );
   }
@@ -120,6 +126,7 @@ class CodingSessionScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => _SessionFormDialog(controller: nameCtrl),
     );
+    nameCtrl.dispose();
 
     if (result == null || result.trim().isEmpty) return;
 
@@ -154,6 +161,7 @@ class CodingSessionScreen extends ConsumerWidget {
         acceptLabel: 'Salvar',
       ),
     );
+    nameCtrl.dispose();
 
     if (result == null || result.trim().isEmpty) return;
 
@@ -400,7 +408,7 @@ class _SessionCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _formatTimestamp(session.updatedAt),
+                      _formatTimestamp(session.updatedAt ?? session.createdAt),
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 11,
