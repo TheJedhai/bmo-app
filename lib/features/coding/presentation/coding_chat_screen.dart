@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../chat/data/chat_message.dart';
+import '../../chat/providers/chat_providers.dart';
 import '../../chat/widgets/chat_input.dart';
 import '../../chat/widgets/chat_message_list.dart';
 import '../data/coding_chat_provider.dart';
@@ -49,6 +50,12 @@ class _CodingChatScreenState extends ConsumerState<CodingChatScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    ref.read(activeChatEchoProvider.notifier).state = null;
+    super.dispose();
+  }
+
   void _resolveFrom(AsyncValue<List<CodingSession>> async) {
     if (_resolvedUuid != null) return;
     async.whenData((sessions) {
@@ -63,6 +70,11 @@ class _CodingChatScreenState extends ConsumerState<CodingChatScreen> {
               .read(codingChatControllerProvider(session.id).notifier)
               .loadHistory();
         }
+        // Configura callback de eco para rich question cards.
+        final controller =
+            ref.read(codingChatControllerProvider(session.id).notifier);
+        ref.read(activeChatEchoProvider.notifier).state =
+            (text) => controller.sendMessage(text, sessionId: widget.sessionId);
         // Força rebuild para sair do estado de loading.
         setState(() {});
       }

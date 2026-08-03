@@ -42,12 +42,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     });
 
-    // Carrega histórico quando uma conversa é selecionada.
+    // Carrega histórico e configura eco quando uma conversa é selecionada.
     ref.listenManual<String?>(
       selectedConversationIdProvider,
       (prev, next) {
-        if (next == null) return;
-        ref.read(chatControllerProvider(next).notifier).loadHistory();
+        if (next == null) {
+          ref.read(activeChatEchoProvider.notifier).state = null;
+          return;
+        }
+        final controller = ref.read(chatControllerProvider(next).notifier);
+        controller.loadHistory();
+        ref.read(activeChatEchoProvider.notifier).state = controller.sendMessage;
       },
       fireImmediately: true,
     );

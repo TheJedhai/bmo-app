@@ -107,6 +107,14 @@ final conversationsProvider =
 
 final selectedConversationIdProvider = StateProvider<String?>((ref) => null);
 
+/// Callback que envia uma mensagem de eco na conversa ativa (normal ou coding).
+///
+/// Cada tela de chat define este callback quando sua conversa está ativa e o
+/// limpa ao sair. O [BmoRichQuestionCard] (e futuros widgets que precisem ecoar
+/// respostas) lê este provider para enviar a resposta sem saber qual tipo de
+/// conversa está renderizando.
+final activeChatEchoProvider = StateProvider<void Function(String)?>((ref) => null);
+
 // ============================================================
 // Mensagens por conversa (família por uuid)
 // ============================================================

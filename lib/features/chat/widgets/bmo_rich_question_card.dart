@@ -160,21 +160,13 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
 
   // ---- chat message echo ---------------------------------------------------
 
-  /// Looks up the label for [value] in the payload options and, if a chat
-  /// session is currently selected, sends it as a user message through the
-  /// same streaming path used by the chat input (POST /api/chat with SSE,
-  /// X-User-Id header, etc.).
+  /// Echoes the chosen [value] as a user chat message so the assistant can
+  /// respond to it. Uses [activeChatEchoProvider] — a callback set by whichever
+  /// chat screen (normal or coding) is currently active.
   void _sendAsChatMessage(String value) {
-    final label = _payloadOptions
-        .where((o) => o.value == value)
-        .map((o) => o.label)
-        .firstOrNull;
-    final text = (label != null && label.isNotEmpty) ? label : value;
-
-    final selectedId = ref.read(selectedConversationIdProvider);
-    if (selectedId == null) return;
-
-    ref.read(chatControllerProvider(selectedId).notifier).sendMessage(text);
+    final echo = ref.read(activeChatEchoProvider);
+    if (echo == null) return;
+    echo(value);
   }
 
   // ---- build --------------------------------------------------------------
