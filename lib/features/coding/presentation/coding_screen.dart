@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/coding_providers.dart';
 import '../data/models/coding_project.dart';
@@ -13,6 +14,17 @@ class CodingScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Gate opt-in: se o perfil atual não tem a feature 'coding', redireciona
+    // para a raiz. Este padrão serve de referência para outras features com
+    // gate opt-in (ex: 'finances').
+    final features = ref.watch(enabledFeaturesProvider);
+    if (!features.contains('coding')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) GoRouter.of(context).go('/');
+      });
+      return const SizedBox.shrink();
+    }
+
     final projectsAsync = ref.watch(projectsProvider);
 
     return Scaffold(
@@ -239,6 +251,20 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
       child: Row(
         children: [
+          IconButton(
+            onPressed: () {
+              if (GoRouter.of(context).canPop()) {
+                GoRouter.of(context).pop();
+              } else {
+                GoRouter.of(context).go('/');
+              }
+            },
+            icon: const Icon(Icons.arrow_back, size: 20),
+            color: BmoColors.textSecondary,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          const SizedBox(width: 8),
           Text(
             'CODING',
             style: TextStyle(

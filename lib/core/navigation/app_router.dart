@@ -10,6 +10,7 @@ import '../../features/rss/presentation/rss_screen.dart';
 import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/calendars_screen.dart';
 import '../../features/coding/presentation/coding_screen.dart';
+import '../../features/coding/presentation/coding_chat_screen.dart';
 import '../../features/coding/presentation/coding_session_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
@@ -187,6 +188,23 @@ final appRouter = GoRouter(
             return _buildFeaturePage(
                 CodingSessionScreen(projectId: projectId), state);
           },
+          routes: [
+            GoRoute(
+              path: ':sessionId',
+              pageBuilder: (context, state) {
+                final projectId =
+                    int.parse(state.pathParameters['projectId']!);
+                final sessionId = state.pathParameters['sessionId']!;
+                return _buildFeaturePage(
+                  CodingChatScreen(
+                    projectId: projectId,
+                    sessionId: sessionId,
+                  ),
+                  state,
+                );
+              },
+            ),
+          ],
         ),
       ],
     ),
