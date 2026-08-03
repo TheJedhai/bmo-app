@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/navigation/app_router.dart';
 import '../../core/theme/bmo_theme.dart';
 import '../calendar/presentation/widgets/calendar_dash_card.dart';
+import '../coding/presentation/widgets/coding_dash_card.dart';
 import '../finances/presentation/widgets/finances_dash_card.dart';
 import '../gallery/widgets/gallery_modal.dart';
 import 'widgets/chat_card.dart';
@@ -124,6 +125,18 @@ final List<DashWidgetSpec> dashboardWidgets = [
     builder: _chatCardBuilder,
   ),
   const DashWidgetSpec(
+    id: 'coding',
+    title: 'Coding',
+    accent: BmoColors.accentBlue,
+    pulseDelay: Duration(milliseconds: 500),
+    featureKey: 'coding',
+    onTap: _goToCoding,
+    showInNavBar: true,
+    navIcon: Icons.code,
+    route: '/coding',
+    builder: _codingCardBuilder,
+  ),
+  const DashWidgetSpec(
     id: 'cofre',
     title: 'Cofre',
     accent: BmoColors.accentYellow,
@@ -183,6 +196,10 @@ void _goToFinances(BuildContext _) {
   appRouter.push('/financas');
 }
 
+void _goToCoding(BuildContext _) {
+  appRouter.push('/coding');
+}
+
 void _goToCalendar(BuildContext _) {
   appRouter.push('/calendario');
 }
@@ -217,6 +234,10 @@ Widget _vaultCardBuilder(BuildContext context, Color accent) {
 
 Widget _financesCardBuilder(BuildContext context, Color accent) {
   return FinancesDashCard(accent: accent);
+}
+
+Widget _codingCardBuilder(BuildContext context, Color accent) {
+  return CodingDashCard(accent: accent);
 }
 
 Widget _calendarCardBuilder(BuildContext context, Color accent) {

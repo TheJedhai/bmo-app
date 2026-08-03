@@ -5,6 +5,7 @@ import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
 import '../../features/missions/data/missions_providers.dart';
 import '../../features/calendar/data/calendar_providers.dart';
+import '../../features/coding/data/coding_providers.dart';
 import '../../features/finances/data/categorization_providers.dart';
 import '../../features/gallery/providers/images_provider.dart';
 
@@ -167,6 +168,19 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'calendar.calendar.deleted':
       ref.invalidate(calendarsProvider);
       invalidateAllFamilyInstances(ref.container,eventsProvider);
+
+    // ---- Coding ----
+    case 'coding.project.created':
+    case 'coding.project.updated':
+    case 'coding.project.deleted':
+    case 'coding.project.synced':
+      ref.invalidate(projectsProvider);
+      break;
+    case 'coding.session.created':
+    case 'coding.session.updated':
+    case 'coding.session.deleted':
+      invalidateAllFamilyInstances(ref.container, sessionsProvider);
+      break;
 
     case 'connected':
       debugPrint('SSE connected');

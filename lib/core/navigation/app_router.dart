@@ -9,6 +9,8 @@ import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/rss/presentation/rss_screen.dart';
 import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/calendars_screen.dart';
+import '../../features/coding/presentation/coding_screen.dart';
+import '../../features/coding/presentation/coding_session_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
 import '../events/events_provider.dart';
@@ -172,6 +174,19 @@ final appRouter = GoRouter(
           path: '/financas',
           pageBuilder: (context, state) =>
               _buildFeaturePage(const FinancesScreen(), state),
+        ),
+        GoRoute(
+          path: '/coding',
+          pageBuilder: (context, state) =>
+              _buildFeaturePage(const CodingScreen(), state),
+        ),
+        GoRoute(
+          path: '/coding/:projectId',
+          pageBuilder: (context, state) {
+            final projectId = int.parse(state.pathParameters['projectId']!);
+            return _buildFeaturePage(
+                CodingSessionScreen(projectId: projectId), state);
+          },
         ),
       ],
     ),
