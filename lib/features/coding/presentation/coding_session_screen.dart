@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/coding_client.dart';
 import '../data/coding_providers.dart';
@@ -15,6 +16,17 @@ class CodingSessionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Gate opt-in: se o perfil atual não tem a feature 'coding', redireciona
+    // para a raiz. Este padrão serve de referência para outras features com
+    // gate opt-in (ex: 'finances').
+    final features = ref.watch(enabledFeaturesProvider);
+    if (!features.contains('coding')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) GoRouter.of(context).go('/');
+      });
+      return const SizedBox.shrink();
+    }
+
     final sessionsAsync = ref.watch(sessionsProvider(projectId));
 
     return Scaffold(
@@ -102,7 +114,9 @@ class CodingSessionScreen extends ConsumerWidget {
                   return _SessionCard(
                     session: sorted[index],
                     onTap: () {
-                      // Fatia 2 — por enquanto não navega.
+                      GoRouter.of(context).push(
+                        '/coding/$projectId/${sorted[index].sessionId}',
+                      );
                     },
                     onRename: () =>
                         _renameSession(context, ref, sorted[index]),
@@ -121,12 +135,10 @@ class CodingSessionScreen extends ConsumerWidget {
   }
 
   Future<void> _createSession(BuildContext context, WidgetRef ref) async {
-    final nameCtrl = TextEditingController();
     final result = await showDialog<String>(
       context: context,
-      builder: (ctx) => _SessionFormDialog(controller: nameCtrl),
+      builder: (ctx) => const _SessionFormDialog(),
     );
-    nameCtrl.dispose();
 
     if (result == null || result.trim().isEmpty) return;
 
@@ -152,16 +164,14 @@ class CodingSessionScreen extends ConsumerWidget {
     WidgetRef ref,
     CodingSession session,
   ) async {
-    final nameCtrl = TextEditingController(text: session.name);
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => _SessionFormDialog(
-        controller: nameCtrl,
+        initialText: session.name,
         title: 'Renomear conversa',
         acceptLabel: 'Salvar',
       ),
     );
-    nameCtrl.dispose();
 
     if (result == null || result.trim().isEmpty) return;
 
@@ -467,12 +477,12 @@ class _SessionCard extends StatelessWidget {
 
 class _SessionFormDialog extends StatefulWidget {
   const _SessionFormDialog({
-    required this.controller,
+    this.initialText = '',
     this.title = 'Nova conversa',
     this.acceptLabel = 'Criar',
   });
 
-  final TextEditingController controller;
+  final String initialText;
   final String title;
   final String acceptLabel;
 
@@ -482,6 +492,19 @@ class _SessionFormDialog extends StatefulWidget {
 
 class _SessionFormDialogState extends State<_SessionFormDialog> {
   final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -505,7 +528,7 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
       content: Form(
         key: _formKey,
         child: TextFormField(
-          controller: widget.controller,
+          controller: _controller,
           autofocus: true,
           decoration: InputDecoration(
             hintText: 'Nome da conversa',
@@ -558,7 +581,7 @@ class _SessionFormDialogState extends State<_SessionFormDialog> {
         FilledButton(
           onPressed: () {
             if (!_formKey.currentState!.validate()) return;
-            Navigator.of(context).pop(widget.controller.text.trim());
+            Navigator.of(context).pop(_controller.text.trim());
           },
           style: FilledButton.styleFrom(
             backgroundColor: BmoColors.accentGreen,
