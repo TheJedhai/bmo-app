@@ -116,61 +116,63 @@ final selectedConversationIdProvider = StateProvider<String?>((ref) => null);
 final activeChatEchoProvider = StateProvider<void Function(String)?>((ref) => null);
 
 // ============================================================
-// Mensagens por conversa (família por uuid)
+// Base compartilhada para notifiers de chat (normal e coding)
 // ============================================================
 
-class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
-  StreamSubscription<ChatEvent>? _subscription;
-  String? _currentAssistantMessageId;
-  String? _currentReasoningMessageId;
-  String? _currentTextMessageId;
-  bool _historyLoaded = false;
-  bool _renameDispatched = false;
+/// Lógica comum a [ChatController] e CodingChatNotifier:
+/// stream SSE, parsing de histórico, estado da sessão.
+///
+/// Subclasses chamam [startStream] com o sessionId resolvido e podem
+/// passar [onResponseCompleted] para ações pós-resposta (ex: auto-rename).
+abstract class BaseChatNotifier
+    extends FamilyNotifier<List<ChatMessage>, String> {
+  StreamSubscription<ChatEvent>? streamSub;
+  String? currentAssistantMessageId;
+  String? currentReasoningMessageId;
+  String? currentTextMessageId;
+  bool historyLoaded = false;
 
-  String get _uuid => arg;
+  String get chatId => arg;
 
   @override
   List<ChatMessage> build(String arg) {
     ref.watch(currentUserIdProvider);
-    _resetStreamState();
-    _historyLoaded = false;
+    resetStreamState();
+    historyLoaded = false;
     ref.onDispose(() {
-      _subscription?.cancel();
+      streamSub?.cancel();
     });
     return const [];
   }
 
-  /// Carrega o histórico do servidor uma vez. Chamadas subsequentes viram
-  /// no-op (use ref.invalidate(chatControllerProvider(uuid)) para forçar).
   Future<void> loadHistory() async {
-    if (_historyLoaded) return;
-    _historyLoaded = true;
+    if (historyLoaded) return;
+    historyLoaded = true;
 
     final client = ref.read(bmoChatClientProvider);
     try {
-      final raw = await client.getChat(_uuid);
-      final messages = _parseHistory(raw);
+      final raw = await client.getChat(chatId);
+      final messages = parseHistory(raw);
       state = messages;
     } catch (e) {
       developer.log(
-        'loadHistory falhou para $_uuid: $e',
-        name: 'chat_controller',
+        'loadHistory falhou para $chatId: $e',
+        name: 'base_chat',
         level: 900,
       );
-      // mantém state como []
     }
   }
 
-  void sendMessage(String userText) {
+  /// Envia mensagem e escuta o stream SSE de resposta.
+  /// [sessionId] é o identificador bmo-xxx usado pelo POST /api/chat.
+  /// [onResponseCompleted] dispara após ResponseCompleted (ex: auto-rename
+  /// no chat normal; não usado no coding).
+  void startStream(String userText, {
+    required String sessionId,
+    void Function()? onResponseCompleted,
+  }) {
     final trimmed = userText.trim();
     if (trimmed.isEmpty) return;
-
-    final conversations =
-        ref.read(conversationsProvider).valueOrNull ?? const <Conversation>[];
-    final conv = conversations.firstWhere(
-      (c) => c.uuid == _uuid,
-      orElse: () => throw StateError('conversa $_uuid não encontrada'),
-    );
 
     final userMsg = ChatMessage.create(
       role: ChatRole.user,
@@ -185,139 +187,82 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
 
     state = [...state, userMsg, assistantMsg];
 
-    _currentAssistantMessageId = assistantMsg.id;
-    _currentReasoningMessageId = null;
-    _currentTextMessageId = null;
-    _renameDispatched = false;
+    currentAssistantMessageId = assistantMsg.id;
+    currentReasoningMessageId = null;
+    currentTextMessageId = null;
 
     final client = ref.read(bmoChatClientProvider);
     final stream = client.sendMessage(
-      sessionId: conv.sessionId,
+      sessionId: sessionId,
       text: trimmed,
     );
 
-    _subscription = stream.listen(
-      (event) {
-        _handleEvent(event, userText: trimmed);
-      },
+    streamSub = stream.listen(
+      (event) => handleEvent(event, onResponseCompleted: onResponseCompleted),
       onError: (e) {
-        _updateAssistant((m) => m.copyWith(
+        updateAssistant((m) => m.copyWith(
               text: 'erro: $e',
               status: ChatMessageStatus.error,
             ));
-        _resetStreamState();
+        resetStreamState();
       },
     );
   }
 
   void cancelCurrentRequest() {
-    if (_subscription == null) return;
-    _subscription!.cancel();
-    _updateAssistant((m) => m.copyWith(status: ChatMessageStatus.cancelled));
-    _resetStreamState();
+    if (streamSub == null) return;
+    streamSub!.cancel();
+    updateAssistant((m) => m.copyWith(status: ChatMessageStatus.cancelled));
+    resetStreamState();
   }
 
-  void clearChat() {
-    if (_subscription != null) {
-      _subscription!.cancel();
-      _updateAssistant((m) => m.copyWith(status: ChatMessageStatus.cancelled));
-      _resetStreamState();
-    }
-    state = const [];
-  }
+  // ============================================================
+  // Event handling (protocolo SSE do bmo-server)
+  // ============================================================
 
-  void _handleEvent(ChatEvent event, {required String userText}) {
+  void handleEvent(ChatEvent event, {void Function()? onResponseCompleted}) {
     switch (event) {
       case ResponseCreated():
       case ResponseInProgress():
         break;
       case MessageStarted(:final messageId, :final messageType):
         if (messageType == 'reasoning') {
-          _currentReasoningMessageId = messageId;
+          currentReasoningMessageId = messageId;
         } else if (messageType == 'message') {
-          _currentTextMessageId = messageId;
+          currentTextMessageId = messageId;
         }
       case TextDelta(:final messageId, :final text):
-        if (messageId == _currentReasoningMessageId) {
-          _updateAssistant((m) => m.copyWith(
+        if (messageId == currentReasoningMessageId) {
+          updateAssistant((m) => m.copyWith(
                 reasoning: (m.reasoning ?? '') + text,
               ));
-        } else if (messageId == _currentTextMessageId) {
-          _updateAssistant((m) => m.copyWith(text: m.text + text));
+        } else if (messageId == currentTextMessageId) {
+          updateAssistant((m) => m.copyWith(text: m.text + text));
         }
       case MessageCompleted():
         break;
       case ResponseCompleted():
-        _updateAssistant((m) => m.copyWith(status: ChatMessageStatus.completed));
-        _resetStreamState();
-        _maybeAutoRename(userText);
+        updateAssistant(
+            (m) => m.copyWith(status: ChatMessageStatus.completed));
+        resetStreamState();
+        onResponseCompleted?.call();
       case StreamError(:final error):
-        _updateAssistant((m) => m.copyWith(
+        updateAssistant((m) => m.copyWith(
               text: error,
               status: ChatMessageStatus.error,
             ));
-        _resetStreamState();
+        resetStreamState();
       case UnknownEvent():
         break;
     }
   }
 
-  /// Dispara após primeira ResponseCompleted, se a conversa ainda tem o
-  /// nome default e o histórico tem exatamente 1 user + 1 assistant
-  /// (ambos completed). Tenta título via LLM; cai pra truncate(40) se
-  /// falhar.
-  void _maybeAutoRename(String userText) {
-    if (_renameDispatched) return;
+  // ============================================================
+  // Helpers
+  // ============================================================
 
-    if (state.length != 2) return;
-    final first = state[0];
-    final second = state[1];
-    if (first.role != ChatRole.user ||
-        first.status != ChatMessageStatus.completed) {
-      return;
-    }
-    if (second.role != ChatRole.assistant ||
-        second.status != ChatMessageStatus.completed) {
-      return;
-    }
-
-    final conversations =
-        ref.read(conversationsProvider).valueOrNull ?? const <Conversation>[];
-    final conv = conversations.firstWhere(
-      (c) => c.uuid == _uuid,
-      orElse: () => throw StateError('conv $_uuid sumiu'),
-    );
-    if (conv.name != kDefaultConversationName) return;
-
-    _renameDispatched = true;
-    final assistantText = second.text;
-    final fallback =
-        userText.length > 40 ? userText.substring(0, 40) : userText;
-
-    // Fire and forget: tenta LLM, cai pro fallback se vier null.
-    () async {
-      final client = ref.read(bmoChatClientProvider);
-      final llmTitle = await client.suggestTitle(
-        userMessage: userText,
-        assistantMessage: assistantText,
-      );
-      final newName = llmTitle ?? fallback;
-      try {
-        await ref
-            .read(conversationsProvider.notifier)
-            .rename(_uuid, newName);
-      } catch (e) {
-        developer.log(
-          'auto-rename rename() falhou para $_uuid: $e',
-          name: 'chat_controller',
-          level: 900,
-        );
-      }
-    }();
-  }
-
-  void _updateAssistant(ChatMessage Function(ChatMessage) transform) {
-    final id = _currentAssistantMessageId;
+  void updateAssistant(ChatMessage Function(ChatMessage) transform) {
+    final id = currentAssistantMessageId;
     if (id == null) return;
     final idx = state.indexWhere((m) => m.id == id);
     if (idx == -1) return;
@@ -326,23 +271,23 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
     state = updated;
   }
 
-  void _resetStreamState() {
-    _subscription = null;
-    _currentAssistantMessageId = null;
-    _currentReasoningMessageId = null;
-    _currentTextMessageId = null;
+  void resetStreamState() {
+    streamSub = null;
+    currentAssistantMessageId = null;
+    currentReasoningMessageId = null;
+    currentTextMessageId = null;
   }
 
   /// Converte o histórico cru do servidor em ChatMessages.
   /// Sequência típica de um turno: (user/message) → (assistant/reasoning)
   /// → (assistant/message). O reasoning fica anexado à message do
   /// assistant que vem em seguida.
-  List<ChatMessage> _parseHistory(Map<String, dynamic> raw) {
+  List<ChatMessage> parseHistory(Map<String, dynamic> raw) {
     final rawMessages = raw['messages'];
     if (rawMessages is! List) {
       developer.log(
-        'campo "messages" ausente ou não é lista no histórico de $_uuid',
-        name: 'chat_controller',
+        'campo "messages" ausente ou não é lista no histórico de $chatId',
+        name: 'base_chat',
         level: 900,
       );
       return const [];
@@ -355,7 +300,7 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
       if (raw is! Map) continue;
       final type = raw['type'] as String?;
       final role = raw['role'] as String?;
-      final text = _extractText(raw['content']);
+      final text = extractText(raw['content']);
 
       if (type == 'reasoning' && role == 'assistant') {
         pendingReasoning = (pendingReasoning ?? '') + text;
@@ -396,7 +341,7 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
     return result;
   }
 
-  String _extractText(dynamic content) {
+  String extractText(dynamic content) {
     if (content is! List) return '';
     final buffer = StringBuffer();
     for (final item in content) {
@@ -406,6 +351,93 @@ class ChatController extends FamilyNotifier<List<ChatMessage>, String> {
       }
     }
     return buffer.toString();
+  }
+}
+
+// ============================================================
+// Chat normal (conversas do menu lateral)
+// ============================================================
+
+class ChatController extends BaseChatNotifier {
+  bool _renameDispatched = false;
+
+  void sendMessage(String userText) {
+    final trimmed = userText.trim();
+    if (trimmed.isEmpty) return;
+
+    final conversations =
+        ref.read(conversationsProvider).valueOrNull ?? const <Conversation>[];
+    final conv = conversations.firstWhere(
+      (c) => c.uuid == chatId,
+      orElse: () => throw StateError('conversa $chatId não encontrada'),
+    );
+
+    _renameDispatched = false;
+    startStream(trimmed, sessionId: conv.sessionId,
+        onResponseCompleted: () => _maybeAutoRename(trimmed));
+  }
+
+  void clearChat() {
+    if (streamSub != null) {
+      streamSub!.cancel();
+      updateAssistant((m) => m.copyWith(status: ChatMessageStatus.cancelled));
+      resetStreamState();
+    }
+    state = const [];
+  }
+
+  /// Dispara após primeira ResponseCompleted, se a conversa ainda tem o
+  /// nome default e o histórico tem exatamente 1 user + 1 assistant
+  /// (ambos completed). Tenta título via LLM; cai pra truncate(40) se
+  /// falhar.
+  void _maybeAutoRename(String userText) {
+    if (_renameDispatched) return;
+
+    if (state.length != 2) return;
+    final first = state[0];
+    final second = state[1];
+    if (first.role != ChatRole.user ||
+        first.status != ChatMessageStatus.completed) {
+      return;
+    }
+    if (second.role != ChatRole.assistant ||
+        second.status != ChatMessageStatus.completed) {
+      return;
+    }
+
+    final conversations =
+        ref.read(conversationsProvider).valueOrNull ?? const <Conversation>[];
+    final conv = conversations.firstWhere(
+      (c) => c.uuid == chatId,
+      orElse: () => throw StateError('conv $chatId sumiu'),
+    );
+    if (conv.name != kDefaultConversationName) return;
+
+    _renameDispatched = true;
+    final assistantText = second.text;
+    final fallback =
+        userText.length > 40 ? userText.substring(0, 40) : userText;
+
+    // Fire and forget: tenta LLM, cai pro fallback se vier null.
+    () async {
+      final client = ref.read(bmoChatClientProvider);
+      final llmTitle = await client.suggestTitle(
+        userMessage: userText,
+        assistantMessage: assistantText,
+      );
+      final newName = llmTitle ?? fallback;
+      try {
+        await ref
+            .read(conversationsProvider.notifier)
+            .rename(chatId, newName);
+      } catch (e) {
+        developer.log(
+          'auto-rename rename() falhou para $chatId: $e',
+          name: 'chat_controller',
+          level: 900,
+        );
+      }
+    }();
   }
 }
 
