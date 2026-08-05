@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:math';
 
@@ -132,6 +133,10 @@ abstract class BaseChatNotifier
   String? currentTextMessageId;
   bool historyLoaded = false;
 
+  /// Delegações em andamento, keyed por call_id. Sincronizadas para a
+  /// mensagem do assistant corrente a cada atualização.
+  final Map<String, DelegationEvent> _delegations = {};
+
   String get chatId => arg;
 
   @override
@@ -241,6 +246,26 @@ abstract class BaseChatNotifier
         }
       case MessageCompleted():
         break;
+      case PluginCallStarted(:final callId, :final name):
+        if (name == 'delegate_external_agent') {
+          _delegations[callId] = DelegationEvent(
+            callId: callId,
+            status: DelegationStatus.running,
+          );
+          _syncDelegationsToAssistant();
+        }
+      case PluginCallCompleted(:final callId, :final name, :final arguments):
+        if (name == 'delegate_external_agent') {
+          _applyDelegationArgs(callId, arguments);
+        }
+      case PluginCallData(:final callId, :final name, :final arguments):
+        if (name == 'delegate_external_agent') {
+          _applyDelegationArgs(callId, arguments);
+        }
+      case PluginCallOutput(:final callId, :final name, :final output):
+        if (name == 'delegate_external_agent') {
+          _applyDelegationOutput(callId, output);
+        }
       case ResponseCompleted():
         updateAssistant(
             (m) => m.copyWith(status: ChatMessageStatus.completed));
@@ -255,6 +280,104 @@ abstract class BaseChatNotifier
       case UnknownEvent():
         break;
     }
+  }
+
+  // ============================================================
+  // Delegação (delegate_external_agent)
+  // ============================================================
+
+  /// Extrai runner e cwd dos arguments JSON do plugin_call e atualiza
+  /// a delegação correspondente.
+  void _applyDelegationArgs(String callId, String rawArgs) {
+    final existing = _delegations[callId] ??
+        DelegationEvent(callId: callId, status: DelegationStatus.running);
+    String? runner;
+    String? cwd;
+    try {
+      final args = jsonDecode(rawArgs);
+      if (args is Map<String, dynamic>) {
+        runner = args['runner'] as String?;
+        cwd = args['cwd'] as String?;
+        // Fallback para nomes alternativos comuns
+        runner ??= args['agent'] as String?;
+        cwd ??= args['working_dir'] as String?;
+        cwd ??= args['working_directory'] as String?;
+      }
+    } catch (_) {
+      // arguments ainda não é JSON completo (streaming) — ignora
+    }
+    _delegations[callId] = existing.copyWith(
+      runner: runner ?? existing.runner,
+      cwd: cwd ?? existing.cwd,
+    );
+    _syncDelegationsToAssistant();
+  }
+
+  /// Processa o output de um plugin_call_output.
+  ///
+  /// O output é uma string JSON contendo uma lista de blocos {type, text}.
+  /// Para delegate_external_agent, há duas formas:
+  /// 1. Pedido de permissão — texto começa com
+  ///    "🔐 **External Agent Permission Request**"
+  /// 2. Resultado final — dois blocos: runner info + `[assistant]` seguido do relatório
+  void _applyDelegationOutput(String callId, String output) {
+    final existing = _delegations[callId] ??
+        DelegationEvent(callId: callId, status: DelegationStatus.running);
+    try {
+      final parsed = jsonDecode(output);
+      if (parsed is! List) {
+        _delegations[callId] = existing.copyWith(
+          status: DelegationStatus.error,
+          error: output,
+        );
+        _syncDelegationsToAssistant();
+        return;
+      }
+
+      final blocks = parsed.cast<Map<String, dynamic>>();
+      final allText = blocks
+          .where((b) => b['type'] == 'text')
+          .map((b) => (b['text'] as String?) ?? '')
+          .join('\n');
+
+      if (allText.contains('🔐 **External Agent Permission Request**')) {
+        // Pedido de permissão — a pergunta é renderizada pelo
+        // BmoRichQuestionCard, não duplicamos aqui.
+        _delegations[callId] = existing.copyWith(
+          status: DelegationStatus.waitingPermission,
+        );
+      } else if (allText.contains('[assistant]')) {
+        // Resultado final: extrai o relatório após "[assistant]"
+        final report =
+            allText.split('[assistant]').skip(1).join('[assistant]').trim();
+        _delegations[callId] = existing.copyWith(
+          status: DelegationStatus.completed,
+          report: report,
+        );
+      } else {
+        // Output com formato inesperado
+        _delegations[callId] = existing.copyWith(
+          status: DelegationStatus.completed,
+          report: allText,
+        );
+      }
+    } catch (_) {
+      // Output não é JSON válido — pode ser texto puro de erro
+      _delegations[callId] = existing.copyWith(
+        status: DelegationStatus.error,
+        error: output,
+      );
+    }
+    _syncDelegationsToAssistant();
+  }
+
+  /// Copia o estado atual de [_delegations] para a mensagem do assistant
+  /// corrente.
+  void _syncDelegationsToAssistant() {
+    if (_delegations.isEmpty) return;
+    updateAssistant((m) => m.copyWith(
+          delegations: _delegations.values.toList(),
+        ));
   }
 
   // ============================================================
@@ -276,12 +399,17 @@ abstract class BaseChatNotifier
     currentAssistantMessageId = null;
     currentReasoningMessageId = null;
     currentTextMessageId = null;
+    _delegations.clear();
   }
 
   /// Converte o histórico cru do servidor em ChatMessages.
+  ///
   /// Sequência típica de um turno: (user/message) → (assistant/reasoning)
-  /// → (assistant/message). O reasoning fica anexado à message do
-  /// assistant que vem em seguida.
+  /// → (assistant/message). O reasoning fica anexado à message do assistant
+  /// que vem em seguida.
+  ///
+  /// Mensagens de plugin_call e plugin_call_output viram [DelegationEvent]s
+  /// anexados à última mensagem do assistant.
   List<ChatMessage> parseHistory(Map<String, dynamic> raw) {
     final rawMessages = raw['messages'];
     if (rawMessages is! List) {
@@ -295,11 +423,55 @@ abstract class BaseChatNotifier
 
     final result = <ChatMessage>[];
     String? pendingReasoning;
+    final delegations = <String, DelegationEvent>{};
+
+    void flushDelegations() {
+      if (delegations.isEmpty || result.isEmpty) return;
+      final last = result.last;
+      if (last.role != ChatRole.assistant) return;
+      result[result.length - 1] = last.copyWith(
+        delegations: delegations.values.toList(),
+      );
+      delegations.clear();
+    }
 
     for (final raw in rawMessages) {
       if (raw is! Map) continue;
       final type = raw['type'] as String?;
       final role = raw['role'] as String?;
+
+      // plugin_call_output pode vir antes de flush — processa e anexa ao
+      // último assistant.
+      if (type == 'plugin_call_output') {
+        final callId =
+            raw['call_id'] as String? ?? raw['id'] as String? ?? '';
+        final name = raw['name'] as String? ?? '';
+        final output = raw['output'] as String? ?? '';
+        if (name == 'delegate_external_agent' && callId.isNotEmpty) {
+          final existing = delegations[callId] ??
+              DelegationEvent(callId: callId, status: DelegationStatus.running);
+          delegations[callId] =
+              _parseHistoryDelegationOutput(existing, output);
+          flushDelegations();
+        }
+        continue;
+      }
+
+      if (type == 'plugin_call') {
+        final callId = raw['id'] as String? ?? raw['call_id'] as String? ?? '';
+        final name = raw['name'] as String? ?? '';
+        final arguments = raw['arguments'] as String? ?? '';
+        if (name == 'delegate_external_agent' && callId.isNotEmpty) {
+          final existing = delegations[callId] ??
+              DelegationEvent(callId: callId, status: DelegationStatus.running);
+          delegations[callId] =
+              _parseHistoryDelegationArgs(existing, arguments);
+          // Não faz flush aqui — espera o plugin_call_output correspondente
+          // para não perder runner/cwd ao limpar o mapa antes do output.
+        }
+        continue;
+      }
+
       final text = extractText(raw['content']);
 
       if (type == 'reasoning' && role == 'assistant') {
@@ -308,6 +480,7 @@ abstract class BaseChatNotifier
       }
 
       if (type == 'message' && role == 'user') {
+        flushDelegations();
         result.add(ChatMessage.create(
           role: ChatRole.user,
           text: text,
@@ -317,6 +490,7 @@ abstract class BaseChatNotifier
       }
 
       if (type == 'message' && role == 'assistant') {
+        flushDelegations();
         result.add(ChatMessage.create(
           role: ChatRole.assistant,
           text: text,
@@ -327,6 +501,8 @@ abstract class BaseChatNotifier
         continue;
       }
     }
+
+    flushDelegations();
 
     // Reasoning órfão (sem message depois) — emite mesmo assim.
     if (pendingReasoning != null) {
@@ -339,6 +515,66 @@ abstract class BaseChatNotifier
     }
 
     return result;
+  }
+
+  /// Extrai runner e cwd dos arguments de um plugin_call no histórico.
+  DelegationEvent _parseHistoryDelegationArgs(
+      DelegationEvent existing, String rawArgs) {
+    try {
+      final args = jsonDecode(rawArgs);
+      if (args is Map<String, dynamic>) {
+        String? runner = args['runner'] as String?;
+        String? cwd = args['cwd'] as String?;
+        runner ??= args['agent'] as String?;
+        cwd ??= args['working_dir'] as String?;
+        cwd ??= args['working_directory'] as String?;
+        return existing.copyWith(
+          runner: runner ?? existing.runner,
+          cwd: cwd ?? existing.cwd,
+        );
+      }
+    } catch (_) {}
+    return existing;
+  }
+
+  /// Processa o output de um plugin_call_output no histórico.
+  DelegationEvent _parseHistoryDelegationOutput(
+      DelegationEvent existing, String output) {
+    try {
+      final parsed = jsonDecode(output);
+      if (parsed is! List) {
+        return existing.copyWith(
+          status: DelegationStatus.error,
+          error: output,
+        );
+      }
+      final blocks = parsed.cast<Map<String, dynamic>>();
+      final allText = blocks
+          .where((b) => b['type'] == 'text')
+          .map((b) => (b['text'] as String?) ?? '')
+          .join('\n');
+
+      if (allText.contains('🔐 **External Agent Permission Request**')) {
+        return existing.copyWith(status: DelegationStatus.waitingPermission);
+      } else if (allText.contains('[assistant]')) {
+        final report =
+            allText.split('[assistant]').skip(1).join('[assistant]').trim();
+        return existing.copyWith(
+          status: DelegationStatus.completed,
+          report: report,
+        );
+      } else {
+        return existing.copyWith(
+          status: DelegationStatus.completed,
+          report: allText,
+        );
+      }
+    } catch (_) {
+      return existing.copyWith(
+        status: DelegationStatus.error,
+        error: output,
+      );
+    }
   }
 
   String extractText(dynamic content) {

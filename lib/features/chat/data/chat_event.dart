@@ -76,7 +76,40 @@ sealed class ChatEvent {
           index: (json['index'] as num?)?.toInt() ?? 0,
         );
       }
+      if (type == 'data') {
+        return PluginCallData(
+          callId: json['call_id'] as String? ?? '',
+          name: json['name'] as String? ?? '',
+          arguments: json['arguments'] as String? ?? '',
+        );
+      }
       // status completed, delta=false ou null → ignoramos pra não duplicar texto
+    }
+
+    if (object == 'message') {
+      final msgType = json['type'] as String?;
+      if (msgType == 'plugin_call') {
+        if (status == 'in_progress') {
+          return PluginCallStarted(
+            callId: json['id'] as String? ?? '',
+            name: json['name'] as String? ?? '',
+          );
+        }
+        if (status == 'completed') {
+          return PluginCallCompleted(
+            callId: json['id'] as String? ?? '',
+            name: json['name'] as String? ?? '',
+            arguments: json['arguments'] as String? ?? '',
+          );
+        }
+      }
+      if (msgType == 'plugin_call_output') {
+        return PluginCallOutput(
+          callId: json['call_id'] as String? ?? json['id'] as String? ?? '',
+          name: json['name'] as String? ?? '',
+          output: json['output'] as String? ?? '',
+        );
+      }
     }
 
     return UnknownEvent(rawJson: json);
@@ -146,4 +179,49 @@ final class StreamError extends ChatEvent {
 final class UnknownEvent extends ChatEvent {
   final Map<String, dynamic> rawJson;
   const UnknownEvent({required this.rawJson});
+}
+
+/// Disparado quando um plugin_call inicia (object==message, type==plugin_call,
+/// status==in_progress).
+final class PluginCallStarted extends ChatEvent {
+  final String callId;
+  final String name;
+  const PluginCallStarted({required this.callId, required this.name});
+}
+
+/// Disparado quando um plugin_call completa (object==message, type==plugin_call,
+/// status==completed). Carrega os arguments completos do tool call.
+final class PluginCallCompleted extends ChatEvent {
+  final String callId;
+  final String name;
+  final String arguments;
+  const PluginCallCompleted({
+    required this.callId,
+    required this.name,
+    required this.arguments,
+  });
+}
+
+/// Dados incrementais de um plugin_call (object==content, type==data).
+final class PluginCallData extends ChatEvent {
+  final String callId;
+  final String name;
+  final String arguments;
+  const PluginCallData({
+    required this.callId,
+    required this.name,
+    required this.arguments,
+  });
+}
+
+/// Resultado de um plugin_call (object==message, type==plugin_call_output).
+final class PluginCallOutput extends ChatEvent {
+  final String callId;
+  final String name;
+  final String output;
+  const PluginCallOutput({
+    required this.callId,
+    required this.name,
+    required this.output,
+  });
 }

@@ -6,6 +6,7 @@ import '../data/bmo_rich_parser.dart';
 import '../data/bmo_rich_registry.dart';
 import '../data/chat_message.dart';
 import 'chat_avatar.dart';
+import 'delegation_chip.dart';
 import 'reasoning_box.dart';
 import 'speech_bubble.dart';
 
@@ -92,6 +93,13 @@ class MessageBubble extends StatelessWidget {
         isStreaming: message.status == ChatMessageStatus.streaming &&
             message.text.isEmpty,
       ));
+    }
+
+    // Delegation chips — aparecem entre o reasoning e o corpo da mensagem.
+    if (!isUser && message.delegations != null) {
+      for (final d in message.delegations!) {
+        children.add(DelegationChip(delegation: d));
+      }
     }
 
     children.addAll(_buildBody(theme, isUser));
