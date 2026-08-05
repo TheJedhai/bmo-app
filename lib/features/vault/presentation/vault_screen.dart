@@ -836,6 +836,8 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   bool _isUploading = false;
   double _uploadProgress = 0;
   String _uploadFileName = '';
+  int _uploadIndex = 0;
+  int _uploadTotal = 0;
 
   // Download state
   String? _downloadingItemId;
@@ -883,15 +885,15 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   /// closes without a file being selected, `onChange` never fires, so we
   /// complete with `null` on the next window focus event after a short delay
   /// to let a legitimate `onChange` event arrive first.
-  Future<html.File?> _pickFile() async {
+  Future<List<html.File>> _pickFiles() async {
     final input = html.FileUploadInputElement()
       ..accept = '*/*'
-      ..multiple = false;
+      ..multiple = true;
 
-    final completer = Completer<html.File?>();
+    final completer = Completer<List<html.File>>();
 
     input.onChange.listen((_) {
-      completer.complete(input.files?.first);
+      completer.complete(input.files ?? const []);
     });
 
     // Detect cancel: when window regains focus after file dialog closes,
@@ -900,7 +902,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     focusSub = html.window.onFocus.listen((_) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!completer.isCompleted) {
-          completer.complete(null);
+          completer.complete(const []);
         }
       });
     });
@@ -914,55 +916,79 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     }
   }
 
-  Future<void> _pickAndUploadFile() async {
-    final file = await _pickFile();
-    if (file == null) return; // User cancelled the dialog.
-
-    // Read file bytes in browser
-    final reader = html.FileReader();
-    reader.readAsArrayBuffer(file);
-    await reader.onLoadEnd.first;
-
-    final bytes = Uint8List.fromList(reader.result as List<int>);
-    final fileName = file.name;
-    final mimeType =
-        file.type.isNotEmpty ? file.type : 'application/octet-stream';
+  Future<void> _pickAndUploadFiles() async {
+    final files = await _pickFiles();
+    if (files.isEmpty) return; // User cancelled or empty selection.
 
     if (!mounted) return;
     setState(() {
       _isUploading = true;
-      _uploadProgress = 0;
-      _uploadFileName = fileName;
+      _uploadTotal = files.length;
+      _uploadIndex = 0;
     });
 
-    try {
-      final repo = ref.read(vaultRepositoryProvider);
-      await repo.uploadItem(
-        _session.vaultId,
-        _session.dek,
-        bytes,
-        fileName,
-        mimeType,
-        onProgress: (sent, total) {
-          if (!mounted) return;
-          setState(() {
-            _uploadProgress = total > 0 ? sent / total : 0;
-          });
-        },
-      );
+    final repo = ref.read(vaultRepositoryProvider);
+    final failures = <String>[];
+
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+
+      // Read file bytes in browser
+      final reader = html.FileReader();
+      reader.readAsArrayBuffer(file);
+      await reader.onLoadEnd.first;
+
+      final bytes = Uint8List.fromList(reader.result as List<int>);
+      final fileName = file.name;
+      final mimeType =
+          file.type.isNotEmpty ? file.type : 'application/octet-stream';
+
       if (!mounted) return;
       setState(() {
-        _isUploading = false;
-        _uploadFileName = '';
+        _uploadIndex = i + 1;
+        _uploadProgress = 0;
+        _uploadFileName = fileName;
       });
-      await _loadItems();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _isUploading = false;
-        _uploadFileName = '';
-      });
-      _showError('Falha no upload: ${_friendlyError(e)}');
+
+      try {
+        await repo.uploadItem(
+          _session.vaultId,
+          _session.dek,
+          bytes,
+          fileName,
+          mimeType,
+          onProgress: (sent, total) {
+            if (!mounted) return;
+            setState(() {
+              _uploadProgress = total > 0 ? sent / total : 0;
+            });
+          },
+        );
+      } catch (e) {
+        failures.add('$fileName: ${_friendlyError(e)}');
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isUploading = false;
+      _uploadFileName = '';
+      _uploadIndex = 0;
+      _uploadTotal = 0;
+    });
+
+    await _loadItems();
+
+    if (failures.isNotEmpty) {
+      if (failures.length == 1) {
+        _showError('Falha no upload: ${failures.first}');
+      } else {
+        final suffix =
+            failures.take(3).join('\n');
+        _showError(
+          '${failures.length}/$files.length arquivos falharam:\n$suffix',
+        );
+      }
     }
   }
 
@@ -1306,7 +1332,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           vaultName: _session.decryptedName,
           isMobile: isMobile,
           isUploading: _isUploading,
-          onAddFile: _pickAndUploadFile,
+          onAddFile: _pickAndUploadFiles,
           onLock: () => ref.read(vaultSessionProvider.notifier).lock(),
           onDeleteVault: _deleteVault,
         ),
@@ -1316,7 +1342,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         if (_isUploading)
           _ProgressBar(
             progress: _uploadProgress,
-            label: 'Enviando $_uploadFileName…',
+            label: _uploadTotal > 1
+                ? 'Enviando $_uploadIndex/$_uploadTotal — $_uploadFileName…'
+                : 'Enviando $_uploadFileName…',
           ),
 
         // Download progress bar
@@ -1486,7 +1514,7 @@ class _VaultHeader extends StatelessWidget {
           // Add file button
           _HeaderIconButton(
             icon: Icons.add,
-            tooltip: 'Adicionar arquivo',
+            tooltip: 'Adicionar arquivos',
             isLoading: isUploading,
             onPressed: onAddFile,
           ),
