@@ -1626,8 +1626,11 @@ class _VaultFileItem extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 6),
                 child: Row(
                   children: [
-                    Icon(_iconForMimeType(item.mimeType),
-                        size: 24, color: BmoColors.textMuted),
+                    // Thumbnail or icon
+                    _ThumbnailWidget(
+                      thumbnail: item.thumbnail,
+                      mimeType: item.mimeType,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -1743,6 +1746,69 @@ class _VaultFileItem extends StatelessWidget {
     if (diff.inDays < 7) return '${diff.inDays}d';
     final local = date.toLocal();
     return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+}
+
+// ============================================================
+// Thumbnail widget
+// ============================================================
+
+class _ThumbnailWidget extends StatelessWidget {
+  final Uint8List? thumbnail;
+  final String mimeType;
+
+  const _ThumbnailWidget({required this.thumbnail, required this.mimeType});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(
+      _VaultFileItem._iconForMimeType(mimeType),
+      size: 24,
+      color: BmoColors.textMuted,
+    );
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: thumbnail != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.memory(
+                    thumbnail!,
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, _, _) => Container(
+                      color: BmoColors.screenBgElevated,
+                      child: Center(child: icon),
+                    ),
+                  ),
+                  if (mimeType.startsWith('video/'))
+                    Center(
+                      child: Icon(
+                        Icons.play_circle_fill,
+                        size: 16,
+                        color: Colors.white.withValues(alpha: 0.9),
+                        shadows: const [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              )
+            : Container(
+                color: BmoColors.screenBgElevated,
+                child: Center(child: icon),
+              ),
+      ),
+    );
   }
 }
 

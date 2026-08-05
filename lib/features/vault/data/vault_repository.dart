@@ -401,12 +401,28 @@ final class VaultRepository {
           item.metadataIv,
         );
         if (metaJson == null) continue;
+
+        // Decrypt thumbnail if present (enhancement — failure is non-fatal).
+        Uint8List? thumbnail;
+        if (item.thumbnailBlob != null && item.thumbnailIv != null) {
+          try {
+            thumbnail = await cipher.decrypt(
+              dek,
+              item.thumbnailIv!,
+              item.thumbnailBlob!,
+            );
+          } on VaultCipherException {
+            thumbnail = null;
+          }
+        }
+
         decrypted.add(VaultItemDecrypted(
           id: item.id,
           vaultId: item.vaultId,
           fileName: metaJson['fileName'] as String? ?? 'unknown',
           mimeType: metaJson['mimeType'] as String? ?? 'application/octet-stream',
           originalSize: metaJson['originalSize'] as int? ?? 0,
+          thumbnail: thumbnail,
           encryptionScheme: item.encryptionScheme,
           chunkSize: item.chunkSize,
           sizeBytes: item.sizeBytes,

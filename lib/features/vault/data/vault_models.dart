@@ -86,6 +86,8 @@ final class VaultItem {
   final String vaultId;
   final Uint8List metadataBlob;
   final Uint8List metadataIv;
+  final Uint8List? thumbnailBlob;
+  final Uint8List? thumbnailIv;
   final String? encryptionScheme;
   final int? chunkSize;
   final int sizeBytes;
@@ -97,6 +99,8 @@ final class VaultItem {
     required this.vaultId,
     required this.metadataBlob,
     required this.metadataIv,
+    this.thumbnailBlob,
+    this.thumbnailIv,
     required this.encryptionScheme,
     required this.chunkSize,
     required this.sizeBytes,
@@ -105,11 +109,24 @@ final class VaultItem {
   });
 
   factory VaultItem.fromJson(Map<String, dynamic> json) {
+    Uint8List? parseOptionalBase64(dynamic value) {
+      if (value is String && value.isNotEmpty) {
+        try {
+          return base64Decode(value);
+        } on FormatException {
+          return null;
+        }
+      }
+      return null;
+    }
+
     return VaultItem(
       id: _parseId(json['id']),
       vaultId: _parseId(json['vault_id']),
       metadataBlob: base64Decode(json['metadata_blob'] as String? ?? ''),
       metadataIv: base64Decode(json['metadata_iv'] as String? ?? ''),
+      thumbnailBlob: parseOptionalBase64(json['thumbnail_blob']),
+      thumbnailIv: parseOptionalBase64(json['thumbnail_iv']),
       encryptionScheme: json['encryption_scheme'] as String?,
       chunkSize: json['chunk_size'] as int?,
       sizeBytes: json['size_bytes'] as int? ?? 0,
@@ -139,6 +156,9 @@ final class VaultItemDecrypted {
   /// Original plaintext file size in bytes (decrypted from metadata).
   final int originalSize;
 
+  /// Decrypted JPEG thumbnail bytes (optional, null if no thumbnail).
+  final Uint8List? thumbnail;
+
   /// Encryption scheme used for the content: "gcm_single" or "gcm_chunked".
   final String? encryptionScheme;
 
@@ -157,6 +177,7 @@ final class VaultItemDecrypted {
     required this.fileName,
     required this.mimeType,
     required this.originalSize,
+    this.thumbnail,
     required this.encryptionScheme,
     required this.chunkSize,
     required this.sizeBytes,

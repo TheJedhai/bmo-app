@@ -539,6 +539,103 @@ void main() {
 
       expect(items.length, 0);
     });
+
+    test('decrypts thumbnail when present', () async {
+      const fileName = 'photo.jpg';
+      const mimeType = 'image/jpeg';
+      const originalSize = 123456;
+      const cipher = VaultCipher();
+
+      // Encrypt metadata.
+      final metaJson = jsonEncode({
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'originalSize': originalSize,
+      });
+      final (metadataIv, metadataBlob) = await cipher.encrypt(
+        testDek,
+        Uint8List.fromList(utf8.encode(metaJson)),
+      );
+
+      // Encrypt a fake thumbnail (just small test bytes).
+      final thumbnailBytes = _testBytes(64, seed: 99);
+      final (thumbIv, thumbBlob) = await cipher.encrypt(testDek, thumbnailBytes);
+
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/vaults/1/items') {
+          final item = _itemJson(
+            id: '1',
+            vaultId: '1',
+            metadataBlob: metadataBlob,
+            metadataIv: metadataIv,
+            encryptionScheme: 'gcm_chunked',
+            chunkSize: VaultChunkedCipher.defaultChunkSize,
+            sizeBytes: 5000,
+          );
+          item['thumbnail_blob'] = base64Encode(thumbBlob);
+          item['thumbnail_iv'] = base64Encode(thumbIv);
+          return http.Response(
+            jsonEncode([item]),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final repo = _createRepo(mockClient);
+      final items = await repo.listItems('1', testDek);
+
+      expect(items.length, 1);
+      expect(items[0].thumbnail, isNotNull);
+      expect(items[0].thumbnail, thumbnailBytes);
+    });
+
+    test('item without thumbnail fields has thumbnail==null, still present', () async {
+      const fileName = 'readme.txt';
+      const mimeType = 'text/plain';
+      const originalSize = 42;
+      const cipher = VaultCipher();
+
+      final metaJson = jsonEncode({
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'originalSize': originalSize,
+      });
+      final (metadataIv, metadataBlob) = await cipher.encrypt(
+        testDek,
+        Uint8List.fromList(utf8.encode(metaJson)),
+      );
+
+      final mockClient = MockClient((request) async {
+        if (request.url.path == '/api/v1/vaults/1/items') {
+          // No thumbnail_blob / thumbnail_iv in the JSON.
+          return http.Response(
+            jsonEncode([
+              _itemJson(
+                id: '1',
+                vaultId: '1',
+                metadataBlob: metadataBlob,
+                metadataIv: metadataIv,
+                encryptionScheme: 'gcm_chunked',
+                chunkSize: VaultChunkedCipher.defaultChunkSize,
+                sizeBytes: 100,
+              ),
+            ]),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+
+      final repo = _createRepo(mockClient);
+      final items = await repo.listItems('1', testDek);
+
+      expect(items.length, 1);
+      expect(items[0].thumbnail, isNull);
+      expect(items[0].fileName, fileName);
+    });
   });
 
   // =========================================================================
