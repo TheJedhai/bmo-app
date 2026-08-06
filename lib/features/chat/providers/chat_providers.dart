@@ -246,14 +246,8 @@ abstract class BaseChatNotifier
         }
       case MessageCompleted():
         break;
-      case PluginCallStarted(:final callId, :final name):
-        if (name == 'delegate_external_agent') {
-          _delegations[callId] = DelegationEvent(
-            callId: callId,
-            status: DelegationStatus.running,
-          );
-          _syncDelegationsToAssistant();
-        }
+      case PluginCallStarted():
+        break; // name só chega no content/data, chip criado no PluginCallData
       case PluginCallCompleted(:final callId, :final name, :final arguments):
         if (name == 'delegate_external_agent') {
           _applyDelegationArgs(callId, arguments);
@@ -443,10 +437,22 @@ abstract class BaseChatNotifier
       // plugin_call_output pode vir antes de flush — processa e anexa ao
       // último assistant.
       if (type == 'plugin_call_output') {
-        final callId =
-            raw['call_id'] as String? ?? raw['id'] as String? ?? '';
-        final name = raw['name'] as String? ?? '';
-        final output = raw['output'] as String? ?? '';
+        // Campos dentro de content[].data, não no topo
+        String callId = '';
+        String name = '';
+        String output = '';
+        final content = raw['content'];
+        if (content is List && content.isNotEmpty) {
+          final first = content[0];
+          if (first is Map) {
+            final data = first['data'];
+            if (data is Map) {
+              callId = data['call_id'] as String? ?? '';
+              name = data['name'] as String? ?? '';
+              output = data['output'] as String? ?? '';
+            }
+          }
+        }
         if (name == 'delegate_external_agent' && callId.isNotEmpty) {
           final existing = delegations[callId] ??
               DelegationEvent(callId: callId, status: DelegationStatus.running);
@@ -458,9 +464,22 @@ abstract class BaseChatNotifier
       }
 
       if (type == 'plugin_call') {
-        final callId = raw['id'] as String? ?? raw['call_id'] as String? ?? '';
-        final name = raw['name'] as String? ?? '';
-        final arguments = raw['arguments'] as String? ?? '';
+        // Campos dentro de content[].data, não no topo
+        String callId = '';
+        String name = '';
+        String arguments = '';
+        final content = raw['content'];
+        if (content is List && content.isNotEmpty) {
+          final first = content[0];
+          if (first is Map) {
+            final data = first['data'];
+            if (data is Map) {
+              callId = data['call_id'] as String? ?? '';
+              name = data['name'] as String? ?? '';
+              arguments = data['arguments'] as String? ?? '';
+            }
+          }
+        }
         if (name == 'delegate_external_agent' && callId.isNotEmpty) {
           final existing = delegations[callId] ??
               DelegationEvent(callId: callId, status: DelegationStatus.running);
