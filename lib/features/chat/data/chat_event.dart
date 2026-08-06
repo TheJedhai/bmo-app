@@ -40,14 +40,19 @@ sealed class ChatEvent {
     }
 
     if (object == 'message') {
-      if (status == 'in_progress') {
+      // plugin_call / plugin_call_output são tratados no segundo bloco
+      // "object == message" abaixo; não devem ser interceptados aqui.
+      final msgType = json['type'] as String?;
+      final isPlugin = msgType == 'plugin_call' ||
+          msgType == 'plugin_call_output';
+      if (!isPlugin && status == 'in_progress') {
         return MessageStarted(
           messageId: json['id'] as String? ?? '',
-          messageType: json['type'] as String? ?? '',
+          messageType: msgType ?? '',
           role: json['role'] as String? ?? '',
         );
       }
-      if (status == 'completed') {
+      if (!isPlugin && status == 'completed') {
         final content = json['content'];
         final buffer = StringBuffer();
         if (content is List) {
@@ -60,7 +65,7 @@ sealed class ChatEvent {
         }
         return MessageCompleted(
           messageId: json['id'] as String? ?? '',
-          messageType: json['type'] as String? ?? '',
+          messageType: msgType ?? '',
           fullText: buffer.toString(),
         );
       }
@@ -77,10 +82,11 @@ sealed class ChatEvent {
         );
       }
       if (type == 'data') {
+        final data = json['data'] as Map<String, dynamic>? ?? {};
         return PluginCallData(
-          callId: json['call_id'] as String? ?? '',
-          name: json['name'] as String? ?? '',
-          arguments: json['arguments'] as String? ?? '',
+          callId: data['call_id'] as String? ?? '',
+          name: data['name'] as String? ?? '',
+          arguments: data['arguments'] as String? ?? '',
         );
       }
       // status completed, delta=false ou null → ignoramos pra não duplicar texto
@@ -104,10 +110,25 @@ sealed class ChatEvent {
         }
       }
       if (msgType == 'plugin_call_output') {
+        String callId = '';
+        String name = '';
+        String output = '';
+        final content = json['content'];
+        if (content is List && content.isNotEmpty) {
+          final first = content[0];
+          if (first is Map) {
+            final data = first['data'];
+            if (data is Map) {
+              callId = data['call_id'] as String? ?? '';
+              name = data['name'] as String? ?? '';
+              output = data['output'] as String? ?? '';
+            }
+          }
+        }
         return PluginCallOutput(
-          callId: json['call_id'] as String? ?? json['id'] as String? ?? '',
-          name: json['name'] as String? ?? '',
-          output: json['output'] as String? ?? '',
+          callId: callId,
+          name: name,
+          output: output,
         );
       }
     }
