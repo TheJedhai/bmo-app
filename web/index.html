@@ -35,12 +35,16 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
-    Failsafe stub: ensures window.hashwasm is NEVER null, even if the
-    module script below fails to load (404, CSP, network error, etc.).
+    Failsafe stub (Camada 2): ensures window.hashwasm is NEVER null, even
+    if the module script below fails to load (404, CSP, network error,
+    etc.).
 
     This runs synchronously during HTML parsing, BEFORE the deferred
     module script. The module script (if successful) overwrites this
     stub with the real hash-wasm functions.
+
+    The `__bmoStub` marker lets the Camada 1 guard (hashwasm_guard.js)
+    detect that the real module never overwrote this stub.
 
     If the stub is never overwritten, any dargon2 call will throw a
     visible error: "hash-wasm WASM module not loaded".
@@ -51,6 +55,7 @@
   -->
   <script>
     window.hashwasm = {
+      __bmoStub: true,
       argon2i: function() {
         throw new Error("hash-wasm WASM module not loaded. " +
           "The self-hosted /hash-wasm/index.esm.js failed to initialize. " +
@@ -83,6 +88,14 @@
       from '/hash-wasm/index.esm.js';
     window.hashwasm = { argon2i, argon2d, argon2id, argon2Verify };
   </script>
+
+  <!--
+    Camada 1 guard: fails early and visibly if the self-hosted module is
+    absent, and guarantees dargon2 never sees window.hashwasm as null.
+    External file — runs even when CSP blocks inline scripts, same class
+    as flutter_bootstrap.js.
+  -->
+  <script src="hashwasm_guard.js"></script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

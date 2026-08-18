@@ -1,7 +1,13 @@
-// Regression test: CDN fallback defenses (Camada 1 + Camada 2).
+// Regression test: CDN fallback defenses.
 //
-// Verifies that when window.hashwasm is missing, the vault fails with a
-// VISIBLE exception — never a silent CDN fetch to jsdelivr.net.
+// Camada 1 (web/hashwasm_guard.js) lives in the web bootstrap and is
+// verified manually against the built site — it fails visibly at page
+// load when the self-hosted hash-wasm module is absent, and guarantees
+// dargon2 never sees window.hashwasm as null (which would trigger a
+// silent CDN fetch to jsdelivr.net).
+//
+// This file covers Camada 2: the failsafe stub that throws on call,
+// and the happy path when the real module is present.
 //
 // Run: flutter test --platform=chrome test/vault_cdn_defense_test.dart
 
@@ -14,79 +20,8 @@ import 'package:dargon2_flutter_web/src/argon2.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bmo_app/features/vault/crypto/argon2_kdf.dart';
-import 'package:bmo_app/features/vault/crypto/vault_kdf.dart';
 
 void main() {
-  // -------------------------------------------------------------------
-  // Regression: Camada 1 — guard throws VaultKdfUnavailableException
-  // when window.hashwasm is not populated.
-  // -------------------------------------------------------------------
-  group('Camada 1 — guard throws on missing hashwasm', () {
-    test(
-      'derive() throws VaultKdfUnavailableException when hashwasm null',
-      () async {
-        // Ensure hashwasm is absent
-        globalContext['hashwasm'] = null;
-
-        const kdf = Argon2Kdf();
-        final password = Uint8List.fromList('test'.codeUnits);
-        final salt = Uint8List.fromList(List.generate(16, (i) => i));
-
-        // Must throw VaultKdfUnavailableException — NOT a DArgon2Exception,
-        // NOT an UnimplementedError, NOT a CDN fetch.
-        expect(
-          () async => kdf.derive(password: password, salt: salt),
-          throwsA(isA<VaultKdfUnavailableException>()),
-        );
-      },
-    );
-
-    test(
-      'guard check does NOT trigger CDN import (no script created)',
-      () async {
-        // Track whether dargon2 creates any script element (which would
-        // indicate an attempted CDN import).
-        globalContext.callMethod(
-          'eval'.toJS,
-          '''
-        window.__defenseScriptCount = 0;
-        var __origCreateEl = document.createElement.bind(document);
-        document.createElement = function(tag) {
-          var el = __origCreateEl(tag);
-          if (tag.toLowerCase() === 'script') {
-            window.__defenseScriptCount++;
-          }
-          return el;
-        };
-      '''
-              .toJS,
-        );
-
-        // Clear hashwasm
-        globalContext['hashwasm'] = null;
-
-        const kdf = Argon2Kdf();
-        final password = Uint8List.fromList('test'.codeUnits);
-        final salt = Uint8List.fromList(List.generate(16, (i) => i));
-
-        // The guard should throw BEFORE dargon2 gets a chance to create
-        // any script element for CDN import.
-        try {
-          await kdf.derive(password: password, salt: salt);
-          fail('Expected VaultKdfUnavailableException');
-        } on VaultKdfUnavailableException {
-          // Expected — this is the correct failure mode.
-        }
-
-        // NOTE: Flutter test infrastructure creates script elements during
-        // test setup, so scriptCount may be > 0 from that. What matters is
-        // that the guard throws BEFORE calling dargon2 — which we verified
-        // above by catching VaultKdfUnavailableException specifically.
-        // The script count here is informational.
-      },
-    );
-  });
-
   // -------------------------------------------------------------------
   // Regression: Camada 2 — failsafe stub prevents CDN import.
   //
@@ -169,8 +104,7 @@ void main() {
           caught = e;
         }
 
-        // The guard checks hashwasm is non-null → passes
-        // Then dargon2 calls hashwasm.argon2id() → stub throws
+        // dargon2 calls hashwasm.argon2id() → stub throws
         // This surfaces as an error from dargon2's JS interop.
         expect(caught, isNotNull, reason: 'Stub should cause visible error');
 
