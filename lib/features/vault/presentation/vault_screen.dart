@@ -10,8 +10,8 @@ import '../crypto/vault_crypto.dart' as crypto;
 import '../data/vault_client.dart';
 import 'dart:typed_data';
 
+import '../../../core/platform/file_stream_writer.dart';
 import '../data/vault_models.dart';
-import '../data/vault_file_save.dart';
 import '../crypto/vault_chunked_cipher.dart';
 import '../providers/vault_providers.dart';
 import 'viewers/vault_viewer_router.dart';
@@ -964,7 +964,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
 
   Future<void> _downloadItem(VaultItemDecrypted item) async {
     final isLarge = item.originalSize >= _kLargeFileThreshold;
-    final canStream = isFileSystemAccessApiAvailable;
+    final canStream = isFileStreamSaveAvailable;
 
     if (isLarge && canStream) {
       await _downloadItemStreaming(item);
@@ -978,11 +978,16 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     }
   }
 
-  /// Streaming download via fetchChunkRange + File System Access API.
+  /// Streaming download via fetchChunkRange + seam de escrita em arquivo.
   ///
-  /// Fetches the 21-byte header, opens a save dialog, then downloads and
-  /// decrypts each chunk sequentially — writing each to disk immediately
-  /// via the File System Access API. Never holds the full file in memory.
+  /// Fetches the 21-byte header, opens a save destination, then downloads
+  /// and decrypts each chunk sequentially — writing each to disk
+  /// immediately via [FileStreamWriter]. Never holds the full file in
+  /// memory.
+  ///
+  /// Em erro/cancelamento o [FileStreamWriter.abort] descarta o parcial:
+  /// web aborta o writable stream sem close() (o destino não materializa);
+  /// nativo fecha o RandomAccessFile e apaga o arquivo.
   Future<void> _downloadItemStreaming(VaultItemDecrypted item) async {
     setState(() {
       _downloadingItemId = item.id;
@@ -990,6 +995,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       _downloadFileName = item.fileName;
     });
 
+    FileStreamWriter? writer;
     try {
       final repo = ref.read(vaultRepositoryProvider);
 
@@ -1005,9 +1011,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       final totalChunks =
           VaultChunkedCipher.totalChunks(originalSize, chunkSize);
 
-      // 3. Open save dialog (File System Access API).
-      final result = await openSaveStream(item.fileName);
-      if (result == null) {
+      // 3. Open the save destination.
+      writer = await openFileStreamWriter(item.fileName);
+      if (writer == null) {
         // User cancelled the save dialog — clean up without error.
         if (!mounted) return;
         setState(() {
@@ -1016,63 +1022,47 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         });
         return;
       }
-      final stream = result.stream;
 
       // 4. Fetch, decrypt, and write each chunk sequentially.
       for (var i = 0; i < totalChunks; i++) {
         if (!mounted) {
-          await closeStream(stream);
+          // Screen closed mid-download: discard the partial file.
+          await writer.abort();
           return;
         }
 
-        try {
-          final (plaintext, statusCode, _) = await repo.fetchChunkRange(
-            _session.vaultId,
-            _session.dek,
-            item.id,
-            i,
-            header,
-          );
+        final (plaintext, statusCode, _) = await repo.fetchChunkRange(
+          _session.vaultId,
+          _session.dek,
+          item.id,
+          i,
+          header,
+        );
 
-          if (statusCode != 206 && plaintext.isEmpty) {
-            await closeStream(stream);
-            if (!mounted) return;
-            setState(() {
-              _downloadingItemId = null;
-              _downloadFileName = '';
-            });
-            _showError(
-              'Falha no download: servidor retornou status $statusCode.',
-            );
-            return;
-          }
-
-          await writeChunk(stream, plaintext);
-
-          if (mounted) {
-            setState(() {
-              _downloadProgress = (i + 1) / totalChunks;
-            });
-          }
-        } on VaultApiException catch (e) {
-          await closeStream(stream);
+        if (statusCode != 206 && plaintext.isEmpty) {
+          await writer.abort();
           if (!mounted) return;
           setState(() {
             _downloadingItemId = null;
             _downloadFileName = '';
           });
-          if (e.statusCode == 410) {
-            _showError(
-                'Arquivo não encontrado no servidor. O blob foi removido.');
-          } else {
-            _showError('Falha no download: ${_friendlyError(e)}');
-          }
+          _showError(
+            'Falha no download: servidor retornou status $statusCode.',
+          );
           return;
+        }
+
+        await writer.writeChunk(plaintext);
+
+        if (mounted) {
+          setState(() {
+            _downloadProgress = (i + 1) / totalChunks;
+          });
         }
       }
 
       // 5. Finalize the file.
-      await closeStream(stream);
+      await writer.finalize();
 
       if (!mounted) return;
       setState(() {
@@ -1080,12 +1070,20 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         _downloadFileName = '';
       });
     } catch (e) {
+      // Abort descarta o parcial em qualquer ponto — no-op seguro depois
+      // de finalize(), o catch não precisa saber até onde a gravação foi.
+      await writer?.abort();
       if (!mounted) return;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
-      _showError('Falha no download: ${_friendlyError(e)}');
+      if (e is VaultApiException && e.statusCode == 410) {
+        _showError(
+            'Arquivo não encontrado no servidor. O blob foi removido.');
+      } else {
+        _showError('Falha no download: ${_friendlyError(e)}');
+      }
     }
   }
 
