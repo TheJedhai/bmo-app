@@ -6,7 +6,7 @@ import '../../../core/events/events_provider.dart';
 import '../../../core/events/rich_blocks_provider.dart';
 import '../../../core/events/rich_blocks_state.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../../../core/utils/file_download.dart';
+import '../../../core/platform/file_download.dart';
 import '../../gallery/data/image_filename.dart';
 import '../../gallery/providers/images_provider.dart';
 import '../data/bmo_rich_block.dart';

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../../../core/utils/file_download.dart';
+import '../../../core/platform/file_download.dart';
 import '../data/image_filename.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
