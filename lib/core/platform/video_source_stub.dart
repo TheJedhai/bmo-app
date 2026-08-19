@@ -41,8 +41,12 @@ class IoVideoSource implements VideoSource {
 
   @override
   void dispose() {
-    // Dispose não pode await. unlink funciona com o arquivo aberto (POSIX):
-    // o AVPlayer segue lendo pelo fd, espaço liberado quando ele fechar.
+    // Dispose não pode await — a ordem é garantida pelo call site: o
+    // controller é totalmente descartado antes da fonte. O AVPlayer
+    // trabalha por URL e pode reabrir o arquivo; apagar antes de ele
+    // soltar é condição de corrida, sem proteção do filesystem. A
+    // exclusão em si é melhor esforço: se falhar, o NSTemporaryDirectory
+    // é purgado pelo SO.
     _deleteQuietly(_file);
   }
 }

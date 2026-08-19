@@ -123,10 +123,17 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       try {
         await controller.initialize();
       } catch (e) {
-        // Release local resources even if unmounted — dispose() only knows
-        // about _source/_controller, which are not assigned yet.
-        controller.dispose();
-        source.dispose();
+        // Controller before source, fully awaited: on iOS the AVPlayer must
+        // release the URL before the temp file can be safely deleted —
+        // deleting first races the player reopening the file (seek, resume).
+        // finally releases the source even if the controller's dispose
+        // throws. These are locals — dispose() only knows about
+        // _source/_controller, which are not assigned yet.
+        try {
+          await controller.dispose();
+        } finally {
+          source.dispose();
+        }
         if (!mounted) return;
         setState(() {
           _error = _friendlyError(e);
@@ -136,8 +143,13 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       }
 
       if (!mounted) {
-        controller.dispose();
-        source.dispose();
+        // Widget disposed during initialize. Same order: controller fully
+        // disposed before the source is released.
+        try {
+          await controller.dispose();
+        } finally {
+          source.dispose();
+        }
         return;
       }
 
@@ -478,12 +490,13 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
 
   @override
   void dispose() {
-    // Order matters: dispose controller first (tears down the player), then
-    // release the source (revoke blob URL / delete temp file). On native,
-    // unlinking while AVPlayer holds the file open is fine on POSIX — the
-    // data is freed when the player closes its descriptor.
-    _disposeController();
-    _cleanupSource();
+    // Order matters: the controller must be FULLY disposed before the
+    // source is released. On iOS video_player hands a URL to AVPlayer,
+    // which may reopen the file (seek, resume after background) — deleting
+    // it while the player still holds the URL is a race that only shows on
+    // device. dispose() can't await, so release the source only when the
+    // controller's dispose completes (whenComplete runs even on throw).
+    _disposeController().whenComplete(_cleanupSource);
     super.dispose();
   }
 }
