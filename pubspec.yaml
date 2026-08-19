@@ -59,6 +59,9 @@ dependencies:
   go_router: ^14.0.0
   kalender: ^0.23.0
   file_saver: ^0.4.0
+  # image: ~480 KB no bundle web — findDecoderForData referencia todos os
+  # decoders, o tree-shaking não corta nenhum. Se o tamanho um dia importar,
+  # trocar decodeImage pelo decoder específico por MIME (ex.: JpegDecoder).
   image: ^4.9.2
   get_thumbnail_video: ^0.7.3
 

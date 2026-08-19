@@ -104,8 +104,11 @@ Uint8List? _generateImageThumbnail(Uint8List fileBytes) {
     decoded,
     width: targetW,
     height: targetH,
-    // average = area sampling; matches the browser's canvas downscale.
-    // linear/cubic are point filters — visibly blocky on photos.
+    // average = area sampling, the only mode that matches the browser
+    // canvas reference. Measured against the old pipeline (PSNR on a real
+    // WebP photo): linear 17.8 dB, cubic 17.8 dB, average 45.0 dB —
+    // linear/cubic are point filters. Do not "upgrade" to cubic without
+    // re-measuring against that reference.
     interpolation: img.Interpolation.average,
   );
   final jpegBytes = img.encodeJpg(
