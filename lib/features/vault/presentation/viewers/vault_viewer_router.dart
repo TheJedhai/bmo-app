@@ -9,6 +9,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/platform/pdf_preview.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_models.dart';
 import '../../data/vault_repository.dart';
@@ -43,12 +44,16 @@ const kVideoLargeWarningThreshold = 1 * 1024 * 1024 * 1024; // 1 GiB
 ///
 /// [session] provides the vaultId, DEK, and decrypted name.
 /// [ref] is used to read [vaultRepositoryProvider].
+/// [onPdfPreviewOpened] (native only) receives the PDF preview handle when
+/// the Quick Look sheet is up — the vault screen disposes it in its own
+/// dispose, since the system (not our code) closes the sheet.
 void openVaultItemViewer(
   BuildContext context, {
   required VaultItemDecrypted item,
   required VaultSession session,
   required WidgetRef ref,
   VoidCallback? onDownload,
+  void Function(PdfPreview preview)? onPdfPreviewOpened,
 }) {
   final mime = item.mimeType.toLowerCase();
   final repo = ref.read(vaultRepositoryProvider);
@@ -109,6 +114,7 @@ void openVaultItemViewer(
         repo: repo,
         isMobile: isMobile,
         onDownload: onDownload,
+        onPreviewOpened: onPdfPreviewOpened,
       ),
     );
   } else if (mime.startsWith('video/')) {

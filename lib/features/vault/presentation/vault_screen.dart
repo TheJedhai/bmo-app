@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mime/mime.dart';
 
 import '../../../core/platform/file_download.dart';
+import '../../../core/platform/pdf_preview.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../crypto/vault_crypto.dart' as crypto;
@@ -843,10 +844,24 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   double _downloadProgress = 0;
   String _downloadFileName = '';
 
+  // PDF preview state (native only)
+  //
+  // Handle of the temp file behind the Quick Look sheet. The system closes
+  // the sheet, not our code, so the file dies HERE — on this screen's
+  // dispose (lock, leaving the tab). App killed with the sheet open: the
+  // dispose never runs and the OS purges NSTemporaryDirectory instead.
+  PdfPreview? _openPdfPreview;
+
   @override
   void initState() {
     super.initState();
     _loadItems();
+  }
+
+  @override
+  void dispose() {
+    _openPdfPreview?.dispose();
+    super.dispose();
   }
 
   VaultSession get _session => widget.session;
@@ -1200,7 +1215,15 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       session: _session,
       ref: ref,
       onDownload: () => _downloadItem(item),
+      onPdfPreviewOpened: _onPdfPreviewOpened,
     );
+  }
+
+  /// Receives the temp-file handle once the Quick Look sheet is up.
+  /// Reopening a preview replaces the previous one — no accumulation.
+  void _onPdfPreviewOpened(PdfPreview preview) {
+    _openPdfPreview?.dispose();
+    _openPdfPreview = preview;
   }
 
   // ----------------------------------------------------------

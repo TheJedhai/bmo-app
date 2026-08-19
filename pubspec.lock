@@ -893,6 +893,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.5.0"
+  quick_look:
+    dependency: "direct main"
+    description:
+      name: quick_look
+      sha256: b6797d22d0c038a660715d27c477424472d32f1b1b51ed450e8a52ad50a7251e
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
   record_use:
     dependency: transitive
     description:

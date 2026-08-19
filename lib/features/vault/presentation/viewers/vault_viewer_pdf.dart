@@ -1,61 +1,35 @@
 /// In-app PDF viewer for vault items.
 ///
-/// Uses the browser's native PDF viewer via an iframe + blob URL.
-/// **Zero additional dependencies** — Chrome's built-in PDF viewer handles
-/// rendering, zoom, search, page navigation, and printing.
+/// Delegates to the platform's built-in PDF viewer — the browser's via an
+/// iframe + blob URL (web), the system's Quick Look sheet (native).
+/// **Zero additional rendering deps** — no pdfx/pdfrx (both bundle PDFium,
+/// ~4 MB on web) for something the platform already does.
 ///
-/// ## Why iframe instead of pdfx?
-/// pdfx adds ~500 KB (PDF.js + photo_view + utility deps) for functionality
-/// the browser already provides natively. The iframe approach:
-/// - Zero dependencies
-/// - Native Chrome PDF viewer (zoom, search, page nav, print, rotate)
-/// - Same user experience as opening a PDF in Chrome
-/// - No z-order issues (the iframe is the only platform view in the dialog,
-///   and the close button is in a Flutter header above it)
+/// The platform difference lives behind [createPdfPreview] in
+/// core/platform — this file has no platform code.
 ///
-/// ## Memory / platform view lifecycle
-/// Same strategy as the video viewer: the platform view factory closes over
-/// only a string key (viewType), looking up the actual iframe element from a
-/// global map.  On dispose the entry is removed → the factory (stuck in the
-/// registry forever) no longer reaches the element → GC collects the buffer.
+/// ## Resource lifecycle
+/// Web: blob URL revoked when this dialog closes (as always).
+/// Native: the Quick Look sheet is closed by the SYSTEM, so the handle is
+/// handed to the vault screen ([onPreviewOpened]) and the temp file dies
+/// with the screen's dispose — see core/platform/pdf_preview.dart.
 ///
 /// ## Security
-/// - Decrypted PDF bytes → blob URL → iframe. Blob URL is revoked on close.
+/// - Decrypted PDF bytes → blob URL → iframe (web) / temp file → Quick
+///   Look (native). Released on dialog close (web) or screen dispose
+///   (native).
 /// - No plaintext in log/storage.
 library;
-
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
-
-import 'dart:html' as html;
-import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/platform/pdf_preview.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
 import '../../data/vault_models.dart';
 import '../../data/vault_repository.dart';
 import '../../providers/vault_providers.dart';
-
-// ---------------------------------------------------------------------------
-// Global iframe element registry
-// ---------------------------------------------------------------------------
-
-/// Maps viewType → live `<iframe>` element so the platform view factory
-/// can look up the element without capturing it in a closure.
-final _iframeElements = <String, html.IFrameElement>{};
-
-int _nextPdfViewId = 0;
-
-/// Creates a unique viewType for a single viewer instance.
-String _nextPdfViewType() => 'vault-pdf-${_nextPdfViewId++}';
-
-/// Platform view factory.  Captures only [viewType] (a short string), NOT
-/// the iframe element.
-html.IFrameElement _pdfPlatformFactory(int viewId, String viewType) {
-  return _iframeElements[viewType]!;
-}
 
 // ============================================================
 // Viewer dialog
@@ -70,6 +44,11 @@ class VaultPdfViewer extends ConsumerStatefulWidget {
   /// Called when the user taps "Baixar" after a memory error.
   final VoidCallback? onDownload;
 
+  /// Native only: receives the preview handle once the Quick Look sheet is
+  /// up, so the vault screen can dispose it in its own dispose. Web never
+  /// calls this — the blob URL dies with this dialog.
+  final void Function(PdfPreview preview)? onPreviewOpened;
+
   const VaultPdfViewer({
     super.key,
     required this.item,
@@ -77,6 +56,7 @@ class VaultPdfViewer extends ConsumerStatefulWidget {
     required this.repo,
     required this.isMobile,
     this.onDownload,
+    this.onPreviewOpened,
   });
 
   @override
@@ -88,7 +68,8 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
   double _progress = 0;
   String? _error;
   bool _isMemoryError = false;
-  String? _blobUrl;
+  PdfPreview? _preview;
+  bool _handedOff = false;
 
   @override
   void initState() {
@@ -98,7 +79,8 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
 
   Future<void> _load() async {
     // Clean up state from a previous attempt.
-    _cleanupBlobUrl();
+    _cleanupPreview();
+    _handedOff = false;
     _isMemoryError = false;
 
     try {
@@ -115,21 +97,42 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
       );
       if (!mounted) return;
 
-      // Create blob URL for the iframe
-      final blob = html.Blob([bytes], 'application/pdf');
-      final url = html.Url.createObjectUrl(blob);
-
+      final preview = await createPdfPreview(bytes);
       if (!mounted) {
-        html.Url.revokeObjectUrl(url);
+        preview.dispose();
         return;
       }
       setState(() {
-        _blobUrl = url;
+        _preview = preview;
         _isLoading = false;
       });
+
+      if (!preview.isSystemPresented) return; // web: iframe already built.
+
+      // Native: present the Quick Look sheet and hand the handle to the
+      // vault screen — the system closes the sheet, so the temp file can
+      // only die with the screen's dispose (see core/platform/pdf_preview).
+      final ok = await preview.present();
+      if (!mounted) {
+        // Dialog died during presentation (lock, barrier) — the handle has
+        // no owner anymore: release it here. The sheet may have just come
+        // up; Quick Look already loaded the preview into its own process,
+        // and the OS purges the temp dir anyway. Security first.
+        preview.dispose();
+        return;
+      }
+      if (ok) {
+        widget.onPreviewOpened?.call(preview);
+        _handedOff = true;
+        Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _error = 'Não foi possível abrir o visualizador do sistema.';
+        });
+      }
     } catch (e) {
       if (!mounted) return;
-      _cleanupBlobUrl();
+      _cleanupPreview();
 
       final msg = e.toString().toLowerCase();
       if (msg.contains('memory') ||
@@ -157,11 +160,10 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
     return e.toString();
   }
 
-  void _cleanupBlobUrl() {
-    if (_blobUrl != null) {
-      html.Url.revokeObjectUrl(_blobUrl!);
-      _blobUrl = null;
-    }
+  void _cleanupPreview() {
+    final p = _preview;
+    _preview = null;
+    p?.dispose();
   }
 
   @override
@@ -278,81 +280,19 @@ class _VaultPdfViewerState extends ConsumerState<VaultPdfViewer> {
       );
     }
 
-    if (_blobUrl == null) return const SizedBox.shrink();
+    final preview = _preview;
+    if (preview == null) return const SizedBox.shrink();
 
-    // Rebuild iframe when blob URL changes (key ensures a fresh widget).
-    return _PdfIframe(
-      key: ValueKey(_blobUrl),
-      blobUrl: _blobUrl!,
-    );
+    return preview.buildContent();
   }
 
   @override
   void dispose() {
-    _cleanupBlobUrl();
-    super.dispose();
-  }
-}
-
-// ============================================================
-// PDF iframe (browser's native PDF viewer)
-// ============================================================
-
-class _PdfIframe extends StatefulWidget {
-  final String blobUrl;
-
-  const _PdfIframe({super.key, required this.blobUrl});
-
-  @override
-  State<_PdfIframe> createState() => _PdfIframeState();
-}
-
-class _PdfIframeState extends State<_PdfIframe> {
-  late final html.IFrameElement _iframe;
-  late final String _viewType;
-
-  @override
-  void initState() {
-    super.initState();
-    _viewType = _nextPdfViewType();
-    _iframe = html.IFrameElement()
-      ..src = widget.blobUrl
-      ..style.width = '100%'
-      ..style.height = '100%'
-      ..style.border = 'none';
-
-    // Store in global registry so the factory can look it up without
-    // capturing the element directly.
-    _iframeElements[_viewType] = _iframe;
-
-    // Register factory.  The closure captures only [_viewType], NOT
-    // [_iframe] — see _pdfPlatformFactory.
-    ui_web.platformViewRegistry.registerViewFactory(
-      _viewType,
-      (int viewId) => _pdfPlatformFactory(viewId, _viewType),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return HtmlElementView(viewType: _viewType);
-  }
-
-  @override
-  void dispose() {
-    // Release the iframe's reference to the blob (so Chrome frees the
-    // decoded PDF buffer) and remove from the global registry so the
-    // factory (still held by platformViewRegistry) can no longer reach
-    // this element → GC collects it.
-    try {
-      _iframe.src = '';
-      if (_iframe.parentNode != null) {
-        _iframe.remove();
-      }
-    } catch (_) {
-      // Best-effort cleanup.
-    }
-    _iframeElements.remove(_viewType);
+    // Web: the blob URL dies with this dialog. Native: after a successful
+    // handoff the screen owns the handle; when the dialog dies before the
+    // handoff (lock mid-presentation) the handle is released here.
+    final p = _preview;
+    if (p != null && !_handedOff) p.dispose();
     super.dispose();
   }
 }
