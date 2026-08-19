@@ -103,7 +103,7 @@ class _GalleryImageDetailState extends ConsumerState<GalleryImageDetail> {
                         : IconButton(
                             icon: Icon(Icons.download,
                                 color: BmoColors.textSecondary, size: 20),
-                            tooltip: 'Baixar',
+                            tooltip: 'Salvar',
                             onPressed: _download,
                           ),
                   IconButton(
