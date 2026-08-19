@@ -4,6 +4,10 @@ import 'dart:typed_data';
 
 import 'video_source.dart';
 
+/// Contadores de create/dispose — testes de vazamento de arquivo temporário.
+int videoSourceCreatedCount = 0;
+int videoSourceDisposedCount = 0;
+
 /// Fonte nativa (iOS): grava os bytes decifrados em arquivo temporário e
 /// apaga no [dispose].
 ///
@@ -33,6 +37,7 @@ class IoVideoSource implements VideoSource {
       await _deleteQuietly(file);
       rethrow;
     }
+    videoSourceCreatedCount++;
     return IoVideoSource._(file);
   }
 
@@ -41,13 +46,19 @@ class IoVideoSource implements VideoSource {
 
   @override
   void dispose() {
+    videoSourceDisposedCount++;
     // Dispose não pode await — a ordem é garantida pelo call site: o
     // controller é totalmente descartado antes da fonte. O AVPlayer
     // trabalha por URL e pode reabrir o arquivo; apagar antes de ele
-    // soltar é condição de corrida, sem proteção do filesystem. A
-    // exclusão em si é melhor esforço: se falhar, o NSTemporaryDirectory
-    // é purgado pelo SO.
-    _deleteQuietly(_file);
+    // soltar é condição de corrida, sem proteção do filesystem. Delete
+    // síncrono: unlink é operação de metadados, não lê o conteúdo — e o
+    // arquivo some de fato quando o dispose retorna. Se falhar, o
+    // NSTemporaryDirectory é purgado pelo SO.
+    try {
+      if (_file.existsSync()) _file.deleteSync();
+    } catch (_) {
+      // Melhor esforço: NSTemporaryDirectory é purgado pelo SO.
+    }
   }
 }
 

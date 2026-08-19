@@ -5,6 +5,10 @@ import 'dart:typed_data';
 
 import 'video_source.dart';
 
+/// Contadores de create/dispose — testes de vazamento de blob URL.
+int videoSourceCreatedCount = 0;
+int videoSourceDisposedCount = 0;
+
 /// Fonte web: blob URL criado a partir dos bytes decifrados.
 ///
 /// [dispose] revoga o blob URL — esquecer aqui é vazamento silencioso de
@@ -20,6 +24,7 @@ class WebVideoSource implements VideoSource {
 
   @override
   void dispose() {
+    videoSourceDisposedCount++;
     html.Url.revokeObjectUrl(uri.toString());
   }
 }
@@ -29,5 +34,7 @@ class WebVideoSource implements VideoSource {
 /// `async` converte erros de criação do blob (ex.: falta de memória) em
 /// erro do Future, capturável pelo call site com `await`.
 Future<VideoSource> createVideoSource(Uint8List bytes, String mimeType) async {
-  return WebVideoSource(bytes, mimeType);
+  final source = WebVideoSource(bytes, mimeType);
+  videoSourceCreatedCount++;
+  return source;
 }
