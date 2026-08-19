@@ -1,9 +1,10 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
-
 /// In-app video viewer for vault items.
 ///
 /// Fetches the full video via [VaultRepository.downloadItem], decrypts it,
-/// creates a blob URL, and plays it with the [video_player] package.
+/// creates a [VideoSource], and plays it with the [video_player] package.
+/// The source is platform-specific (blob URL on web, temp file on native)
+/// and lives behind [createVideoSource] in core/platform — this file has
+/// no platform code.
 ///
 /// ## Why video_player instead of manual <video>
 /// The previous manual approach (HtmlElementView + platformViewRegistry)
@@ -14,16 +15,16 @@
 /// and the platform view is disposed by the Flutter engine.
 ///
 /// ## Security
-/// - Decrypted content lives only as a blob URL while the viewer is open.
-/// - Blob URL revoked on close; plaintext reference discarded.
+/// - Decrypted content lives only as a [VideoSource] while the viewer is
+///   open: a blob URL revoked on close (web), or a temp file deleted on
+///   close (native).
 library;
-
-import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../../core/platform/video_source.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/vault_client.dart';
 import '../../data/vault_models.dart';
@@ -62,7 +63,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   double _progress = 0;
   String? _error;
   bool _isMemoryError = false;
-  String? _blobUrl;
+  VideoSource? _source;
   VideoPlayerController? _controller;
   bool _isFullscreenOpen = false;
 
@@ -75,7 +76,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   Future<void> _load() async {
     // Clean up any state from a previous attempt before starting fresh.
     await _disposeController();
-    _cleanupBlobUrl();
+    _cleanupSource();
     _isMemoryError = false;
 
     try {
@@ -92,11 +93,10 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       );
       if (!mounted) return;
 
-      // Wrap blob creation in try-catch for memory errors.
-      String? blobUrl;
+      // Wrap source creation in try-catch for memory errors.
+      VideoSource? source;
       try {
-        final blob = html.Blob([bytes], widget.item.mimeType);
-        blobUrl = html.Url.createObjectUrl(blob);
+        source = await createVideoSource(bytes, widget.item.mimeType);
       } catch (e) {
         if (!mounted) return;
         setState(() {
@@ -109,25 +109,25 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       }
 
       if (!mounted) {
-        // Widget was disposed while creating blob — revoke it immediately.
-        html.Url.revokeObjectUrl(blobUrl);
+        // Widget was disposed while creating source — release it immediately.
+        source.dispose();
         return;
       }
 
-      // Create video_player controller pointing at the blob URL.
+      // Create video_player controller pointing at the source.
       // video_player_web creates a <video> element internally and manages
       // its lifecycle — when this widget is disposed and the platform view
       // is removed, the plugin tears down the element and releases buffers.
-      final controller = VideoPlayerController.networkUrl(
-        Uri.parse(blobUrl),
-      );
+      final controller = VideoPlayerController.networkUrl(source.uri);
 
       try {
         await controller.initialize();
       } catch (e) {
-        if (!mounted) return;
+        // Release local resources even if unmounted — dispose() only knows
+        // about _source/_controller, which are not assigned yet.
         controller.dispose();
-        html.Url.revokeObjectUrl(blobUrl);
+        source.dispose();
+        if (!mounted) return;
         setState(() {
           _error = _friendlyError(e);
           _isLoading = false;
@@ -137,12 +137,12 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
 
       if (!mounted) {
         controller.dispose();
-        html.Url.revokeObjectUrl(blobUrl);
+        source.dispose();
         return;
       }
 
       _controller = controller;
-      _blobUrl = blobUrl;
+      _source = source;
 
       // Listen for playback state changes to rebuild controls.
       _controller!.addListener(_onControllerUpdate);
@@ -157,7 +157,7 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
       if (!mounted) return;
       // Clean up any partially-created resources on error.
       await _disposeController();
-      _cleanupBlobUrl();
+      _cleanupSource();
 
       final msg = e.toString().toLowerCase();
       if (msg.contains('memory') ||
@@ -267,12 +267,11 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
   // Resource cleanup
   // ---------------------------------------------------------------------------
 
-  /// Revokes the blob URL and clears the reference.
-  void _cleanupBlobUrl() {
-    if (_blobUrl != null) {
-      html.Url.revokeObjectUrl(_blobUrl!);
-      _blobUrl = null;
-    }
+  /// Releases the video source (revokes the blob URL on web, deletes the
+  /// temp file on native) and clears the reference.
+  void _cleanupSource() {
+    _source?.dispose();
+    _source = null;
   }
 
   /// Disposes the [VideoPlayerController] — the managed teardown that
@@ -479,10 +478,12 @@ class _VaultVideoViewerState extends ConsumerState<VaultVideoViewer> {
 
   @override
   void dispose() {
-    // Order matters: dispose controller first (tears down the <video>
-    // element via video_player's managed teardown), then revoke the blob.
+    // Order matters: dispose controller first (tears down the player), then
+    // release the source (revoke blob URL / delete temp file). On native,
+    // unlinking while AVPlayer holds the file open is fine on POSIX — the
+    // data is freed when the player closes its descriptor.
     _disposeController();
-    _cleanupBlobUrl();
+    _cleanupSource();
     super.dispose();
   }
 }
