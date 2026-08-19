@@ -15,9 +15,7 @@ void downloadBytes({
   final (:extension, :mime) = _mimeToSaver(mimeType, fileName);
   // file_saver appends the extension to `name`, so strip it here when the
   // incoming file name already carries it.
-  final name = fileName.endsWith('.$extension')
-      ? fileName.substring(0, fileName.length - extension.length - 1)
-      : fileName;
+  final name = stripFileExtension(fileName, extension);
 
   FileSaver.instance
       .saveAs(
@@ -31,6 +29,16 @@ void downloadBytes({
         debugPrint('Save failed: $error');
         return null;
       });
+}
+
+/// Removes a trailing ".$extension" from [fileName] when it matches
+/// exactly (case-insensitive). Returns [fileName] unchanged otherwise.
+String stripFileExtension(String fileName, String extension) {
+  final suffix = '.$extension';
+  if (fileName.length <= suffix.length) return fileName;
+  final tail = fileName.substring(fileName.length - suffix.length);
+  if (tail.toLowerCase() != suffix.toLowerCase()) return fileName;
+  return fileName.substring(0, fileName.length - suffix.length);
 }
 
 ({String extension, MimeType mime}) _mimeToSaver(
