@@ -1,14 +1,13 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
-
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mime/mime.dart';
 
+import '../../../core/platform/file_download.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../crypto/vault_crypto.dart' as crypto;
 import '../data/vault_client.dart';
-import 'dart:async';
-import 'dart:html' as html;
 import 'dart:typed_data';
 
 import '../data/vault_models.dart';
@@ -878,70 +877,37 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // Upload
   // ----------------------------------------------------------
 
-  /// Opens the browser file picker and returns the selected file, or `null`
-  /// if the user cancelled the dialog.
-  ///
-  /// Uses window focus to detect dialog dismissal — when the file dialog
-  /// closes without a file being selected, `onChange` never fires, so we
-  /// complete with `null` on the next window focus event after a short delay
-  /// to let a legitimate `onChange` event arrive first.
-  Future<List<html.File>> _pickFiles() async {
-    final input = html.FileUploadInputElement()
-      ..accept = '*/*'
-      ..multiple = true;
-
-    final completer = Completer<List<html.File>>();
-
-    input.onChange.listen((_) {
-      completer.complete(input.files ?? const []);
-    });
-
-    // Detect cancel: when window regains focus after file dialog closes,
-    // give onChange a short window to fire, then treat as cancelled.
-    late final StreamSubscription<html.Event> focusSub;
-    focusSub = html.window.onFocus.listen((_) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!completer.isCompleted) {
-          completer.complete(const []);
-        }
-      });
-    });
-
-    input.click();
-
-    try {
-      return await completer.future;
-    } finally {
-      focusSub.cancel();
-    }
-  }
-
   Future<void> _pickAndUploadFiles() async {
-    final files = await _pickFiles();
-    if (files.isEmpty) return; // User cancelled or empty selection.
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.any,
+    );
+    // `null` means the user cancelled the picker.
+    if (result == null || result.files.isEmpty) return;
 
     if (!mounted) return;
     setState(() {
       _isUploading = true;
-      _uploadTotal = files.length;
+      _uploadTotal = result.files.length;
       _uploadIndex = 0;
     });
 
     final repo = ref.read(vaultRepositoryProvider);
     final failures = <String>[];
 
-    for (var i = 0; i < files.length; i++) {
-      final file = files[i];
+    for (var i = 0; i < result.files.length; i++) {
+      final file = result.files[i];
 
-      // Read file bytes in browser
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      await reader.onLoadEnd.first;
+      // On web and iOS, withData (default) populates `bytes` fully in memory.
+      final bytes = file.bytes;
+      if (bytes == null) {
+        failures.add('${file.name}: não foi possível ler o arquivo.');
+        continue;
+      }
 
-      final bytes = Uint8List.fromList(reader.result as List<int>);
       final fileName = file.name;
       final mimeType =
-          file.type.isNotEmpty ? file.type : 'application/octet-stream';
+          lookupMimeType(fileName) ?? 'application/octet-stream';
 
       if (!mounted) return;
       setState(() {
@@ -986,7 +952,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         final suffix =
             failures.take(3).join('\n');
         _showError(
-          '${failures.length}/$files.length arquivos falharam:\n$suffix',
+          '${failures.length}/${result.files.length} arquivos falharam:\n$suffix',
         );
       }
     }
@@ -1149,16 +1115,12 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       );
       if (!mounted) return;
 
-      // Save file via browser download
-      final blob = html.Blob([plaintext], item.mimeType);
-      final url = html.Url.createObjectUrl(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', item.fileName)
-        ..style.display = 'none';
-      html.document.body?.children.add(anchor);
-      anchor.click();
-      html.document.body?.children.remove(anchor);
-      html.Url.revokeObjectUrl(url);
+      // Save file via the platform download helper (file_saver).
+      downloadBytes(
+        bytes: plaintext,
+        fileName: item.fileName,
+        mimeType: item.mimeType,
+      );
 
       setState(() {
         _downloadingItemId = null;
