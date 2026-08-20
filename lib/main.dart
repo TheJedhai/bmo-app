@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'core/config/env.dart';
 import 'core/identity/identity_provider.dart';
 import 'core/platform/url_strategy.dart';
 import 'features/chat/data/bmo_rich_registry.dart';
@@ -10,6 +11,11 @@ import 'features/chat/widgets/bmo_rich_image_card.dart';
 import 'features/chat/widgets/bmo_rich_question_card.dart';
 
 void main() async {
+  assert(
+    Env.bmoServerUrl.startsWith('https://'),
+    'BMO_SERVER_URL deve usar https:// (ATS no iOS bloqueia http) — recebido: '
+    '${Env.bmoServerUrl}',
+  );
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
 

@@ -1,17 +1,47 @@
 # bmo_app
 
-A new Flutter project.
+Frontend Flutter (web e iOS) do BMO. Acessa dois backends via Tailscale:
+QwenPaw (8088) e bmo-server (8089), este último com HTTPS via Caddy no
+hostname Tailscale.
 
-## Getting Started
+## Configuração de URLs
 
-This project is a starting point for a Flutter application.
+As URLs dos backends vêm de `--dart-define` (`lib/core/config/env.dart`):
 
-A few resources to get you started if this is your first Flutter project:
+| Variável | Default |
+| --- | --- |
+| `BMO_SERVER_URL` | `https://jedhais-mac-mini.taild5baed.ts.net` |
+| `QWENPAW_URL` | `http://localhost:8088` |
+| `AGENT_ID` | `default` |
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+`BMO_SERVER_URL` precisa ser `https://` — o ATS do iOS bloqueia HTTP puro,
+e uma assertion em debug falha no boot se a URL configurada não começar com
+`https://`. Não adicionar exceções de ATS ao `Info.plist`.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Build
+
+```bash
+flutter pub get
+
+# Web (dev)
+flutter run -d chrome
+
+# Web (produção)
+flutter build web --release \
+  --dart-define=BMO_SERVER_URL=https://jedhais-mac-mini.taild5baed.ts.net
+
+# iOS
+flutter build ios \
+  --dart-define=BMO_SERVER_URL=https://jedhais-mac-mini.taild5baed.ts.net
+```
+
+Os defaults do `env.dart` já apontam para o hostname Tailscale; o
+`--dart-define` só é necessário para apontar para outro ambiente.
+
+## Comandos
+
+```bash
+dart run build_runner build        # após mudar provider com @riverpod
+dart run build_runner watch        # durante desenvolvimento ativo
+flutter analyze                    # lint
+```
