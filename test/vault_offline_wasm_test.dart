@@ -8,6 +8,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Remove // and /* */ comments, preserving string literals. The scan's
@@ -78,8 +79,23 @@ String _stripHtmlComments(String source) {
 }
 
 void main() {
+  // Guarda por teste: dart:io não existe no navegador. O runner do
+  // flutter_test ignora @TestOn, então o skip é marcado em runtime.
+  void vmTest(String name, void Function() body) {
+    test(name, () {
+      if (kIsWeb) {
+        markTestSkipped(
+          'Verificação de arquivos — dart:io não existe no navegador; '
+          'rode na VM (flutter test, sem --platform).',
+        );
+        return;
+      }
+      body();
+    });
+  }
+
   group('WASM self-hosting acceptance', () {
-    test('web/hash-wasm/index.esm.js exists and is non-trivial', () {
+    vmTest('web/hash-wasm/index.esm.js exists and is non-trivial', () {
       final file = File('web/hash-wasm/index.esm.js');
       expect(file.existsSync(), isTrue,
           reason: 'web/hash-wasm/index.esm.js must exist for offline KDF');
@@ -88,7 +104,7 @@ void main() {
           reason: 'hash-wasm ESM should be ~253 KB (contains inline WASM)');
     });
 
-    test('web/index.html pre-loads hash-wasm locally', () {
+    vmTest('web/index.html pre-loads hash-wasm locally', () {
       final html = File('web/index.html').readAsStringSync();
       expect(html.contains('/hash-wasm/index.esm.js'), isTrue,
           reason: 'index.html must import local hash-wasm ESM');
@@ -96,7 +112,7 @@ void main() {
           reason: 'index.html must set window.hashwasm for dargon2');
     });
 
-    test('web/index.html does NOT reference jsdelivr.net', () {
+    vmTest('web/index.html does NOT reference jsdelivr.net', () {
       final html = File('web/index.html').readAsStringSync();
       expect(html.contains('jsdelivr.net'), isFalse,
           reason: 'index.html must NOT contain any CDN reference');
@@ -104,7 +120,7 @@ void main() {
           reason: 'index.html must NOT contain any CDN reference');
     });
 
-    test('no CDN reference in entire web/ directory', () {
+    vmTest('no CDN reference in entire web/ directory', () {
       final webDir = Directory('web');
       for (final entity in webDir.listSync(recursive: true)) {
         if (entity is! File) continue;
