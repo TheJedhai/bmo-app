@@ -1,13 +1,13 @@
-// Integration test: VaultRepository end-to-end against real bmo-server.
+// Integration test: VaultRepository end-to-end against a DISPOSABLE
+// bmo-server instance.
 //
-// REQUIRES bmo-server running on localhost:8089.
-// NOT a unit test — hits the real API, creates/deletes real vaults.
+// NEVER run against production. The target URL is hardcoded to a loopback
+// disposable server (port 8091) and a runtime guard fails the test if the
+// target is ever pointed at production (Tailscale host or port 8089).
 //
-// Run with:
-//   flutter test --platform=chrome test/vault_integration_test.dart
-//
-// To skip when server is not available:
-//   flutter test --platform=chrome test/vault_integration_test.dart --tags=integration
+// Run with the helper script, which starts a scratch server (temp DB + temp
+// blob dir) and tears it down afterwards:
+//   test/vault_integration_run.sh
 //
 // ## Test flow (Phase 8.2 spec):
 // 1. Create vault with password → receives recovery key
@@ -27,7 +27,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:bmo_app/core/config/env.dart';
 import 'package:bmo_app/core/http/client_factory.dart';
 import 'package:bmo_app/features/vault/crypto/argon2_kdf.dart';
 import 'package:bmo_app/features/vault/crypto/vault_cipher.dart';
@@ -39,14 +38,38 @@ import 'package:bmo_app/features/vault/data/vault_repository.dart';
 import 'argon2_register.dart';
 
 // ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+/// Disposable bmo-server on a dedicated port (8091) — distinct from the
+/// vault_item suite (8090) and from production (8089). Started by
+/// test/vault_integration_run.sh with a temporary DB and blob dir.
+const _testServerUrl = 'http://127.0.0.1:8091';
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Creates a real [VaultRepository] pointed at the local bmo-server.
+/// Hard guard: this suite must NEVER hit production. Only an HTTP loopback
+/// disposable server is acceptable — the production server (Tailscale
+/// hostname, or its local port 8089) fails this check immediately.
+void _assertDisposableTarget() {
+  final uri = Uri.parse(_testServerUrl);
+  final isLoopback =
+      uri.scheme == 'http' && (uri.host == '127.0.0.1' || uri.host == 'localhost');
+  if (!isLoopback || uri.port == 8089) {
+    fail(
+      'vault_integration_test aponta para $_testServerUrl — produção ou '
+      'URL não descartável. Rode via test/vault_integration_run.sh.',
+    );
+  }
+}
+
+/// Creates a real [VaultRepository] pointed at the disposable bmo-server.
 VaultRepository _createRepo() {
   final client = createHttpClient();
   return VaultRepository(
-    VaultClient(client: client, baseUrl: Env.bmoServerUrl),
+    VaultClient(client: client, baseUrl: _testServerUrl),
   );
 }
 
@@ -60,7 +83,7 @@ Future<bool> _backendReachable() async {
   final client = createHttpClient();
   try {
     await client
-        .get(Uri.parse('${Env.bmoServerUrl}/api/v1/me'))
+        .get(Uri.parse('$_testServerUrl/api/v1/me'))
         .timeout(const Duration(seconds: 5));
     return true;
   } catch (_) {
@@ -90,8 +113,8 @@ void main() {
   var serverUp = false;
   var kdfUp = false;
   const backendSkipReason =
-      'bmo-server indisponível em ${Env.bmoServerUrl} — suba o backend '
-      'para executar o E2E de vault.';
+      'bmo-server descartável indisponível em $_testServerUrl — rode '
+      'test/vault_integration_run.sh para executar o E2E de vault.';
   // O KDF real (Argon2id) exige o WASM do hash-wasm, que só existe no
   // navegador — no VM do flutter_tester lança UnimplementedError antes de
   // qualquer chamada de rede.
@@ -108,6 +131,7 @@ void main() {
   // no runner do flutter_test, então o skip é marcado dentro de cada teste.
   void runE2E(String name, Future<void> Function() body) {
     test(name, () async {
+      _assertDisposableTarget();
       if (!kdfUp) {
         markTestSkipped(vmSkipReason);
         return;
