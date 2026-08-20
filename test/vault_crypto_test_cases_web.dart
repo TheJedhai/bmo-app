@@ -4,10 +4,9 @@
 // 1. Cipher round-trip (binary-safe)
 // 2. IV uniqueness
 // 3. Canary validation
-// 4. Recovery key unlocks same DEK
-// 5. Tampered ciphertext rejection
-// 6. RFC 9106 Argon2id known-answer test vector
-// 7. Offline WASM self-hosting acceptance
+// 4. Tampered ciphertext rejection
+// 5. RFC 9106 Argon2id known-answer test vector
+// 6. Offline WASM self-hosting acceptance
 //
 // ## Security: This test file NEVER logs key material.
 //
@@ -191,82 +190,7 @@ void runVaultCryptoTests() {
   });
 
   // =========================================================================
-  // 4. Recovery key unlocks same DEK
-  // =========================================================================
-  group('Recovery key', () {
-    test('recovery key decrypts the same DEK as the password', () async {
-      const mockKdf = MockKdf();
-      const password = 'my-secret-password';
-
-      // Create vault
-      final material = await createVault(password, 'test-vault', kdf: mockKdf);
-
-      // Unlock with password
-      final unlockMat = VaultUnlockMaterial(
-        salt: material.salt,
-        wrappedDek: material.wrappedDek,
-        dekIv: material.dekIv,
-        canaryCiphertext: material.canaryCiphertext,
-        canaryIv: material.canaryIv,
-        recoveryWrappedDek: material.recoveryWrappedDek,
-        recoveryDekIv: material.recoveryDekIv,
-        recoveryKeyWrapped: material.recoveryKeyWrapped,
-        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
-        nameBlob: material.nameBlob,
-        nameIv: material.nameIv,
-      );
-      final dekFromPassword = await unlock(password, unlockMat, kdf: mockKdf);
-
-      // Unlock with recovery key
-      final dekFromRecovery =
-          await unlockWithRecoveryKey(material.recoveryKey, unlockMat);
-
-      // Same DEK
-      expect(dekFromRecovery, equals(dekFromPassword));
-      expect(dekFromRecovery, hasLength(32));
-    });
-
-    test('wrong recovery key fails to unlock', () async {
-      const mockKdf = MockKdf();
-      final material = await createVault('password', 'test-vault', kdf: mockKdf);
-
-      final wrongRecoveryKey = VaultCipher.generateKey();
-      // Ensure different
-      expect(wrongRecoveryKey, isNot(equals(material.recoveryKey)));
-
-      final unlockMat = VaultUnlockMaterial(
-        salt: material.salt,
-        wrappedDek: material.wrappedDek,
-        dekIv: material.dekIv,
-        canaryCiphertext: material.canaryCiphertext,
-        canaryIv: material.canaryIv,
-        recoveryWrappedDek: material.recoveryWrappedDek,
-        recoveryDekIv: material.recoveryDekIv,
-        recoveryKeyWrapped: material.recoveryKeyWrapped,
-        recoveryKeyWrapIv: material.recoveryKeyWrapIv,
-        nameBlob: material.nameBlob,
-        nameIv: material.nameIv,
-      );
-
-      expect(
-        () async => unlockWithRecoveryKey(wrongRecoveryKey, unlockMat),
-        throwsA(isA<VaultCipherException>()),
-      );
-    });
-
-    test('recovery key encode/decode round-trip', () {
-      final original = generateRecoveryKey();
-      final encoded = encodeRecoveryKey(original);
-      final decoded = decodeRecoveryKey(encoded);
-
-      expect(decoded, equals(original));
-      expect(encoded.length, equals(64)); // 32 bytes = 64 hex chars
-      expect(encoded, equals(encoded.toLowerCase())); // lowercase
-    });
-  });
-
-  // =========================================================================
-  // 5. Tampered ciphertext rejection
+  // 4. Tampered ciphertext rejection
   // =========================================================================
   group('Tampering detection', () {
     test('flipping 1 byte in ciphertext causes decrypt failure', () async {
@@ -333,7 +257,7 @@ void runVaultCryptoTests() {
   });
 
   // =========================================================================
-  // 6. Wrong password exception
+  // 5. Wrong password exception
   // =========================================================================
   group('Wrong password', () {
     test('wrong password throws WrongPasswordException', () async {
@@ -385,7 +309,7 @@ void runVaultCryptoTests() {
   });
 
   // =========================================================================
-  // 7. RFC 9106 Argon2id known-answer test vector (real KDF)
+  // 6. RFC 9106 Argon2id known-answer test vector (real KDF)
   // =========================================================================
   group('Argon2id correctness', () {
     setUp(() async {
@@ -482,7 +406,7 @@ void runVaultCryptoTests() {
   });
 
   // =========================================================================
-  // 8. Cipher edge cases
+  // 7. Cipher edge cases
   // =========================================================================
   group('VaultCipher edge cases', () {
     test('encrypt empty plaintext', () async {
@@ -554,7 +478,7 @@ void runVaultCryptoTests() {
   });
 
   // =========================================================================
-  // 9. Argon2Params constants are self-consistent
+  // 8. Argon2Params constants are self-consistent
   // =========================================================================
   group('Argon2Params', () {
     test('constants satisfy Argon2 constraints', () {

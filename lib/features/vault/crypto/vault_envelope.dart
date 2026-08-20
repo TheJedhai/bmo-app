@@ -1,4 +1,4 @@
-/// Envelope encryption for the vault: DEK wrapping, recovery keys, and canary.
+/// Envelope encryption for the vault: DEK wrapping, recovery wraps, and canary.
 ///
 /// ## Architecture
 /// ```
@@ -10,8 +10,10 @@
 /// - **DEK** (Data Encryption Key): 32 random bytes. Encrypts all vault data.
 /// - **KEK** (Key Encryption Key): 32 bytes derived from password + salt via
 ///   Argon2id. Wraps/unwraps the DEK.
-/// - **Recovery Key**: 32 random bytes. Used directly as an AES-256 key to
-///   wrap the DEK — no KDF, instant unlock. Shown to user once as base32/hex.
+/// - **Recovery wraps**: a recovery key is still generated at creation and the
+///   recovery-wrapped DEK / wrapped recovery key are still stored server-side,
+///   but nothing consumes them anymore. They are the only fallback net until
+///   the master password feature ships.
 /// - **Canary**: A known constant encrypted with the KEK. Stored on the server
 ///   alongside the salt. Allows password validation (unlock) without downloading
 ///   the full vault.
@@ -20,7 +22,6 @@
 /// - NEVER log, print, or debugPrint keys, DEKs, recovery keys, or canary
 ///   plaintext.
 /// - NEVER reuse an IV. Every wrap/canary operation generates a fresh IV.
-/// - The recovery key is stored ONLY by the user. The server never sees it.
 library;
 
 import 'dart:convert';
@@ -112,45 +113,17 @@ Future<bool> validateCanary(
 }
 
 // ---------------------------------------------------------------------------
-// Recovery key
+// Recovery key (generation + wraps only — no consumption path anymore)
 // ---------------------------------------------------------------------------
 
 /// Generates a 32-byte recovery key via CSPRNG.
 ///
-/// The recovery key is an alternative AES-256 key that can unwrap the DEK
-/// without the password. Show it to the user ONCE as a base32 or hex string.
-///
-/// The server stores `recoveryWrappedDek` (DEK encrypted with this key)
-/// but never sees the recovery key itself.
+/// Still generated at creation so the recovery wraps below can be stored
+/// server-side as an inert fallback net until the master password feature
+/// ships. The plaintext key is discarded after creation — nothing consumes
+/// it today.
 Uint8List generateRecoveryKey() {
   return VaultCipher.generateKey();
-}
-
-/// Encodes a recovery key as a lowercase hex string (64 chars).
-///
-/// This is the user-facing format. Safe to display — but the user must
-/// store it securely (password manager, printed copy, etc.).
-String encodeRecoveryKey(Uint8List recoveryKey) {
-  return _bytesToHex(recoveryKey);
-}
-
-/// Decodes a hex-encoded recovery key back to bytes.
-///
-/// Throws [FormatException] if the hex string is invalid.
-Uint8List decodeRecoveryKey(String hexString) {
-  if (hexString.length % 2 != 0) {
-    throw FormatException('Hex string must have even length');
-  }
-  final bytes = Uint8List(hexString.length ~/ 2);
-  for (var i = 0; i < bytes.length; i++) {
-    final byteStr = hexString.substring(i * 2, i * 2 + 2);
-    final byte = int.tryParse(byteStr, radix: 16);
-    if (byte == null) {
-      throw FormatException('Invalid hex character at position ${i * 2}');
-    }
-    bytes[i] = byte;
-  }
-  return bytes;
 }
 
 /// Wraps the DEK with a recovery key (direct AES-256-GCM, no KDF).
@@ -181,16 +154,4 @@ bool _constantTimeEquals(List<int> a, List<int> b) {
     diff |= a[i] ^ b[i];
   }
   return diff == 0;
-}
-
-/// Converts bytes to lowercase hex string.
-String _bytesToHex(List<int> bytes) {
-  const hexChars = '0123456789abcdef';
-  final buffer = StringBuffer();
-  for (final byte in bytes) {
-    buffer
-      ..write(hexChars[byte >> 4])
-      ..write(hexChars[byte & 0x0F]);
-  }
-  return buffer.toString();
 }

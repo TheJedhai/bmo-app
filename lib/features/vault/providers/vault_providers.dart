@@ -1,8 +1,8 @@
 /// Vault feature providers — client, repository, and in-memory session.
 ///
-/// ## Security: DEK and KEK live ONLY in memory
+/// ## Security: DEK lives ONLY in memory
 ///
-/// The [vaultSessionProvider] holds the DEK, KEK, and decrypted vault name
+/// The [vaultSessionProvider] holds the DEK and decrypted vault name
 /// in a pure-Dart [VaultSession] object. These values are **never** written
 /// to localStorage, SharedPreferences, IndexedDB, or any persistent storage.
 ///
@@ -13,8 +13,7 @@
 /// - Phase 8.4 will add an inactivity timer that calls [VaultSessionNotifier.lock]
 ///   to proactively zero the keys even while the tab is open.
 ///
-/// **NEVER log, print, or debugPrint the DEK, KEK, password, recovery key,
-/// or decrypted name.**
+/// **NEVER log, print, or debugPrint the DEK, password, or decrypted name.**
 library;
 
 import 'package:flutter/foundation.dart';
@@ -23,7 +22,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
 import '../crypto/vault_crypto.dart' as crypto;
-import '../crypto/vault_envelope.dart';
 import '../data/vault_client.dart';
 import '../data/vault_repository.dart';
 
@@ -51,7 +49,7 @@ final vaultRepositoryProvider = Provider<VaultRepository>((ref) {
 /// The unlocked vault session — holds all key material in memory.
 ///
 /// All fields are **volatile** and **never persisted**. This object is
-/// created by a successful password or recovery-key unlock, and destroyed
+/// created by a successful password unlock, and destroyed
 /// by [VaultSessionNotifier.lock] or when the widget tree disposes.
 final class VaultSession {
   /// Server-assigned vault ID.
@@ -60,11 +58,6 @@ final class VaultSession {
   /// 32-byte Data Encryption Key — encrypts/decrypts vault items.
   final Uint8List dek;
 
-  /// 32-byte Key Encryption Key — derived from password via Argon2id.
-  /// Used to re-display the recovery key via [VaultRepository.revealRecoveryKey].
-  /// May be absent when unlocked via recovery key (no KDF in that path).
-  final Uint8List? kek;
-
   /// The vault name, decrypted from the server's name_blob.
   /// **NEVER persist or log.**
   final String decryptedName;
@@ -72,7 +65,6 @@ final class VaultSession {
   const VaultSession({
     required this.vaultId,
     required this.dek,
-    this.kek,
     required this.decryptedName,
   });
 }
@@ -96,7 +88,7 @@ final vaultSessionProvider =
 /// and the UI shows the vault contents.
 ///
 /// ## Lifecycle
-/// - Created by [unlockWithPassword] or [unlockWithRecoveryKey].
+/// - Created by [unlockWithPassword].
 /// - Destroyed by [lock] or by widget disposal (route popped).
 /// - Phase 8.4 will add an inactivity timer that calls [lock] automatically.
 ///
@@ -152,58 +144,15 @@ final class VaultSessionNotifier extends Notifier<VaultSession?> {
     state = VaultSession(
       vaultId: matchedVaultId,
       dek: result.dek,
-      kek: result.kek,
       decryptedName: result.decryptedName,
     );
   }
 
-  /// Unlocks the vault with a recovery key.
-  ///
-  /// Tests the recovery key against every vault's recovery-wrapped DEK.
-  /// The first vault that decrypts successfully is the one we open.
-  ///
-  /// Throws [WrongRecoveryKeyException] if no vault matches.
-  /// Throws [VaultApiException] on HTTP errors.
-  Future<void> unlockWithRecoveryKey(String recoveryKeyHex) async {
-    final repo = ref.read(vaultRepositoryProvider);
-    final recoveryKey = decodeRecoveryKey(recoveryKeyHex);
-
-    // 1. Get all vaults and their unlock materials.
-    final vaults = await repo.listVaults();
-
-    if (vaults.isEmpty) {
-      throw const NoVaultsException();
-    }
-
-    // 2. Test recovery key against each vault.
-    for (final vault in vaults) {
-      final ok = await repo.verifyRecoveryKey(vault.id, recoveryKey);
-      if (ok) {
-        // 3. Full unlock with recovery key.
-        final dek = await repo.unlockWithRecoveryKey(vault.id, recoveryKey);
-
-        state = VaultSession(
-          vaultId: vault.id,
-          dek: dek,
-          kek: null, // No KEK when unlocked via recovery key.
-          decryptedName: vault.name, // Use plaintext name from metadata.
-        );
-        return;
-      }
-    }
-
-    throw const WrongRecoveryKeyException();
-  }
-
-  /// Creates a new vault, unlocks it, and returns the recovery key for
-  /// one-time display.
-  ///
-  /// The caller MUST display the recovery key to the user and then discard
-  /// it — it is NEVER stored.
+  /// Creates a new vault and unlocks it.
   ///
   /// Throws [DuplicatePasswordException] if another vault already uses this
   /// password (canary validation succeeds against an existing vault).
-  Future<String> createVault(String name, String password) async {
+  Future<void> createVault(String name, String password) async {
     final repo = ref.read(vaultRepositoryProvider);
 
     // 1. Check for duplicate password — test against existing canaries.
@@ -225,32 +174,20 @@ final class VaultSessionNotifier extends Notifier<VaultSession?> {
     }
 
     // 2. Create the vault.
-    final result = await repo.createVault(name, password);
+    final vault = await repo.createVault(name, password);
 
     // 3. Unlock immediately after creation.
-    final unlockResult = await repo.unlockWithPassword(result.vault.id, password);
+    final unlockResult =
+        await repo.unlockWithPassword(vault.id, password);
 
     state = VaultSession(
-      vaultId: result.vault.id,
+      vaultId: vault.id,
       dek: unlockResult.dek,
-      kek: unlockResult.kek,
       decryptedName: unlockResult.decryptedName,
     );
-
-    // 4. Return the encoded recovery key for one-time display.
-    return encodeRecoveryKey(result.recoveryKey);
   }
 
-  /// Verifies that a user-supplied recovery key truly unlocks the vault
-  /// (performs actual GCM unwrap — not string comparison).
-  Future<bool> verifyRecoveryKey(String recoveryKeyHex) async {
-    final repo = ref.read(vaultRepositoryProvider);
-    final recoveryKey = decodeRecoveryKey(recoveryKeyHex);
-    if (state == null) return false;
-    return repo.verifyRecoveryKey(state!.vaultId, recoveryKey);
-  }
-
-  /// Locks the vault — clears the DEK, KEK, and decrypted name from memory.
+  /// Locks the vault — clears the DEK and decrypted name from memory.
   ///
   /// After this call, the UI returns to the unlock screen.
   /// The keys are gone — the user must re-enter their password.
@@ -290,13 +227,4 @@ final class DuplicatePasswordException implements Exception {
   @override
   String toString() =>
       'DuplicatePasswordException: password already used by another vault';
-}
-
-/// Thrown when [VaultSessionNotifier.unlockWithRecoveryKey] fails for all
-/// vaults.
-final class WrongRecoveryKeyException implements Exception {
-  const WrongRecoveryKeyException();
-
-  @override
-  String toString() => 'WrongRecoveryKeyException: invalid recovery key';
 }

@@ -12,9 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:bmo_app/features/vault/crypto/vault_cipher.dart';
 import 'package:bmo_app/features/vault/crypto/vault_crypto.dart';
-import 'package:bmo_app/features/vault/crypto/vault_envelope.dart';
 import 'package:bmo_app/features/vault/crypto/vault_kdf.dart';
 import 'package:bmo_app/features/vault/data/vault_client.dart';
 import 'package:bmo_app/features/vault/data/vault_models.dart';
@@ -68,7 +66,6 @@ Map<String, dynamic> _vaultJson(String id, String name) => {
 /// Extracts the unlock-material fields from a [VaultCreationMaterial] into
 /// a JSON map matching the `GET /vaults/{id}/keys` response shape.
 Map<String, dynamic> _keysJsonFromMaterial(VaultCreationMaterial m) {
-  // VaultCreationMaterial.toJson() already excludes recoveryKey.
   return m.toJson();
 }
 
@@ -81,7 +78,7 @@ void main() {
   // createVault
   // -----------------------------------------------------------------------
   group('createVault', () {
-    test('creates vault and returns recovery key', () async {
+    test('creates vault and sends all key material', () async {
       final mockClient = MockClient((request) async {
         if (request.method == 'POST' &&
             request.url.path == '/api/v1/vaults') {
@@ -94,11 +91,13 @@ void main() {
           expect(body['dek_iv'], isA<String>());
           expect(body['canary_ciphertext'], isA<String>());
           expect(body['canary_iv'], isA<String>());
+          // Recovery envelopes are generated on purpose and still sent —
+          // they stay inert server-side until the master password ships.
           expect(body['recovery_wrapped_dek'], isA<String>());
           expect(body['recovery_dek_iv'], isA<String>());
           expect(body['recovery_key_wrapped'], isA<String>());
           expect(body['recovery_key_wrap_iv'], isA<String>());
-          // Recovery key must NOT be in the payload
+          // Plaintext recovery key must NOT be in the payload
           expect(body.containsKey('recovery_key'), isFalse);
 
           return http.Response(
@@ -112,18 +111,11 @@ void main() {
 
       final repo = _createRepo(mockClient);
 
-      final result = await repo.createVault('Test Vault', 'test-password');
+      final vault = await repo.createVault('Test Vault', 'test-password');
 
       // Verify vault metadata
-      expect(result.vault.id, 'vault-1');
-      expect(result.vault.name, 'Test Vault');
-
-      // Verify recovery key is 32 bytes
-      expect(result.recoveryKey.length, 32);
-
-      // Verify recovery key can be encoded
-      final hex = encodeRecoveryKey(result.recoveryKey);
-      expect(hex.length, 64);
+      expect(vault.id, 'vault-1');
+      expect(vault.name, 'Test Vault');
     });
   });
 
@@ -155,9 +147,6 @@ void main() {
 
       // Verify DEK is 32 bytes
       expect(result.dek.length, 32);
-
-      // Verify KEK is 32 bytes
-      expect(result.kek.length, 32);
     });
 
     test('throws WrongPasswordException for wrong password', () async {
@@ -205,212 +194,9 @@ void main() {
   });
 
   // -----------------------------------------------------------------------
-  // unlockWithRecoveryKey
+  // deleteVault
   // -----------------------------------------------------------------------
-  group('unlockWithRecoveryKey', () {
-    test('unlocks with correct recovery key', () async {
-      const password = 'some-password';
-
-      // Create real crypto material
-      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
-      final keysJson = _keysJsonFromMaterial(material);
-
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/vault-1/keys') {
-          return http.Response(
-            jsonEncode(keysJson),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      final dek =
-          await repo.unlockWithRecoveryKey('vault-1', material.recoveryKey);
-
-      // Verify DEK is 32 bytes
-      expect(dek.length, 32);
-    });
-
-    test('throws VaultCipherException for wrong recovery key', () async {
-      const password = 'some-password';
-
-      // Create real crypto material
-      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
-      final keysJson = _keysJsonFromMaterial(material);
-
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/vault-1/keys') {
-          return http.Response(
-            jsonEncode(keysJson),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      // Generate a different random key (definitely wrong)
-      final wrongKey = VaultCipher.generateKey();
-
-      expect(
-        () => repo.unlockWithRecoveryKey('vault-1', wrongKey),
-        throwsA(isA<VaultCipherException>()),
-      );
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // revealRecoveryKey
-  // -----------------------------------------------------------------------
-  group('revealRecoveryKey', () {
-    test('reveals recovery key from KEK-unlocked vault', () async {
-      const password = 'test-password';
-
-      // Create real crypto material
-      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
-      final keysJson = _keysJsonFromMaterial(material);
-
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/vault-1/keys') {
-          return http.Response(
-            jsonEncode(keysJson),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      // First unlock to get KEK
-      final unlockResult =
-          await repo.unlockWithPassword('vault-1', password);
-
-      // Then reveal recovery key using KEK
-      final revealedKey =
-          await repo.revealRecoveryKey('vault-1', unlockResult.kek);
-
-      // Should match the original recovery key
-      expect(revealedKey, material.recoveryKey);
-
-      // Encoded form should match too
-      expect(
-        encodeRecoveryKey(revealedKey),
-        encodeRecoveryKey(material.recoveryKey),
-      );
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // verifyRecoveryKey
-  // -----------------------------------------------------------------------
-  group('verifyRecoveryKey', () {
-    test('returns true for correct recovery key', () async {
-      const password = 'test-password';
-
-      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
-      final keysJson = _keysJsonFromMaterial(material);
-
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/vault-1/keys') {
-          return http.Response(
-            jsonEncode(keysJson),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      final valid = await repo.verifyRecoveryKey(
-        'vault-1',
-        material.recoveryKey,
-      );
-      expect(valid, isTrue);
-    });
-
-    test('returns false for wrong recovery key', () async {
-      const password = 'test-password';
-
-      final material = await createVault(password, 'test-vault', kdf: const MockKdf());
-      final keysJson = _keysJsonFromMaterial(material);
-
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/vault-1/keys') {
-          return http.Response(
-            jsonEncode(keysJson),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      final wrongKey = VaultCipher.generateKey();
-      final valid = await repo.verifyRecoveryKey('vault-1', wrongKey);
-      expect(valid, isFalse);
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // listVaults / getVault / deleteVault
-  // -----------------------------------------------------------------------
-  group('vault management', () {
-    test('listVaults returns vault list', () async {
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults') {
-          return http.Response(
-            jsonEncode([
-              _vaultJson('v-1', 'Personal'),
-              _vaultJson('v-2', 'Work'),
-            ]),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      final vaults = await repo.listVaults();
-      expect(vaults.length, 2);
-      expect(vaults[0].id, 'v-1');
-      expect(vaults[0].name, 'Personal');
-      expect(vaults[1].id, 'v-2');
-      expect(vaults[1].name, 'Work');
-    });
-
-    test('getVault returns single vault', () async {
-      final mockClient = MockClient((request) async {
-        if (request.url.path == '/api/v1/vaults/v-1') {
-          return http.Response(
-            jsonEncode(_vaultJson('v-1', 'Personal')),
-            200,
-            headers: {'content-type': 'application/json'},
-          );
-        }
-        return http.Response('not found', 404);
-      });
-
-      final repo = _createRepo(mockClient);
-
-      final vault = await repo.getVault('v-1');
-      expect(vault.id, 'v-1');
-      expect(vault.name, 'Personal');
-    });
-
+  group('deleteVault', () {
     test('deleteVault succeeds on 200', () async {
       final mockClient = MockClient((request) async {
         if (request.method == 'DELETE' &&
@@ -595,7 +381,6 @@ void main() {
 
       // Unlock result should be valid.
       expect(result.dek.length, 32);
-      expect(result.kek.length, 32);
     });
   });
 }

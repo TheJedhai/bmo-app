@@ -41,7 +41,6 @@ class _FakeKdf implements VaultKdf {
 VaultSession _testSession() => VaultSession(
       vaultId: 'test-vault-id',
       dek: Uint8List.fromList(List.generate(32, (i) => i)),
-      kek: Uint8List.fromList(List.generate(32, (i) => i)),
       decryptedName: 'test-vault',
     );
 

@@ -138,7 +138,7 @@ class _LockedVaultViewState extends ConsumerState<_LockedVaultView> {
 }
 
 // ============================================================
-// Unlock view — password or recovery key
+// Unlock view — password
 // ============================================================
 
 class _UnlockView extends ConsumerStatefulWidget {
@@ -152,16 +152,13 @@ class _UnlockView extends ConsumerStatefulWidget {
 
 class _UnlockViewState extends ConsumerState<_UnlockView> {
   final _passwordController = TextEditingController();
-  final _recoveryController = TextEditingController();
   bool _obscurePassword = true;
-  bool _useRecoveryKey = false;
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
   void dispose() {
     _passwordController.dispose();
-    _recoveryController.dispose();
     super.dispose();
   }
 
@@ -174,19 +171,10 @@ class _UnlockViewState extends ConsumerState<_UnlockView> {
     });
 
     try {
-      if (_useRecoveryKey) {
-        await notifier.unlockWithRecoveryKey(_recoveryController.text.trim());
-      } else {
-        await notifier.unlockWithPassword(_passwordController.text);
-      }
+      await notifier.unlockWithPassword(_passwordController.text);
       // Success — VaultScreen rebuilds automatically.
     } on crypto.WrongPasswordException {
       setState(() => _errorMessage = 'Senha incorreta.');
-    } on WrongRecoveryKeyException {
-      setState(() => _errorMessage = 'Chave de recuperação inválida.');
-    } on FormatException {
-      setState(() =>
-          _errorMessage = 'Formato inválido. A chave deve ter 64 caracteres hexadecimais.');
     } on VaultApiException catch (e) {
       setState(() => _errorMessage = 'Erro do servidor (${e.statusCode}).');
     } on NoVaultsException {
@@ -246,47 +234,27 @@ class _UnlockViewState extends ConsumerState<_UnlockView> {
             ),
             const SizedBox(height: 32),
 
-            // Toggle: password vs recovery key
-            _UnlockModeToggle(
-              useRecoveryKey: _useRecoveryKey,
-              onChanged: (v) => setState(() {
-                _useRecoveryKey = v;
-                _errorMessage = null;
-              }),
-            ),
-            const SizedBox(height: 20),
-
             // Input field
-            if (_useRecoveryKey)
-              _VaultTextField(
-                controller: _recoveryController,
-                label: 'Chave de recuperação (64 hex)',
-                hint: 'abcd1234...',
-                enabled: !_isLoading,
-                textInputAction: TextInputAction.go,
-                onSubmitted: (_) => _unlock(),
-              )
-            else
-              _VaultTextField(
-                controller: _passwordController,
-                label: 'Senha',
-                hint: 'Sua senha do cofre',
-                obscureText: _obscurePassword,
-                enabled: !_isLoading,
-                textInputAction: TextInputAction.go,
-                onSubmitted: (_) => _unlock(),
-                suffix: IconButton(
-                  icon: Icon(
-                    _obscurePassword
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    size: 20,
-                    color: BmoColors.textMuted,
-                  ),
-                  onPressed: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
+            _VaultTextField(
+              controller: _passwordController,
+              label: 'Senha',
+              hint: 'Sua senha do cofre',
+              obscureText: _obscurePassword,
+              enabled: !_isLoading,
+              textInputAction: TextInputAction.go,
+              onSubmitted: (_) => _unlock(),
+              suffix: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  size: 20,
+                  color: BmoColors.textMuted,
                 ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
               ),
+            ),
             const SizedBox(height: 8),
 
             // Error message
@@ -366,9 +334,6 @@ enum _CreatePhase {
   /// Fill in name + password.
   form,
 
-  /// Show recovery key once, ask for confirmation redigitation.
-  showRecoveryKey,
-
   /// Creating vault (spinner).
   creating,
 }
@@ -392,20 +357,17 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
   final _nameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  final _recoveryConfirmController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
   _CreatePhase _phase = _CreatePhase.form;
   String? _errorMessage;
-  String? _recoveryKeyDisplay; // Held ONLY during showRecoveryKey phase.
 
   @override
   void dispose() {
     _nameController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
-    _recoveryConfirmController.dispose();
     super.dispose();
   }
 
@@ -440,17 +402,14 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
 
     try {
       final notifier = ref.read(vaultSessionProvider.notifier);
-      final recoveryKeyHex = await notifier.createVault(
+      await notifier.createVault(
         _nameController.text.trim(),
         _passwordController.text,
       );
 
       if (!mounted) return;
 
-      setState(() {
-        _recoveryKeyDisplay = recoveryKeyHex;
-        _phase = _CreatePhase.showRecoveryKey;
-      });
+      widget.onVaultCreated();
     } on DuplicatePasswordException {
       setState(() {
         _errorMessage =
@@ -466,47 +425,6 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
       setState(() {
         _errorMessage = 'Erro inesperado ao criar o cofre.';
         _phase = _CreatePhase.form;
-      });
-    }
-  }
-
-  // ---- Recovery key confirmation ----
-
-  Future<void> _confirmRecoveryKey() async {
-    final entered = _recoveryConfirmController.text.trim();
-    if (entered.isEmpty) {
-      setState(() =>
-          _errorMessage = 'Digite a chave de recuperação para confirmar.');
-      return;
-    }
-
-    setState(() {
-      _errorMessage = null;
-      _phase = _CreatePhase.creating;
-    });
-
-    try {
-      final notifier = ref.read(vaultSessionProvider.notifier);
-      final ok = await notifier.verifyRecoveryKey(entered);
-
-      if (!mounted) return;
-
-      if (ok) {
-        // Vault is already created and unlocked — just clear the recovery key
-        // from memory and signal completion.
-        _recoveryKeyDisplay = null;
-        widget.onVaultCreated();
-      } else {
-        setState(() {
-          _errorMessage =
-              'A chave digitada não confere. Confira e tente novamente.';
-          _phase = _CreatePhase.showRecoveryKey;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Erro ao verificar a chave. Tente novamente.';
-        _phase = _CreatePhase.showRecoveryKey;
       });
     }
   }
@@ -542,8 +460,6 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
 
             if (_phase == _CreatePhase.form) ...[
               _buildForm(isMobile),
-            ] else if (_phase == _CreatePhase.showRecoveryKey) ...[
-              _buildRecoveryKeyConfirmation(isMobile),
             ] else ...[
               // Creating phase
               const Padding(
@@ -580,7 +496,7 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Crie um cofre protegido por senha\ne guarde a chave de recuperação',
+          'Crie um cofre protegido por senha',
           textAlign: TextAlign.center,
           style: TextStyle(
             fontFamily: 'Inter',
@@ -675,128 +591,6 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
             ),
             child: Text(
               'Criar cofre',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecoveryKeyConfirmation(bool isMobile) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Warning icon
-        Icon(
-          Icons.warning_amber_rounded,
-          size: isMobile ? 48 : 64,
-          color: BmoColors.accentYellow,
-        ),
-        const SizedBox(height: 16),
-
-        // Title
-        Text(
-          'Guarde sua chave',
-          style: TextStyle(
-            fontFamily: 'PressStart2P',
-            fontSize: isMobile ? 12 : 14,
-            color: BmoColors.accentYellow,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Warning text
-        Text(
-          'Esta é a ÚNICA forma de recuperar seu cofre\n'
-          'se você esquecer a senha. Copie e guarde\n'
-          'em um local seguro agora.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: isMobile ? 12 : 13,
-            color: BmoColors.textSecondary,
-            height: 1.5,
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Recovery key display
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: BmoColors.screenBgElevated,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: BmoColors.accentYellow.withValues(alpha: 0.3)),
-          ),
-          child: SelectableText(
-            _recoveryKeyDisplay ?? '',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: isMobile ? 11 : 13,
-              color: BmoColors.textPrimary,
-              letterSpacing: 1.2,
-              wordSpacing: 4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Confirmation field
-        Text(
-          'Digite a chave abaixo para confirmar que a guardou:',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: isMobile ? 12 : 13,
-            color: BmoColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _VaultTextField(
-          controller: _recoveryConfirmController,
-          label: 'Chave de recuperação',
-          hint: 'Cole ou digite a chave de 64 caracteres',
-          enabled: true,
-          textInputAction: TextInputAction.go,
-          onSubmitted: (_) => _confirmRecoveryKey(),
-        ),
-        const SizedBox(height: 8),
-
-        // Error message
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _errorMessage!,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13,
-              color: BmoColors.accentYellow,
-            ),
-          ),
-        ],
-        const SizedBox(height: 20),
-
-        // Confirm button
-        SizedBox(
-          width: isMobile ? double.infinity : 320,
-          height: 48,
-          child: ElevatedButton(
-            onPressed: _confirmRecoveryKey,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: BmoColors.accentYellow,
-              foregroundColor: BmoColors.screenBg,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              'Confirmar chave',
               style: TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 15,
@@ -1969,78 +1763,6 @@ class _DeleteVaultDialogState extends State<_DeleteVaultDialog> {
 // ============================================================
 // Shared widgets
 // ============================================================
-
-/// Toggle button for switching between password and recovery key unlock.
-class _UnlockModeToggle extends StatelessWidget {
-  final bool useRecoveryKey;
-  final ValueChanged<bool> onChanged;
-
-  const _UnlockModeToggle({
-    required this.useRecoveryKey,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ToggleOption(
-          label: 'Senha',
-          isSelected: !useRecoveryKey,
-          onTap: () => onChanged(false),
-        ),
-        const SizedBox(width: 1),
-        _ToggleOption(
-          label: 'Chave de recuperação',
-          isSelected: useRecoveryKey,
-          onTap: () => onChanged(true),
-        ),
-      ],
-    );
-  }
-}
-
-class _ToggleOption extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ToggleOption({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? BmoColors.accentGreen.withValues(alpha: 0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color:
-                isSelected ? BmoColors.accentGreen : BmoColors.textMuted.withValues(alpha: 0.3),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 12,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected ? BmoColors.accentGreen : BmoColors.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Styled text field for vault forms.
 ///

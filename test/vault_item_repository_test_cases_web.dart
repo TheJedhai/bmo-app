@@ -229,7 +229,7 @@ void runVaultItemRepositoryTests() {
       // Create vault + unlock to get DEK
       final createResult = await repo.createVault('test-vault', password);
       final unlockResult =
-          await repo.unlockWithPassword(createResult.vault.id, password);
+          await repo.unlockWithPassword(createResult.id, password);
       final dek = unlockResult.dek;
 
       // Generate test content (small — 1 chunk)

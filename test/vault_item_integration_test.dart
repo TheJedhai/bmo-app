@@ -181,8 +181,8 @@ void main() {
         'e2e-items-$_runId',
         testPassword,
       );
-      expect(result.vault.id, isNotEmpty);
-      vaultId = result.vault.id;
+      expect(result.id, isNotEmpty);
+      vaultId = result.id;
 
       final unlockResult =
           await repo.unlockWithPassword(vaultId!, testPassword);

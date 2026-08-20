@@ -1,4 +1,4 @@
-/// Repository orchestrating vault create / unlock / recovery flows.
+/// Repository orchestrating vault create / unlock / item flows.
 ///
 /// Connects the crypto core (Phase 8.1) to the bmo-server backend (Phase 8.0)
 /// via [VaultClient]. Each method combines one or more HTTP calls with
@@ -7,15 +7,10 @@
 /// ## Key material lifecycle
 /// - The **DEK** lives only in memory — returned by unlock methods, consumed
 ///   by item encryption/decryption (Phase 8.3).
-/// - The **recovery key** is shown once after [createVault] and optionally
-///   re-displayed via [revealRecoveryKey]. NEVER persisted.
-/// - The **KEK** lives in memory after a password unlock so that
-///   [revealRecoveryKey] can re-display the recovery key without
-///   re-deriving it.
 ///
 /// ## Security rules (NEVER break these):
-/// - NEVER log passwords, DEKs, KEKs, recovery keys, or plaintext.
-/// - Recovery key and DEK live ONLY in memory.
+/// - NEVER log passwords, DEKs, or plaintext.
+/// - The DEK lives ONLY in memory.
 library;
 
 import 'dart:convert';
@@ -35,40 +30,18 @@ import 'vault_thumbnail.dart';
 // Result types
 // ---------------------------------------------------------------------------
 
-/// Returned by [VaultRepository.createVault] — the server-created vault
-/// metadata plus the one-time recovery key to display to the user.
-final class VaultCreationResult {
-  final Vault vault;
-
-  /// 32-byte recovery key. Encode with [encodeRecoveryKey] for display
-  /// (64 lowercase hex chars). **Show once, then discard.**
-  final Uint8List recoveryKey;
-
-  const VaultCreationResult({required this.vault, required this.recoveryKey});
-}
-
 /// Returned by [VaultRepository.unlockWithPassword].
 ///
-/// Holds both the DEK (for item encryption), the KEK (for
-/// [VaultRepository.revealRecoveryKey]), and the decrypted vault name.
+/// Holds the DEK (for item encryption) and the decrypted vault name.
 final class VaultUnlockResult {
   /// 32-byte Data Encryption Key — encrypts/decrypts vault items.
   final Uint8List dek;
-
-  /// 32-byte Key Encryption Key — derived from password + salt via Argon2id.
-  /// Keep in memory so [revealRecoveryKey] can decrypt the wrapped recovery
-  /// key without re-deriving.
-  final Uint8List kek;
 
   /// The vault name, decrypted from [VaultUnlockMaterial.nameBlob] with the
   /// KEK. **NEVER persist or log.**
   final String decryptedName;
 
-  const VaultUnlockResult({
-    required this.dek,
-    required this.kek,
-    required this.decryptedName,
-  });
+  const VaultUnlockResult({required this.dek, required this.decryptedName});
 }
 
 // ---------------------------------------------------------------------------
@@ -89,19 +62,17 @@ final class VaultRepository {
   /// Creates a new vault with the given [name] and [password].
   ///
   /// 1. Runs [crypto.createVault] from the crypto layer (salt, KEK, DEK,
-  ///    wraps, canary, recovery key).
+  ///    wraps, canary, name blob). The recovery wraps are generated on
+  ///    purpose and sent — they stay inert server-side until the master
+  ///    password feature ships.
   /// 2. POSTs the server-safe material to the backend.
-  /// 3. Returns the created [Vault] metadata plus the one-time [recoveryKey].
-  ///
-  /// The caller MUST display the recovery key to the user once and then
-  /// discard it — it is NEVER persisted.
-  Future<VaultCreationResult> createVault(
+  /// 3. Returns the created [Vault] metadata.
+  Future<Vault> createVault(
     String name,
     String password,
   ) async {
     final material = await crypto.createVault(password, name, kdf: _kdf);
-    final vault = await _client.createVault(name: name, material: material);
-    return VaultCreationResult(vault: vault, recoveryKey: material.recoveryKey);
+    return _client.createVault(name: name, material: material);
   }
 
   // ============================================================
@@ -115,8 +86,7 @@ final class VaultRepository {
   /// 3. Validates the canary — throws [WrongPasswordException] on mismatch.
   /// 4. Unwraps the DEK with the KEK.
   ///
-  /// Returns both the DEK (for item operations) and the KEK (so that
-  /// [revealRecoveryKey] can be called later without re-deriving).
+  /// Returns the DEK (for item operations) and the decrypted vault name.
   ///
   /// Throws [VaultApiException] on HTTP errors.
   /// Throws [crypto.WrongPasswordException] if the password is incorrect.
@@ -126,7 +96,7 @@ final class VaultRepository {
   ) async {
     final material = await _client.getKeys(vaultId);
 
-    // Derive KEK (same as crypto.unlock but we need to capture the KEK)
+    // Derive KEK
     final passwordBytes = Uint8List.fromList(password.codeUnits);
     final kek = await _kdf.derive(
       password: passwordBytes,
@@ -153,85 +123,17 @@ final class VaultRepository {
       material.nameBlob,
     );
 
-    return VaultUnlockResult(dek: dek, kek: kek, decryptedName: decryptedName);
-  }
-
-  // ============================================================
-  // Unlock — recovery key
-  // ============================================================
-
-  /// Unlocks a vault using the recovery key instead of a password.
-  ///
-  /// 1. Fetches key material from `GET /vaults/{vaultId}/keys`.
-  /// 2. Unwraps the DEK directly with the recovery key (no KDF).
-  ///
-  /// Returns the 32-byte DEK.
-  ///
-  /// Throws [VaultApiException] on HTTP errors.
-  /// Throws [VaultCipherException] if the recovery key is wrong.
-  Future<Uint8List> unlockWithRecoveryKey(
-    String vaultId,
-    Uint8List recoveryKey,
-  ) async {
-    final material = await _client.getKeys(vaultId);
-    return crypto.unlockWithRecoveryKey(recoveryKey, material);
-  }
-
-  // ============================================================
-  // Recovery key re-display
-  // ============================================================
-
-  /// Reveals the recovery key using the [kek] from a prior password unlock.
-  ///
-  /// 1. Fetches key material from `GET /vaults/{vaultId}/keys`.
-  /// 2. Decrypts `recovery_key_wrapped` with the KEK.
-  /// 3. Returns the 32-byte recovery key in plaintext.
-  ///
-  /// [kek] must be the KEK returned by [unlockWithPassword]. Passing a DEK
-  /// instead will fail — the recovery key is wrapped with the KEK, not the DEK.
-  ///
-  /// **NEVER persist or log the returned key.**
-  ///
-  /// Throws [VaultApiException] on HTTP errors.
-  /// Throws [VaultCipherException] if the KEK is wrong.
-  Future<Uint8List> revealRecoveryKey(
-    String vaultId,
-    Uint8List kek,
-  ) async {
-    final material = await _client.getKeys(vaultId);
-    return crypto.revealRecoveryKey(material, kek);
-  }
-
-  // ============================================================
-  // Verify recovery key (without unlocking)
-  // ============================================================
-
-  /// Verifies that a user-supplied recovery key truly unwraps the DEK.
-  ///
-  /// Does NOT return the DEK — only proves the key is correct.
-  /// Use this to confirm a recovery key before using it for unlock.
-  ///
-  /// Performs the actual GCM unwrap (not string comparison).
-  Future<bool> verifyRecoveryKey(
-    String vaultId,
-    Uint8List recoveryKey,
-  ) async {
-    final material = await _client.getKeys(vaultId);
-    return crypto.verifyRecoveryKeyUnlocks(material, recoveryKey);
+    return VaultUnlockResult(dek: dek, decryptedName: decryptedName);
   }
 
   // ============================================================
   // Vault management
   // ============================================================
 
-  /// Lists all vaults for the current agent.
-  Future<List<Vault>> listVaults() => _client.listVaults();
-
   /// Fetches unlock material for ALL vaults in a single request.
   ///
   /// Returns a list of (vaultId, minimal unlock material) pairs for
-  /// password/recovery-key testing without knowing which vault the key
-  /// belongs to.
+  /// password testing without knowing which vault the password belongs to.
   Future<List<VaultUnlockLookup>> listUnlockMaterials() =>
       _client.getUnlockMaterials();
 
@@ -254,9 +156,6 @@ final class VaultRepository {
     final kek = await _kdf.derive(password: passwordBytes, salt: salt);
     return validateCanary(kek, canaryIv, canaryCiphertext);
   }
-
-  /// Fetches metadata for a single vault.
-  Future<Vault> getVault(String id) => _client.getVault(id);
 
   /// Deletes a vault and all its encrypted data.
   ///

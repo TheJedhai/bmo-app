@@ -2,8 +2,7 @@
 ///
 /// Covers the endpoints defined in the Phase 8.0 spec:
 /// - `POST   /api/v1/vaults`        create a vault
-/// - `GET    /api/v1/vaults`        list all vaults
-/// - `GET    /api/v1/vaults/{id}`   get vault metadata
+/// - `GET    /api/v1/vaults/unlock-material`  minimal material for canary checks
 /// - `GET    /api/v1/vaults/{id}/keys`  get unlock material
 /// - `DELETE /api/v1/vaults/{id}`   delete a vault
 ///
@@ -97,18 +96,6 @@ final class VaultClient {
     return Vault.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  /// Lists all vaults for the current agent.
-  Future<List<Vault>> listVaults() async {
-    final response = await _client.get(
-      Uri.parse('$_baseUrl/api/v1/vaults'),
-    );
-    _ensureOk(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
-    return list
-        .map((e) => Vault.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
   /// Fetches unlock material for ALL vaults in a single request.
   ///
   /// Calls `GET /api/v1/vaults/unlock-material` which returns a list of
@@ -134,19 +121,9 @@ final class VaultClient {
     }).toList();
   }
 
-  /// Fetches metadata for a single vault.
-  Future<Vault> getVault(String id) async {
-    final response = await _client.get(
-      Uri.parse('$_baseUrl/api/v1/vaults/$id'),
-    );
-    _ensureOk(response);
-    return Vault.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
   /// Fetches the unlock material (keys, wrapped DEKs, canaries) for a vault.
   ///
-  /// Returns [VaultUnlockMaterial] ready to pass to [unlock] or
-  /// [unlockWithRecoveryKey].
+  /// Returns [VaultUnlockMaterial] ready to pass to [unlock].
   Future<VaultUnlockMaterial> getKeys(String id) async {
     final response = await _client.get(
       Uri.parse('$_baseUrl/api/v1/vaults/$id/keys'),
