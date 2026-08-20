@@ -1,8 +1,8 @@
 # bmo_app
 
-Frontend Flutter (web e iOS) do BMO. Acessa dois backends via Tailscale:
-QwenPaw (8088) e bmo-server (8089), este último com HTTPS via Caddy no
-hostname Tailscale.
+Frontend Flutter (web e iOS) do BMO. Acessa o bmo-server via Tailscale
+(HTTPS via Caddy no hostname Tailscale); o QwenPaw fica atrás do
+bmo-server, o frontend não fala com ele direto.
 
 ## Configuração de URLs
 
@@ -11,7 +11,6 @@ As URLs dos backends vêm de `--dart-define` (`lib/core/config/env.dart`):
 | Variável | Default |
 | --- | --- |
 | `BMO_SERVER_URL` | `https://jedhais-mac-mini.taild5baed.ts.net` |
-| `QWENPAW_URL` | `http://localhost:8088` |
 | `AGENT_ID` | `default` |
 
 `BMO_SERVER_URL` precisa ser `https://` — o ATS do iOS bloqueia HTTP puro,

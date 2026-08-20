@@ -7,14 +7,12 @@ CADDYFILE_SRC="$REPO/deploy/Caddyfile"
 CADDYFILE_DEST=/opt/homebrew/etc/Caddyfile
 
 BMO_SERVER_URL="https://jedhais-mac-mini.taild5baed.ts.net"
-QWENPAW_URL="http://100.113.90.23:8088"
 
 cd "$REPO"
 
 echo "==> flutter build web"
 flutter build web --release \
-  --dart-define=BMO_SERVER_URL="$BMO_SERVER_URL" \
-  --dart-define=QWENPAW_URL="$QWENPAW_URL"
+  --dart-define=BMO_SERVER_URL="$BMO_SERVER_URL"
 
 echo "==> validando Caddyfile"
 caddy fmt --overwrite "$CADDYFILE_SRC"
