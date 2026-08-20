@@ -10,6 +10,9 @@ BMO_SERVER_URL="https://jedhais-mac-mini.taild5baed.ts.net"
 
 cd "$REPO"
 
+echo "==> garantindo symlinks de artefatos (fora do iCloud)"
+"$REPO/dev/relink.sh"
+
 echo "==> flutter build web"
 flutter build web --release \
   --dart-define=BMO_SERVER_URL="$BMO_SERVER_URL"
