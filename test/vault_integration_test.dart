@@ -23,15 +23,20 @@
 @Tags(['integration'])
 library;
 
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bmo_app/core/config/env.dart';
 import 'package:bmo_app/core/http/client_factory.dart';
+import 'package:bmo_app/features/vault/crypto/argon2_kdf.dart';
 import 'package:bmo_app/features/vault/crypto/vault_cipher.dart';
 import 'package:bmo_app/features/vault/crypto/vault_crypto.dart';
 import 'package:bmo_app/features/vault/crypto/vault_envelope.dart';
 import 'package:bmo_app/features/vault/data/vault_client.dart';
 import 'package:bmo_app/features/vault/data/vault_repository.dart';
+
+import 'argon2_register.dart';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,19 +54,86 @@ VaultRepository _createRepo() {
 // Tests
 // ---------------------------------------------------------------------------
 
+/// Any HTTP response (even 4xx/5xx) means the server is alive; only network
+/// failures mean it is absent.
+Future<bool> _backendReachable() async {
+  final client = createHttpClient();
+  try {
+    await client
+        .get(Uri.parse('${Env.bmoServerUrl}/api/v1/me'))
+        .timeout(const Duration(seconds: 5));
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
+}
+
+/// Uma derivação real de Argon2id diz se o KDF funciona no ambiente atual.
+/// No VM do flutter_tester o dargon2 usa EmptyDArgon2Flutter (lança
+/// UnimplementedError); no chrome o hash-wasm resolve.
+Future<bool> _kdfAvailable() async {
+  try {
+    const kdf = Argon2Kdf();
+    await kdf.derive(
+      password: Uint8List.fromList('probe'.codeUnits),
+      salt: Uint8List(16),
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 void main() {
+  var serverUp = false;
+  var kdfUp = false;
+  const backendSkipReason =
+      'bmo-server indisponível em ${Env.bmoServerUrl} — suba o backend '
+      'para executar o E2E de vault.';
+  // O KDF real (Argon2id) exige o WASM do hash-wasm, que só existe no
+  // navegador — no VM do flutter_tester lança UnimplementedError antes de
+  // qualquer chamada de rede.
+  const vmSkipReason =
+      'Argon2id (hash-wasm WASM) indisponível no flutter_tester — rode '
+      'com --platform=chrome.';
+
+  setUpAll(() async {
+    kdfUp = await registerArgon2ForTest() && await _kdfAvailable();
+    serverUp = await _backendReachable();
+  });
+
+  // Guarda por teste: markTestSkipped em setUpAll só pula o primeiro teste
+  // no runner do flutter_test, então o skip é marcado dentro de cada teste.
+  void runE2E(String name, Future<void> Function() body) {
+    test(name, () async {
+      if (!kdfUp) {
+        markTestSkipped(vmSkipReason);
+        return;
+      }
+      if (!serverUp) {
+        markTestSkipped(backendSkipReason);
+        return;
+      }
+      await body();
+    });
+  }
+
   const testPassword = 'integration-test-password-8.2';
   String? vaultId;
 
   group('Vault end-to-end integration', () {
-    test('1. createVault returns vault + recovery key', () async {
+    runE2E('1. createVault returns vault + recovery key', () async {
       final repo = _createRepo();
 
       final result =
           await repo.createVault('integration-test-vault', testPassword);
 
       expect(result.vault.id, isNotEmpty);
-      expect(result.vault.name, 'integration-test-vault');
+      // O servidor é zero-knowledge: a resposta de criação não carrega o
+      // nome em texto claro (VaultCreate não tem campo `name`). O nome
+      // decifrado só existe no unlock — verificado no teste 2.
       expect(result.recoveryKey.length, 32);
 
       // Encoded form should be 64 hex chars
@@ -72,7 +144,7 @@ void main() {
       vaultId = result.vault.id;
     });
 
-    test('2. unlockWithPassword returns valid DEK', () async {
+    runE2E('2. unlockWithPassword returns valid DEK', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -83,9 +155,13 @@ void main() {
 
       // KEK must also be 32 bytes
       expect(result.kek.length, 32);
+
+      // Nome decifrado do name_blob com a KEK — único caminho onde o
+      // servidor expõe o nome em texto claro.
+      expect(result.decryptedName, 'integration-test-vault');
     });
 
-    test('3. unlockWithRecoveryKey returns SAME DEK', () async {
+    runE2E('3. unlockWithRecoveryKey returns SAME DEK', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -106,7 +182,7 @@ void main() {
       expect(dekFromRecovery, dekFromPassword);
     });
 
-    test('4. revealRecoveryKey matches original', () async {
+    runE2E('4. revealRecoveryKey matches original', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -127,7 +203,7 @@ void main() {
       expect(hex, matches(RegExp(r'^[0-9a-f]{64}$')));
     });
 
-    test('5. verifyRecoveryKey — correct key returns true', () async {
+    runE2E('5. verifyRecoveryKey — correct key returns true', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -142,7 +218,7 @@ void main() {
       expect(valid, isTrue);
     });
 
-    test('5b. verifyRecoveryKey — wrong key returns false', () async {
+    runE2E('5b. verifyRecoveryKey — wrong key returns false', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -152,7 +228,7 @@ void main() {
       expect(valid, isFalse);
     });
 
-    test('6. wrong password throws WrongPasswordException', () async {
+    runE2E('6. wrong password throws WrongPasswordException', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
@@ -162,16 +238,17 @@ void main() {
       );
     });
 
-    test('7. DELETE vault cleans up', () async {
+    runE2E('7. DELETE vault cleans up', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
 
       // Should not throw
       await repo.deleteVault(vaultId!);
 
-      // Verify vault is gone — GET should 404
+      // Verify vault is gone — o material de unlock some com o vault
+      // (não existe GET /vaults/{id} no servidor; só /keys e /items).
       try {
-        await repo.getVault(vaultId!);
+        await repo.unlockWithPassword(vaultId!, testPassword);
         fail('Expected VaultApiException after delete');
       } on VaultApiException catch (e) {
         expect(e.statusCode, 404);

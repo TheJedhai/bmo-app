@@ -122,11 +122,49 @@ Uint8List _testBytes(int length, {int seed = 42}) {
 /// Unique suffix for test vault names to avoid collisions across runs.
 final _runId = Random().nextInt(99999);
 
+/// Any HTTP response (even 4xx/5xx) means the server is alive; only network
+/// failures mean it is absent.
+Future<bool> _backendReachable() async {
+  final client = http.Client();
+  try {
+    await client
+        .get(Uri.parse('$_testServerUrl/health'))
+        .timeout(const Duration(seconds: 3));
+    return true;
+  } catch (_) {
+    return false;
+  } finally {
+    client.close();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 void main() {
+  var serverUp = false;
+  const skipReason =
+      'Servidor descartável ausente em $_testServerUrl — rode '
+      'test/vault_item_integration_run.sh (ou suba o bmo-server '
+      'descartável manualmente) para executar o E2E.';
+
+  setUpAll(() async {
+    serverUp = await _backendReachable();
+  });
+
+  // Guarda por teste: markTestSkipped em setUpAll só pula o primeiro teste
+  // no runner do flutter_test, então o skip é marcado dentro de cada teste.
+  void runE2E(String name, Future<void> Function() body) {
+    test(name, () async {
+      if (!serverUp) {
+        markTestSkipped(skipReason);
+        return;
+      }
+      await body();
+    });
+  }
+
   const testPassword = 'e2e-item-test-pw-8.3c';
   String? vaultId;
   String? itemId;
@@ -136,7 +174,7 @@ void main() {
     // -------------------------------------------------------------------
     // 1. Create vault + unlock
     // -------------------------------------------------------------------
-    test('1. create vault + unlock → get DEK', () async {
+    runE2E('1. create vault + unlock → get DEK', () async {
       final repo = _createRepo();
 
       final result = await repo.createVault(
@@ -158,7 +196,7 @@ void main() {
     const fileName = 'test-video.mp4';
     const mimeType = 'video/mp4';
 
-    test('2. uploadItem — ~5 MiB pseudo-random bytes', () async {
+    runE2E('2. uploadItem — ~5 MiB pseudo-random bytes', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -194,7 +232,7 @@ void main() {
     // -------------------------------------------------------------------
     // 3. listItems — verify decrypted metadata
     // -------------------------------------------------------------------
-    test('3. listItems — name and MIME decrypted correctly', () async {
+    runE2E('3. listItems — name and MIME decrypted correctly', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -212,7 +250,7 @@ void main() {
     // -------------------------------------------------------------------
     // 4. downloadItem — full decrypt, byte-by-byte comparison
     // -------------------------------------------------------------------
-    test('4. downloadItem — full decrypt, byte-by-byte match', () async {
+    runE2E('4. downloadItem — full decrypt, byte-by-byte match', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -240,7 +278,7 @@ void main() {
     // -------------------------------------------------------------------
     // 5. fetchItemHeader — header bytes
     // -------------------------------------------------------------------
-    test('5. fetchItemHeader — returns valid header', () async {
+    runE2E('5. fetchItemHeader — returns valid header', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(itemId, isNotNull);
@@ -272,7 +310,7 @@ void main() {
     //   - statusCode must be 206 (Partial Content), not 200.
     //   - encryptedBytesReceived must be ~1 MiB (chunk + GCM tag),
     //     not ~5 MiB (full blob).
-    test('6. fetchChunkRange — middle chunk (proof: 206 + partial bytes)', () async {
+    runE2E('6. fetchChunkRange — middle chunk (proof: 206 + partial bytes)', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -325,7 +363,7 @@ void main() {
     //
     // GUARDS AGAINST REGRESSION: each chunk fetch must return 206 with
     // only that chunk's encrypted bytes — not the full blob.
-    test('7. cross-chunk range mapping and fetch/decrypt', () async {
+    runE2E('7. cross-chunk range mapping and fetch/decrypt', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -387,7 +425,7 @@ void main() {
     //
     // GUARDS AGAINST REGRESSION: last chunk must also be a 206 partial
     // transfer, with only that chunk's encrypted bytes.
-    test('8. fetchChunkRange — last chunk (proof: 206 + partial bytes)', () async {
+    runE2E('8. fetchChunkRange — last chunk (proof: 206 + partial bytes)', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(dek, isNotNull);
@@ -427,7 +465,7 @@ void main() {
     // -------------------------------------------------------------------
     // 9. Cleanup: delete item + vault
     // -------------------------------------------------------------------
-    test('9. cleanup — delete item and vault', () async {
+    runE2E('9. cleanup — delete item and vault', () async {
       final repo = _createRepo();
       expect(vaultId, isNotNull);
       expect(itemId, isNotNull);
@@ -442,10 +480,10 @@ void main() {
       // Delete vault.
       await repo.deleteVault(vaultId!);
 
-      // Verify vault is gone — list all vaults, confirm our id is absent.
-      // (bmo-server does NOT have GET /vaults/{id}; uses list + key fetch.)
-      final allVaults = await repo.listVaults();
-      expect(allVaults.where((v) => v.id == vaultId), isEmpty);
+      // Verify vault is gone — /vaults/unlock-material some com o vault.
+      // (bmo-server não tem GET /vaults; só /vaults/unlock-material.)
+      final materials = await repo.listUnlockMaterials();
+      expect(materials.where((m) => m.vaultId == vaultId), isEmpty);
     });
   });
 }
