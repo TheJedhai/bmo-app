@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -36,24 +38,61 @@ final pendingTogglesProvider = StateProvider<Set<String>>((ref) => {});
 // WebSocket stream
 // ============================================================
 
-final devicesWsStreamProvider =
-    StreamProvider<DeviceWsMessage>((ref) async* {
+final devicesWsStreamProvider = StreamProvider<DeviceWsMessage>((ref) {
   final client = ref.read(devicesWsClientProvider);
   var backoff = const Duration(seconds: 1);
   const maxBackoff = Duration(seconds: 30);
+  var cancelled = false;
+  StreamSubscription<DeviceWsMessage>? connectionSub;
+  Completer<void>? currentDone;
 
-  while (true) {
-    try {
-      yield* client.connect();
-      backoff = const Duration(seconds: 1);
-    } catch (e) {
-      debugPrint(
-          'Devices WS error: $e. Reconnecting in ${backoff.inSeconds}s...');
-      await Future.delayed(backoff);
-      backoff = backoff * 2;
-      if (backoff > maxBackoff) backoff = maxBackoff;
+  late final StreamController<DeviceWsMessage> controller;
+  controller = StreamController<DeviceWsMessage>(
+    // Cancel síncrono: o invalidate cancela a conexão corrente ANTES de o
+    // provider rebuildar — nunca duas conexões ao mesmo tempo.
+    onCancel: () {
+      cancelled = true;
+      connectionSub?.cancel();
+      currentDone?.complete();
+    },
+  );
+
+  Future<void> run() async {
+    while (!cancelled) {
+      final done = currentDone = Completer<void>();
+      try {
+        connectionSub = client.connect().listen(
+          (msg) {
+            if (!controller.isClosed) controller.add(msg);
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!done.isCompleted) done.completeError(error, stack);
+          },
+        );
+        await done.future;
+        // Close limpo: volta imediato com backoff resetado.
+        backoff = const Duration(seconds: 1);
+      } catch (e) {
+        if (cancelled) break;
+        debugPrint(
+            'Devices WS error: $e. Reconnecting in ${backoff.inSeconds}s...');
+        await Future.delayed(backoff);
+        backoff = backoff * 2;
+        if (backoff > maxBackoff) backoff = maxBackoff;
+      } finally {
+        await connectionSub?.cancel();
+        connectionSub = null;
+      }
+      if (cancelled) break;
     }
+    await controller.close();
   }
+
+  unawaited(run());
+  return controller.stream;
 });
 
 // ============================================================

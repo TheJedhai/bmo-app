@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,57 +31,88 @@ final eventsClientProvider = Provider<EventsClient>((ref) {
 final sseGenerationProvider = StateProvider<int>((ref) => 0);
 
 final eventsStreamProvider =
-    StreamProvider.autoDispose<Map<String, dynamic>>((ref) async* {
-  // Watch userId so the stream is invalidated and reconnects with the
-  // new identity when the user switches profiles.
-  final userId = ref.watch(currentUserIdProvider);
-
+    StreamProvider.autoDispose<Map<String, dynamic>>((ref) {
   // Guard: without an identity the SSE would 400 in a loop forever.
   // Return an empty stream — the provider is autoDispose, so it will be
-  // recreated when _BmoMainShell mounts with a valid profile.
-  if (userId == null) return;
+  // recreated when the shell mounts with a valid profile.
+  //
+  // Identidade: ref.read (não watch) — a troca de perfil chega como
+  // invalidate via eventsListenerProvider (rebuild por dependência não
+  // cancela a conexão antiga). O BmoHttpClient lê o userId a cada send,
+  // então o client capturado aqui sempre envia a identidade corrente.
+  final userId = ref.read(currentUserIdProvider);
+  if (userId == null) return const Stream<Map<String, dynamic>>.empty();
 
-  final client = ref.watch(eventsClientProvider);
+  final client = ref.read(eventsClientProvider);
   var backoff = const Duration(seconds: 1);
   const maxBackoff = Duration(seconds: 30);
-
-  // Cancellation flag so the while(true) loop dies when the provider is
-  // invalidated/disposed — never leave an orphan generator with backoff
-  // running after a profile switch.
   var cancelled = false;
-  ref.onDispose(() => cancelled = true);
+  StreamSubscription<Map<String, dynamic>>? connectionSub;
+  Completer<void>? currentDone;
 
-  while (!cancelled) {
-    try {
+  late final StreamController<Map<String, dynamic>> controller;
+  controller = StreamController<Map<String, dynamic>>(
+    // Cancel síncrono: o invalidate cancela a conexão corrente ANTES de o
+    // provider rebuildar — nunca duas conexões ao mesmo tempo.
+    onCancel: () {
+      cancelled = true;
+      connectionSub?.cancel();
+      currentDone?.complete();
+    },
+  );
+
+  Future<void> run() async {
+    while (!cancelled) {
+      final done = currentDone = Completer<void>();
       var receivedData = false;
-      await for (final event in client.connect()) {
-        receivedData = true;
-        yield event;
+      try {
+        connectionSub = client.connect().listen(
+          (event) {
+            receivedData = true;
+            if (!controller.isClosed) controller.add(event);
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!done.isCompleted) done.completeError(error, stack);
+          },
+        );
+        await done.future;
+        // Clean disconnect — reset backoff only if we actually streamed data.
+        if (receivedData) {
+          backoff = const Duration(seconds: 1);
+        }
+        if (cancelled) break;
+        await Future.delayed(backoff);
+        if (cancelled) break;
+        backoff = backoff * 2;
+        if (backoff > maxBackoff) backoff = maxBackoff;
+      } catch (e) {
+        if (cancelled) break;
+        debugPrint('SSE error: $e. Reconnecting in ${backoff.inSeconds}s...');
+        await Future.delayed(backoff);
+        if (cancelled) break;
+        backoff = backoff * 2;
+        if (backoff > maxBackoff) backoff = maxBackoff;
+      } finally {
+        await connectionSub?.cancel();
+        connectionSub = null;
       }
-      // Clean disconnect — reset backoff only if we actually streamed data.
-      if (receivedData) {
-        backoff = const Duration(seconds: 1);
-      }
-      if (cancelled) break;
-      await Future.delayed(backoff);
-      if (cancelled) break;
-      backoff = backoff * 2;
-      if (backoff > maxBackoff) backoff = maxBackoff;
-    } catch (e) {
-      if (cancelled) break;
-      debugPrint('SSE error: $e. Reconnecting in ${backoff.inSeconds}s...');
-      await Future.delayed(backoff);
-      if (cancelled) break;
-      backoff = backoff * 2;
-      if (backoff > maxBackoff) backoff = maxBackoff;
     }
+    await controller.close();
   }
+
+  unawaited(run());
+  return controller.stream;
 });
 
 final eventsListenerProvider = Provider.autoDispose<void>((ref) {
-  // Watch userId so the listener is rebuilt on identity changes, ensuring
-  // the old stream subscription is cleaned up before a new one is created.
-  ref.watch(currentUserIdProvider);
+  // Troca de identidade chega como invalidate do stream — o rebuild cancela
+  // a conexão antiga (síncrono) antes de reconectar com o novo X-User-Id.
+  ref.listen(currentUserIdProvider, (prev, next) {
+    if (prev != next) ref.invalidate(eventsStreamProvider);
+  });
 
   ref.listen(eventsStreamProvider, (prev, next) {
     next.when(
