@@ -124,25 +124,27 @@ void main() {
     // -----------------------------------------------------------------------
     // Incomplete fence (streaming)
     // -----------------------------------------------------------------------
-    test('keeps incomplete fence as text (no closing ```)', () {
+    test('keeps text before incomplete fence, hides body behind placeholder',
+        () {
       const text = 'Hello\n```bmo:rich\n{"v":1,"type":"image"';
 
       final result = BmoRichParser.extract(text);
-      expect(result.segments.length, 1);
-      expect(result.segments.first, isA<TextSegment>());
-      expect(
-        (result.segments.first as TextSegment).text,
-        'Hello\n```bmo:rich\n{"v":1,"type":"image"',
-      );
+      // Fence aberto sem ``` de fechamento: o texto antes do fence vira
+      // TextSegment e o corpo (JSON cru) é descartado atrás de um
+      // PendingRichSegment — placeholder até o bloco fechar.
+      expect(result.segments.length, 2);
+      expect(result.segments[0], isA<TextSegment>());
+      expect((result.segments[0] as TextSegment).text, 'Hello\n');
+      expect(result.segments[1], isA<PendingRichSegment>());
     });
 
-    test('keeps text when opening fence present but no closing fence', () {
+    test('open fence at start hides body behind placeholder', () {
       const text = '```bmo:rich\n{"v":1}\nfaltando fechamento';
 
       final result = BmoRichParser.extract(text);
+      // Fence aberto no início: sem texto antes, só o placeholder.
       expect(result.segments.length, 1);
-      expect(result.segments.first, isA<TextSegment>());
-      expect((result.segments.first as TextSegment).text, text);
+      expect(result.segments.first, isA<PendingRichSegment>());
     });
 
     // -----------------------------------------------------------------------
