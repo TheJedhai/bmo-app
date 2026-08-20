@@ -229,13 +229,9 @@ final class VaultChunkedCipher {
       final isLast = i == total - 1;
       final nonce = _buildChunkNonce(noncePrefix, i);
       final aad = _buildChunkAad(header, i, isLast);
-      // Copy to a new buffer: the caller may pass sublist views whose
-      // .buffer is larger than the chunk, and WebCrypto via JS interop
-      // reads the whole backing buffer.
-      final chunkCopy = Uint8List.fromList(effectiveChunks[i]);
       final (_, ciphertext) = await cipher.encrypt(
         dek,
-        chunkCopy,
+        effectiveChunks[i],
         iv: nonce,
         additionalData: aad,
       );
@@ -328,13 +324,11 @@ final class VaultChunkedCipher {
         );
       }
 
-      // Copy to a new buffer: sublist views share the parent buffer,
-      // and WebCrypto via JS interop reads the whole backing buffer.
-      final chunkCiphertext = Uint8List.fromList(Uint8List.sublistView(
+      final chunkCiphertext = Uint8List.sublistView(
         allEncryptedBytes,
         blobOffset,
         blobOffset + encryptedSize,
-      ));
+      );
 
       final decrypted = await decryptChunk(dek, header, i, chunkCiphertext);
       plaintext.setRange(

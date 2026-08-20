@@ -65,6 +65,7 @@ dependencies:
   # trocar decodeImage pelo decoder específico por MIME (ex.: JpegDecoder).
   image: ^4.9.2
   get_thumbnail_video: ^0.7.3
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:
@@ -84,7 +85,6 @@ dev_dependencies:
   dargon2_flutter_web: ^3.2.0
   dargon2_flutter_platform_interface: ^3.2.0
   dargon2_interface: ^1.1.1
-  cryptography: ^2.7.0
   flutter_launcher_icons: ^0.14.4
 
 flutter_launcher_icons:
