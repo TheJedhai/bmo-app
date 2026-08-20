@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/bmo_theme.dart';
+import 'core/widgets/app_lifecycle_reconnect.dart';
 
 class BmoApp extends ConsumerWidget {
   const BmoApp({super.key});
@@ -16,6 +17,10 @@ class BmoApp extends ConsumerWidget {
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('pt', 'BR'), Locale('en')],
       locale: const Locale('pt', 'BR'),
+      // Montado na raiz (acima do Navigator), uma vez por vida do app:
+      // listener de lifecycle único para SSE + WebSocket.
+      builder: (context, child) =>
+          AppLifecycleReconnect(child: child ?? const SizedBox.shrink()),
       routerConfig: appRouter,
     );
   }
