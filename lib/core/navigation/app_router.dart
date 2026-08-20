@@ -13,7 +13,7 @@ import '../../features/coding/presentation/coding_screen.dart';
 import '../../features/coding/presentation/coding_chat_screen.dart';
 import '../../features/coding/presentation/coding_session_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
-import '../../features/vault/vault_entry.dart';
+import '../../features/vault/presentation/vault_screen.dart';
 import '../events/events_provider.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_selector.dart';
