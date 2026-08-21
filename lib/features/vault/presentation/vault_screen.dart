@@ -2,7 +2,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mime/mime.dart';
 
 import '../../../core/platform/file_download.dart';
 import '../../../core/platform/pdf_preview.dart';
@@ -13,6 +12,7 @@ import '../data/vault_client.dart';
 import 'dart:typed_data';
 
 import '../../../core/platform/file_stream_writer.dart';
+import '../../../core/utils/file_mime.dart';
 import '../data/vault_models.dart';
 import '../crypto/vault_chunked_cipher.dart';
 import '../providers/vault_providers.dart';
@@ -708,7 +708,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       pending.add((
         bytes: bytes,
         fileName: file.name,
-        mimeType: lookupMimeType(file.name) ?? 'application/octet-stream',
+        // Mime pelos bytes, não pela extensão (HEIC renomeado para .jpg
+        // vinha do picker como image/jpeg e ficava salvo errado).
+        mimeType: detectMimeType(bytes: bytes, fileName: file.name),
       ));
     }
 
@@ -737,12 +739,10 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       pending.add((
         bytes: bytes,
         fileName: file.name,
-        // mimeType vem preenchido no web (Blob.type); no iOS cai no
-        // lookupMimeType, que continua correto (foto HEIC chega como .jpg,
-        // vídeo preserva o nome original, ex. .MOV).
-        mimeType: file.mimeType ??
-            lookupMimeType(file.name) ??
-            'application/octet-stream',
+        // Mime pelos bytes, não pelo mimeType do picker nem pela extensão:
+        // Blob.type e extensão são metadado editável (foto HEIC do app
+        // Fotos chega como .jpg).
+        mimeType: detectMimeType(bytes: bytes, fileName: file.name),
       ));
     }
 
