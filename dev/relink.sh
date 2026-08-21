@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # ~/Documents está no iCloud, que carimba com.apple.provenance nos artefatos
 # e quebra o codesign do Flutter.framework no build de iOS.
-# Artefatos ficam fora do iCloud via symlink.
-# ATENÇÃO: `flutter clean` apaga os symlinks de build/ e .dart_tool/.
-# Rode este script depois de todo clean.
+# Só build/ precisa sair do iCloud — foi ele que quebrou o codesign.
+#
+# NÃO symlinkar .dart_tool (package_config.json usa caminhos absolutos e a
+# análise quebra) nem ios/Pods (o Xcode resolve o link e polui
+# contents.xcworkspacedata com um caminho de máquina).
+#
+# ATENÇÃO: `flutter clean` apaga o symlink de build/. Rode isto depois.
 set -euo pipefail
 REPO=~/Documents/bmo-app
-EXT=~/dev/bmo-app-ext
+TARGET=~/dev/bmo-app-ext/build
 
-link() {
-  local target="$1" path="$2"
-  mkdir -p "$target"
-  [ -L "$path" ] && return 0
-  [ -e "$path" ] && rm -rf "$path"
-  ln -s "$target" "$path"
-  echo "relinked: $path -> $target"
-}
+mkdir -p "$TARGET"
+if [ -L "$REPO/build" ] && [ "$(readlink "$REPO/build")" = "$TARGET" ]; then
+  echo "build/ já linkado"
+else
+  rm -rf "$REPO/build"
+  ln -s "$TARGET" "$REPO/build"
+  echo "relinked: $REPO/build -> $TARGET"
+fi
 
-link "$EXT/build"     "$REPO/build"
-link "$EXT/dart_tool" "$REPO/.dart_tool"
-link "$EXT/pods"      "$REPO/ios/Pods"
+cd "$REPO" && flutter pub get
