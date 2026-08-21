@@ -36,6 +36,9 @@ PODS:
   - file_saver (0.3.1):
     - Flutter
   - Flutter (1.0.0)
+  - gal (1.0.0):
+    - Flutter
+    - FlutterMacOS
   - get_thumbnail_video (0.0.1):
     - Flutter
     - libwebp
@@ -72,6 +75,7 @@ DEPENDENCIES:
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - file_saver (from `.symlinks/plugins/file_saver/ios`)
   - Flutter (from `Flutter`)
+  - gal (from `.symlinks/plugins/gal/darwin`)
   - get_thumbnail_video (from `.symlinks/plugins/get_thumbnail_video/ios`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - quick_look (from `.symlinks/plugins/quick_look/ios`)
@@ -94,6 +98,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/file_saver/ios"
   Flutter:
     :path: Flutter
+  gal:
+    :path: ".symlinks/plugins/gal/darwin"
   get_thumbnail_video:
     :path: ".symlinks/plugins/get_thumbnail_video/ios"
   image_picker_ios:
@@ -113,6 +119,7 @@ SPEC CHECKSUMS:
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   file_saver: 33b08000e02d10789a0acf35b9decf5bce5ca9de
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  gal: baecd024ebfd13c441269ca7404792a7152fde89
   get_thumbnail_video: 1a754d46b860dffefcc57b7290a43089cd5d7e58
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   libwebp: af5937a13536ef73f3784d69cc342b98961acf33

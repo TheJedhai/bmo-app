@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/app_router.dart';
+import 'core/platform/file_download.dart';
 import 'core/theme/bmo_theme.dart';
 import 'core/widgets/app_lifecycle_reconnect.dart';
 
@@ -13,6 +14,7 @@ class BmoApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'BMO',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: appScaffoldMessengerKey,
       theme: BmoTheme.themeData,
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('pt', 'BR'), Locale('en')],

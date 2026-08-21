@@ -30,6 +30,10 @@
 	     com requestFullMetadata); iOS 14+ usa PHPicker, que não pede permissão. -->
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>O BMO usa a galeria para você escolher fotos e vídeos e guardar no seu cofre.</string>
+	<!-- gal: permissão SÓ de escrita na galeria (baixar do cofre vira
+	     addOnly). Sem álbum nomeado — leitura não é necessária aqui. -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>O BMO salva na galeria as fotos e vídeos que você baixa do seu cofre.</string>
 	<!-- Not required by file_saver's saveAs, but they make files the app
 	     saves visible in the Files app (On My iPhone) and allow opening
 	     them in place. Harmless, kept for convenience. -->

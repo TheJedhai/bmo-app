@@ -1,18 +1,26 @@
+export 'file_download_stub.dart'
+    if (dart.library.js_interop) 'file_download_web.dart';
+
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
-/// Saves raw bytes to a file through the platform's save mechanism.
-///
-/// On web this triggers a browser download (Blob + anchor). On iOS this
-/// opens the system document picker ("Save to Files"), the closest
-/// equivalent to a download. The file name and extension are preserved
-/// on both platforms.
-void downloadBytes({
+/// Chave global do ScaffoldMessenger — o download roda fora de contexto
+/// (helper fire-and-forget) e o erro de salvar precisa aparecer para o
+/// usuário. Montada no MaterialApp (app.dart). Em testes, sem MaterialApp,
+/// `currentState` é null e o aviso é simplesmente descartado.
+final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
+/// Salva via file_saver — comportamento web e fallback nativo (mime fora
+/// de image/video): no navegador vira Blob + anchor; no iOS abre o picker
+/// "Salvar em Arquivos". Fire-and-forget com log de falha.
+void saveWithFileSaver({
   required Uint8List bytes,
   required String fileName,
   required String mimeType,
 }) {
-  final (:extension, :mime) = _mimeToSaver(mimeType, fileName);
+  final (:extension, :mime) = mimeToSaver(mimeType, fileName);
   // file_saver appends the extension to `name`, so strip it here when the
   // incoming file name already carries it.
   final name = stripFileExtension(fileName, extension);
@@ -41,7 +49,7 @@ String stripFileExtension(String fileName, String extension) {
   return fileName.substring(0, fileName.length - suffix.length);
 }
 
-({String extension, MimeType mime}) _mimeToSaver(
+({String extension, MimeType mime}) mimeToSaver(
   String mimeType,
   String fileName,
 ) {
