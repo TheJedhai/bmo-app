@@ -26,6 +26,8 @@ import 'package:bmo_app/features/vault/data/vault_repository.dart';
 import 'package:bmo_app/features/vault/presentation/vault_screen.dart';
 import 'package:bmo_app/features/vault/providers/vault_providers.dart';
 
+import 'vault_cipher_register.dart';
+
 const _password = 'teste123';
 
 /// KDF determinístico e instantâneo — o mesmo usado para gerar o material
@@ -139,6 +141,12 @@ Future<void> _pumpUnlockedVault(
 }
 
 void main() {
+  // No chrome, AesGcm.with256bits() vira crypto.subtle (async real) e o
+  // await do setup pendura dentro do FakeAsync antes do primeiro pump.
+  // Força DartAesGcm puro — no VM é no-op. Rodar antes do primeiro uso de
+  // VaultCipher (static final lazy).
+  registerVaultCipherForWebTests();
+
   testWidgets('selecionar, marcar 2 e cancelar limpa a seleção', (tester) async {
     final deleted = <String>[];
 
