@@ -1,19 +1,9 @@
-/// Concrete [VaultKdf] implementation backed by dargon2_flutter.
+/// Concrete [VaultKdf] implementation backed by Argon2id from
+/// package:cryptography.
 ///
-/// On web, dargon2 delegates to hash-wasm (WASM), which is pre-loaded
-/// from a local asset (see web/index.html). No CDN calls at runtime.
-///
-/// ## CDN fallback defense (web bootstrap)
-/// dargon2_flutter_web registers hash-wasm from `window.hashwasm`; when
-/// that global is null it falls back to a dynamic `import()` from
-/// cdn.jsdelivr.net. The defense lives entirely in the web bootstrap:
-///
-/// - Camada 1 (`web/hashwasm_guard.js`): external script that installs a
-///   throwing stub if `window.hashwasm` is missing, and fails visibly at
-///   page load if the self-hosted module never loaded.
-/// - Camada 2 (`web/index.html`): synchronous inline stub so
-///   `window.hashwasm` is never null during HTML parsing, before the
-///   guard script even runs.
+/// Uses the `Argon2id(...)` factory, which dispatches to the best available
+/// implementation per platform (same principle as [VaultCipher]'s
+/// `AesGcm.with256bits()`). Parameters come from [Argon2Params].
 ///
 /// ## Security rules (NEVER break these):
 /// - NEVER log, print, or debugPrint the password or derived key.
@@ -23,31 +13,35 @@ library;
 
 import 'dart:typed_data';
 
-import 'package:dargon2_flutter/dargon2_flutter.dart';
+import 'package:cryptography/cryptography.dart';
 
 import 'vault_kdf.dart';
 
-/// [VaultKdf] implementation using dargon2_flutter (WASM hash-wasm).
+/// [VaultKdf] implementation using Argon2id from package:cryptography.
 ///
-/// Uses the byte-level API (`hashPasswordBytes`) to avoid the
-/// encode/decode overhead of the string-based `hashPasswordString`.
+/// Pure-Dart implementation on every platform today; the factory leaves the
+/// door open for a platform-accelerated implementation later without
+/// touching vault_crypto/vault_envelope.
 final class Argon2Kdf implements VaultKdf {
   const Argon2Kdf();
+
+  /// Shared algorithm. Stateless — one instance serves all calls.
+  static final Argon2id _argon2id = Argon2id(
+    parallelism: Argon2Params.p,
+    memory: Argon2Params.m,
+    iterations: Argon2Params.t,
+    hashLength: Argon2Params.hashLength,
+  );
 
   @override
   Future<Uint8List> derive({
     required Uint8List password,
     required Uint8List salt,
   }) async {
-    final result = await argon2.hashPasswordBytes(
-      password.toList(),
-      salt: Salt(salt.toList()),
-      iterations: Argon2Params.t,
-      memory: Argon2Params.m,
-      parallelism: Argon2Params.p,
-      length: Argon2Params.hashLength,
-      type: Argon2Type.id,
+    final key = await _argon2id.deriveKey(
+      secretKey: SecretKey(password),
+      nonce: salt,
     );
-    return Uint8List.fromList(result.rawBytes);
+    return Uint8List.fromList(await key.extractBytes());
   }
 }
