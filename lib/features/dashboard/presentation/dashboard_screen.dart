@@ -195,19 +195,25 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Hora
-        Text(
-          hourFormat.format(_now),
-          style: TextStyle(
-            fontFamily: 'PressStart2P',
-            fontSize: 36,
-            color: widget.accent,
-            shadows: [
-              Shadow(
-                color: widget.accent.withValues(alpha: 0.40),
-                blurRadius: 8,
-              ),
-            ],
+        // Hora — height 1.0 compensa o ascent/descent da PressStart2P
+        // (linha box alta demais); FittedBox encolhe se a largura faltar.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            hourFormat.format(_now),
+            style: TextStyle(
+              fontFamily: 'PressStart2P',
+              fontSize: 36,
+              height: 1.0,
+              color: widget.accent,
+              shadows: [
+                Shadow(
+                  color: widget.accent.withValues(alpha: 0.40),
+                  blurRadius: 8,
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 6),
