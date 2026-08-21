@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mime/mime.dart';
 
@@ -686,6 +687,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // Upload
   // ----------------------------------------------------------
 
+  /// "Arquivo" — qualquer tipo, múltiplos, sem limite de tamanho.
   Future<void> _pickAndUploadFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
@@ -694,29 +696,81 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     // `null` means the user cancelled the picker.
     if (result == null || result.files.isEmpty) return;
 
-    if (!mounted) return;
-    setState(() {
-      _isUploading = true;
-      _uploadTotal = result.files.length;
-      _uploadIndex = 0;
-    });
-
-    final repo = ref.read(vaultRepositoryProvider);
     final failures = <String>[];
-
-    for (var i = 0; i < result.files.length; i++) {
-      final file = result.files[i];
-
+    final pending = <({Uint8List bytes, String fileName, String mimeType})>[];
+    for (final file in result.files) {
       // On web and iOS, withData (default) populates `bytes` fully in memory.
       final bytes = file.bytes;
       if (bytes == null) {
         failures.add('${file.name}: não foi possível ler o arquivo.');
         continue;
       }
+      pending.add((
+        bytes: bytes,
+        fileName: file.name,
+        mimeType: lookupMimeType(file.name) ?? 'application/octet-stream',
+      ));
+    }
 
-      final fileName = file.name;
-      final mimeType =
-          lookupMimeType(fileName) ?? 'application/octet-stream';
+    if (pending.isEmpty) {
+      _showError('Falha no upload: ${failures.first}');
+      return;
+    }
+    await _uploadFiles(pending, failures);
+  }
+
+  /// "Foto ou vídeo" — galeria (PHPicker no iOS, seletor filtrado na web).
+  Future<void> _pickAndUploadMedia() async {
+    final files = await ImagePicker().pickMultipleMedia();
+    if (files.isEmpty) return;
+
+    final failures = <String>[];
+    final pending = <({Uint8List bytes, String fileName, String mimeType})>[];
+    for (final file in files) {
+      final Uint8List bytes;
+      try {
+        bytes = await file.readAsBytes();
+      } catch (e) {
+        failures.add('${file.name}: não foi possível ler o arquivo.');
+        continue;
+      }
+      pending.add((
+        bytes: bytes,
+        fileName: file.name,
+        // mimeType vem preenchido no web (Blob.type); no iOS cai no
+        // lookupMimeType, que continua correto (foto HEIC chega como .jpg,
+        // vídeo preserva o nome original, ex. .MOV).
+        mimeType: file.mimeType ??
+            lookupMimeType(file.name) ??
+            'application/octet-stream',
+      ));
+    }
+
+    if (pending.isEmpty) {
+      _showError('Falha no upload: ${failures.first}');
+      return;
+    }
+    await _uploadFiles(pending, failures);
+  }
+
+  /// Fluxo único de upload — cifragem, thumbnail e envio iguais para
+  /// qualquer origem; só os bytes mudam.
+  Future<void> _uploadFiles(
+    List<({Uint8List bytes, String fileName, String mimeType})> files,
+    List<String> failures,
+  ) async {
+    if (!mounted) return;
+    setState(() {
+      _isUploading = true;
+      _uploadTotal = files.length;
+      _uploadIndex = 0;
+    });
+
+    final repo = ref.read(vaultRepositoryProvider);
+
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      final fileName = file.fileName;
 
       if (!mounted) return;
       setState(() {
@@ -729,9 +783,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         await repo.uploadItem(
           _session.vaultId,
           _session.dek,
-          bytes,
+          file.bytes,
           fileName,
-          mimeType,
+          file.mimeType,
           onProgress: (sent, total) {
             if (!mounted) return;
             setState(() {
@@ -758,10 +812,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       if (failures.length == 1) {
         _showError('Falha no upload: ${failures.first}');
       } else {
-        final suffix =
-            failures.take(3).join('\n');
+        final suffix = failures.take(3).join('\n');
         _showError(
-          '${failures.length}/${result.files.length} arquivos falharam:\n$suffix',
+          '${failures.length}/${files.length} arquivos falharam:\n$suffix',
         );
       }
     }
@@ -1109,6 +1162,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           vaultName: _session.decryptedName,
           isMobile: isMobile,
           isUploading: _isUploading,
+          onAddMedia: _pickAndUploadMedia,
           onAddFile: _pickAndUploadFiles,
           onLock: () => ref.read(vaultSessionProvider.notifier).lock(),
           onDeleteVault: _deleteVault,
@@ -1249,6 +1303,7 @@ class _VaultHeader extends StatelessWidget {
   final String vaultName;
   final bool isMobile;
   final bool isUploading;
+  final VoidCallback onAddMedia;
   final VoidCallback onAddFile;
   final VoidCallback onLock;
   final VoidCallback onDeleteVault;
@@ -1257,6 +1312,7 @@ class _VaultHeader extends StatelessWidget {
     required this.vaultName,
     required this.isMobile,
     required this.isUploading,
+    required this.onAddMedia,
     required this.onAddFile,
     required this.onLock,
     required this.onDeleteVault,
@@ -1288,12 +1344,45 @@ class _VaultHeader extends StatelessWidget {
             ),
           ),
 
-          // Add file button
-          _HeaderIconButton(
-            icon: Icons.add,
-            tooltip: 'Adicionar arquivos',
-            isLoading: isUploading,
-            onPressed: onAddFile,
+          // Add button — two obvious origins, one upload flow
+          PopupMenuButton<_VaultAddAction>(
+            tooltip: 'Adicionar ao cofre',
+            enabled: !isUploading,
+            padding: EdgeInsets.zero,
+            color: BmoColors.screenBgElevated,
+            onSelected: (action) {
+              if (action == _VaultAddAction.media) {
+                onAddMedia();
+              } else {
+                onAddFile();
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _VaultAddAction.media,
+                child: _VaultAddMenuItem(
+                  icon: Icons.photo_library_outlined,
+                  label: 'Foto ou vídeo',
+                ),
+              ),
+              PopupMenuItem(
+                value: _VaultAddAction.file,
+                child: _VaultAddMenuItem(
+                  icon: Icons.insert_drive_file_outlined,
+                  label: 'Arquivo',
+                ),
+              ),
+            ],
+            icon: isUploading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: BmoColors.accentGreen,
+                    ),
+                  )
+                : const Icon(Icons.add, size: 20, color: BmoColors.textSecondary),
           ),
           const SizedBox(width: 4),
 
@@ -1329,16 +1418,41 @@ class _VaultHeader extends StatelessWidget {
   }
 }
 
+enum _VaultAddAction { media, file }
+
+class _VaultAddMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _VaultAddMenuItem({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: BmoColors.textSecondary),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            color: BmoColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final String tooltip;
-  final bool isLoading;
   final VoidCallback onPressed;
 
   const _HeaderIconButton({
     required this.icon,
     required this.tooltip,
-    this.isLoading = false,
     required this.onPressed,
   });
 
@@ -1348,19 +1462,10 @@ class _HeaderIconButton extends StatelessWidget {
       message: tooltip,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: isLoading ? null : onPressed,
+        onTap: onPressed,
         child: Padding(
           padding: const EdgeInsets.all(8),
-          child: isLoading
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: BmoColors.accentGreen,
-                  ),
-                )
-              : Icon(icon, size: 20, color: BmoColors.textSecondary),
+          child: Icon(icon, size: 20, color: BmoColors.textSecondary),
         ),
       ),
     );
