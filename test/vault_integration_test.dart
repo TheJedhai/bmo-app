@@ -30,8 +30,6 @@ import 'package:bmo_app/features/vault/crypto/vault_crypto.dart';
 import 'package:bmo_app/features/vault/data/vault_client.dart';
 import 'package:bmo_app/features/vault/data/vault_repository.dart';
 
-import 'argon2_register.dart';
-
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -89,8 +87,6 @@ Future<bool> _backendReachable() async {
 }
 
 /// Uma derivação real de Argon2id diz se o KDF funciona no ambiente atual.
-/// No VM do flutter_tester o dargon2 usa EmptyDArgon2Flutter (lança
-/// UnimplementedError); no chrome o hash-wasm resolve.
 Future<bool> _kdfAvailable() async {
   try {
     const kdf = Argon2Kdf();
@@ -110,15 +106,10 @@ void main() {
   const backendSkipReason =
       'bmo-server descartável indisponível em $_testServerUrl — rode '
       'test/vault_integration_run.sh para executar o E2E de vault.';
-  // O KDF real (Argon2id) exige o WASM do hash-wasm, que só existe no
-  // navegador — no VM do flutter_tester lança UnimplementedError antes de
-  // qualquer chamada de rede.
-  const vmSkipReason =
-      'Argon2id (hash-wasm WASM) indisponível no flutter_tester — rode '
-      'com --platform=chrome.';
+  const kdfSkipReason = 'Argon2id indisponível no ambiente de teste atual.';
 
   setUpAll(() async {
-    kdfUp = await registerArgon2ForTest() && await _kdfAvailable();
+    kdfUp = await _kdfAvailable();
     serverUp = await _backendReachable();
   });
 
@@ -128,7 +119,7 @@ void main() {
     test(name, () async {
       _assertDisposableTarget();
       if (!kdfUp) {
-        markTestSkipped(vmSkipReason);
+        markTestSkipped(kdfSkipReason);
         return;
       }
       if (!serverUp) {

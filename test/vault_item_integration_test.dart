@@ -68,12 +68,11 @@ import 'package:bmo_app/features/vault/data/vault_repository.dart';
 const _testServerUrl = 'http://127.0.0.1:8090';
 
 // ---------------------------------------------------------------------------
-// Mock KDF — fast, deterministic, no WASM
+// Mock KDF — fast, deterministic
 // ---------------------------------------------------------------------------
 
-/// Mock KDF for E2E tests. The real Argon2id KDF requires the hash-wasm
-/// WASM module which is loaded via web/index.html — unavailable in the
-/// Flutter test environment. Argon2id correctness is tested by
+/// Mock KDF for E2E tests — the real Argon2id is too slow for a test that
+/// runs many derivations. Argon2id correctness is tested by
 /// vault_crypto_test.dart; the item E2E test focuses on the integration of
 /// chunked encryption with the server.
 final class _MockKdf implements VaultKdf {
@@ -98,7 +97,7 @@ final class _MockKdf implements VaultKdf {
 // ---------------------------------------------------------------------------
 
 /// Creates a [VaultRepository] pointed at the disposable test server,
-/// using a mock KDF that doesn't require the hash-wasm WASM module.
+/// using a mock KDF to keep the E2E fast.
 VaultRepository _createRepo() {
   final client = http.Client();
   return VaultRepository(
