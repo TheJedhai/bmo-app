@@ -65,6 +65,7 @@ dependencies:
   image: ^4.9.2
   get_thumbnail_video: ^0.7.3
   cryptography: ^2.7.0
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
