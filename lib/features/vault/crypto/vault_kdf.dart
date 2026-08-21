@@ -9,18 +9,18 @@
 /// - The salt MUST be unique per vault (16+ bytes from CSPRNG).
 ///
 /// ## Argon2id parameters
-/// Chosen per OWASP recommendations for server-side password hashing,
-/// applied here to client-side KEK derivation:
+/// Deliberately BELOW OWASP recommendations. Do NOT "fix" this back up:
 ///
-/// - **m = 19456 KiB** (~19 MiB) — memory-hardness to deter GPU/ASIC attacks.
-///   On the client this also provides a UX-level brute-force throttle.
-/// - **t = 2** — iteration count (time cost). Kept low because memory
-///   hardness already dominates the cost; raising t hurts mobile UX.
+/// - Threat model: personal vault behind Tailscale, never publicly exposed.
+///   Offline brute-force resistance is not a requirement — the password
+///   only protects against casual glance.
+/// - Cost: Argon2 runs pure-Dart on the browser main thread (no isolate),
+///   and OWASP-scale parameters took ~5 s per derivation on web.
+///
+/// - **m = 4096 KiB** (4 MiB) — keeps derivation interactive.
+/// - **t = 3** — iteration count (time cost).
 /// - **p = 1** — parallelism. Single-threaded in the browser;
 ///   increasing would multiply memory usage (m * p) without benefit.
-///
-/// These constants are easy to adjust if OWASP updates recommendations
-/// or if UX testing finds the derivation too slow on low-end devices.
 library;
 
 import 'dart:typed_data';
@@ -31,11 +31,11 @@ import 'dart:typed_data';
 /// All values follow the naming conventions from RFC 9106.
 abstract final class Argon2Params {
   /// Memory size in kibibytes (1024 bytes).
-  /// OWASP 2023 recommends 19 MiB = 19456 KiB.
-  static const int m = 19456;
+  /// Tuned for interactive web derivation (see library doc).
+  static const int m = 4096;
 
   /// Number of iterations (time cost).
-  static const int t = 2;
+  static const int t = 3;
 
   /// Degree of parallelism (lanes).
   /// Keep at 1 for web — browser main thread is single-threaded.
