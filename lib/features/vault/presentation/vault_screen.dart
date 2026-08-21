@@ -1106,6 +1106,22 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     });
   }
 
+  /// Alterna entre marcar todos e limpar. "Todos" deriva de
+  /// _selectedIds.length == items.length — sem estado paralelo para não
+  /// dessincronizar. Age sobre a lista visível (o cofre não tem filtro nem
+  /// busca hoje; o contador mostra exatamente esse conjunto).
+  void _toggleSelectAll() {
+    final items = _items;
+    if (items == null || items.isEmpty) return;
+    setState(() {
+      if (_selectedIds.length == items.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds.addAll(items.map((i) => i.id));
+      }
+    });
+  }
+
   /// Baixa a seleção inteira. A costura da composição vive no
   /// file_download.dart (zero kIsWeb/Platform.is aqui):
   ///
@@ -1366,6 +1382,12 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
+    // "Todos marcados" deriva do tamanho da seleção vs total — nunca um
+    // segundo estado que possa sair de sincronia.
+    final visibleItems = _items ?? const <VaultItemDecrypted>[];
+    final allSelected =
+        visibleItems.isNotEmpty && _selectedIds.length == visibleItems.length;
+
     return Column(
       children: [
         // Header
@@ -1376,6 +1398,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           hasItems: _items?.isNotEmpty ?? false,
           selectionMode: _selectionMode,
           selectedCount: _selectedIds.length,
+          allSelected: allSelected,
           selectionBusy: _batchBusy,
           onAddMedia: _pickAndUploadMedia,
           onAddFile: _pickAndUploadFiles,
@@ -1383,6 +1406,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           onDeleteVault: _deleteVault,
           onStartSelection: _enterSelectionMode,
           onCancelSelection: _exitSelectionMode,
+          onToggleSelectAll: _toggleSelectAll,
           onDownloadSelected: _downloadSelected,
           onDeleteSelected: _deleteSelected,
         ),
@@ -1531,6 +1555,7 @@ class _VaultHeader extends StatelessWidget {
   final bool hasItems;
   final bool selectionMode;
   final int selectedCount;
+  final bool allSelected;
   final bool selectionBusy;
   final VoidCallback onAddMedia;
   final VoidCallback onAddFile;
@@ -1538,6 +1563,7 @@ class _VaultHeader extends StatelessWidget {
   final VoidCallback onDeleteVault;
   final VoidCallback onStartSelection;
   final VoidCallback onCancelSelection;
+  final VoidCallback onToggleSelectAll;
   final VoidCallback onDownloadSelected;
   final VoidCallback onDeleteSelected;
 
@@ -1548,6 +1574,7 @@ class _VaultHeader extends StatelessWidget {
     required this.hasItems,
     required this.selectionMode,
     required this.selectedCount,
+    required this.allSelected,
     required this.selectionBusy,
     required this.onAddMedia,
     required this.onAddFile,
@@ -1555,6 +1582,7 @@ class _VaultHeader extends StatelessWidget {
     required this.onDeleteVault,
     required this.onStartSelection,
     required this.onCancelSelection,
+    required this.onToggleSelectAll,
     required this.onDownloadSelected,
     required this.onDeleteSelected,
   });
@@ -1572,13 +1600,25 @@ class _VaultHeader extends StatelessWidget {
     );
   }
 
-  /// Modo seleção: contador + Baixar/Apagar/Cancelar. Zero selecionados
-  /// desabilita as ações.
+  /// Modo seleção: selecionar/desselecionar todos + contador +
+  /// Baixar/Apagar/Cancelar. Zero selecionados desabilita as ações; cofre
+  /// vazio desabilita o toggle (nunca some).
   Widget _buildSelectionBar() {
     final countLabel = selectedCount == 1
         ? '1 selecionado'
         : '$selectedCount selecionados';
     final actionsEnabled = selectedCount > 0 && !selectionBusy;
+    final toggleEnabled = hasItems && !selectionBusy;
+
+    // Mobile: só o símbolo (tooltip); web: símbolo + palavra.
+    final toggleIcon = Icon(
+      allSelected ? Icons.deselect : Icons.select_all,
+      size: isMobile ? 20 : 18,
+      color: BmoColors.textSecondary,
+    );
+    final toggleLabel = allSelected
+        ? 'Desselecionar todos'
+        : 'Selecionar todos';
 
     return Row(
       children: [
@@ -1587,6 +1627,19 @@ class _VaultHeader extends StatelessWidget {
           icon: const Icon(Icons.close, size: 18),
           label: const Text('Cancelar'),
         ),
+        const SizedBox(width: 8),
+        if (isMobile)
+          IconButton(
+            tooltip: toggleLabel,
+            onPressed: toggleEnabled ? onToggleSelectAll : null,
+            icon: toggleIcon,
+          )
+        else
+          TextButton.icon(
+            onPressed: toggleEnabled ? onToggleSelectAll : null,
+            icon: toggleIcon,
+            label: Text(toggleLabel, style: const TextStyle(fontSize: 12)),
+          ),
         const SizedBox(width: 8),
         Expanded(
           child: Text(

@@ -219,4 +219,45 @@ void main() {
     // Sai do modo seleção.
     expect(find.text('Selecionar'), findsOneWidget);
   });
+
+  testWidgets('selecionar todos alterna, deriva do estado e acompanha o '
+      'toque individual', (tester) async {
+    final deleted = <String>[];
+
+    await _pumpUnlockedVault(
+      tester,
+      [
+        (id: 'a', fileName: 'foto1.jpg', mimeType: 'image/jpeg'),
+        (id: 'b', fileName: 'nota.txt', mimeType: 'text/plain'),
+        (id: 'c', fileName: 'doc.pdf', mimeType: 'application/pdf'),
+      ],
+      deleted,
+    );
+
+    await tester.tap(find.text('Selecionar'));
+    await tester.pump();
+    expect(find.text('Selecionar todos'), findsOneWidget);
+
+    // Marca todos.
+    await tester.tap(find.text('Selecionar todos'));
+    await tester.pump();
+    expect(find.text('3 selecionados'), findsOneWidget);
+    expect(find.text('Desselecionar todos'), findsOneWidget);
+
+    // Desmarcar um item individualmente muda o rótulo sozinho.
+    await tester.tap(find.text('nota.txt'));
+    await tester.pump();
+    expect(find.text('2 selecionados'), findsOneWidget);
+    expect(find.text('Selecionar todos'), findsOneWidget,
+        reason: 'rótulo deriva do estado, não de um flag paralelo');
+
+    // Marcar tudo de novo e desselecionar tudo.
+    await tester.tap(find.text('Selecionar todos'));
+    await tester.pump();
+    expect(find.text('3 selecionados'), findsOneWidget);
+    await tester.tap(find.text('Desselecionar todos'));
+    await tester.pump();
+    expect(find.text('0 selecionados'), findsOneWidget);
+    expect(find.text('Selecionar todos'), findsOneWidget);
+  });
 }
