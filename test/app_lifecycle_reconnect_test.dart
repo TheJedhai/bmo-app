@@ -3,8 +3,15 @@
 // sem acumular listeners, sem resetar estado de UI, e com identidade
 // re-resolvida no connect (nunca valor capturado).
 //
+// O reconnect é desligado na web por design (gate kIsWeb em
+// AppLifecycleReconnect), então este arquivo só roda na VM. A anotação
+// precisa ficar no nível da library — em cima de `void main()` o
+// analyzer marca invalid_annotation_target e o runner ignora.
+//
 // Run:
 //   flutter test test/app_lifecycle_reconnect_test.dart
+@TestOn('vm')
+library;
 
 import 'dart:async';
 
@@ -167,7 +174,13 @@ void main() {
     // não há motivo para derrubar a conexão recém-aberta.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
+    // Vários pumps, não um: um invalidate só vira reconexão observável
+    // depois de alguns frames. Com um pump único a asserção passaria mesmo
+    // se o guard `_backgrounded` sumisse — não distinguiria "não
+    // reconectou" de "ainda não reconectou".
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
     expect(sse.connects, 1);
     expect(ws.connects, 1);
 
