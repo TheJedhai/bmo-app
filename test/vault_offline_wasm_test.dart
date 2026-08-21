@@ -79,8 +79,9 @@ String _stripHtmlComments(String source) {
 }
 
 void main() {
-  // Guarda por teste: dart:io não existe no navegador. O runner do
-  // flutter_test ignora @TestOn, então o skip é marcado em runtime.
+  // Guarda por teste: dart:io não existe no navegador. Skip em runtime, não
+  // @TestOn: este arquivo compila nas duas plataformas e precisa rodar onde
+  // tiver navegador sem dart:io.
   void vmTest(String name, void Function() body) {
     test(name, () {
       if (kIsWeb) {
