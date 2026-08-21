@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/settings/widgets/settings_modal.dart';
@@ -6,7 +9,7 @@ import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_avatar.dart';
 import '../theme/bmo_theme.dart';
 
-const _kMobileBreakpoint = 600.0;
+const kMobileBreakpoint = 600.0;
 
 /// Casca visual do BMO ocupando a viewport inteira: borda verde nas 4
 /// extremidades + tela escura no meio cobrindo todo o resto do espaço.
@@ -20,11 +23,27 @@ class BmoFrame extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < _kMobileBreakpoint;
+    final media = MediaQuery.of(context);
+    final width = media.size.width;
+    final isMobile = width < kMobileBreakpoint;
 
-    final borderPadding = isMobile ? 12.0 : 28.0;
-    final innerRadius = isMobile ? 12.0 : 18.0;
+    // No mobile a faixa absorve a safe area (status bar, home indicator,
+    // laterais): viewPadding não zera quando o teclado sobe, ao contrário
+    // de padding. Mínimo de 14px para o bezel não afinar demais em
+    // aparelhos sem inset.
+    final EdgeInsets borderPadding;
+    if (isMobile) {
+      final vp = media.viewPadding;
+      borderPadding = EdgeInsets.fromLTRB(
+        math.max(14.0, vp.left),
+        math.max(14.0, vp.top),
+        math.max(14.0, vp.right),
+        math.max(14.0, vp.bottom),
+      );
+    } else {
+      borderPadding = const EdgeInsets.all(28);
+    }
+    final innerRadius = isMobile ? 26.0 : 18.0;
 
     // ---- Control sizing & positioning -------------------------------------
     //
@@ -38,8 +57,8 @@ class BmoFrame extends ConsumerWidget {
     // Desktop (borderPadding=28): D=22, offset=8 — 8px outer breathing
     //   room, inner edge overflows 2px into the dark screen (invisible
     //   against screenBg background).
-    // Mobile  (borderPadding=12): D=22, offset=-5 — symmetric overflow
-    //   (band is too narrow; 5px over on each side).
+    // Mobile  (band >= 14): D=22, offset=-5 — overflow simétrico
+    //   (band é fino demais; 5px para cada lado).
     final visualDiameter = 28.0;
     final controlOffset = isMobile ? -5.0 : 8.0;
     final touchSize = isMobile ? 40.0 : 44.0;
@@ -48,66 +67,83 @@ class BmoFrame extends ConsumerWidget {
 
     final userAsync = ref.watch(currentUserProvider);
 
-    return Container(
-      color: BmoColors.bodyGreen,
-      child: Stack(
-        children: [
-          // ---- Inner screen ----
-          Padding(
-            padding: EdgeInsets.all(borderPadding),
-            child: Container(
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: BmoColors.screenBg,
-                borderRadius: BorderRadius.circular(innerRadius),
-              ),
-              child: child,
-            ),
-          ),
-
-          // ---- Settings gear (top-right, on green band) ----
-          // Hidden on mobile — moves to the dashboard header.
-          if (!isMobile)
-            Positioned(
-              top: controlOffset,
-              right: controlOffset,
-              child: _ControlHitbox(
-                size: touchSize,
-                alignment: Alignment.topRight,
-                onTap: () => showSettingsModal(context),
-                child: _DarkCircle(
-                  diameter: visualDiameter,
-                  child: Icon(Icons.settings,
-                      size: gearIconSize, color: BmoColors.accentGreen),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        // Fundo claro (faixa verde) embaixo da status bar.
+        statusBarBrightness: Brightness.light, // iOS — light = fundo claro
+        statusBarIconBrightness: Brightness.dark, // Android
+      ),
+      child: Container(
+        color: BmoColors.bodyGreen,
+        child: Stack(
+          children: [
+            // ---- Inner screen ----
+            Padding(
+              padding: borderPadding,
+              child: MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                removeBottom: true,
+                removeLeft: true,
+                removeRight: true,
+                // O frame consome o inset; sem remover o padding qualquer
+                // SafeArea interno inseta de novo por cima da faixa.
+                child: ClipRSuperellipse(
+                  borderRadius: BorderRadius.circular(innerRadius),
+                  child: ColoredBox(color: BmoColors.screenBg, child: child),
                 ),
               ),
             ),
 
-          // ---- Profile avatar (bottom-right, on green band) ----
-          // Hidden on mobile — moves to the dashboard header.
-          if (!isMobile)
-            Positioned(
-              bottom: controlOffset,
-              right: controlOffset,
-              child: userAsync.whenOrNull(
-                    data: (user) {
-                      if (user == null) return const SizedBox.shrink();
-                      return _ControlHitbox(
-                        size: touchSize,
-                        alignment: Alignment.bottomRight,
-                        onTap: () =>
-                            ref.read(currentUserProvider.notifier).clearUser(),
-                        child: _FramedAvatar(
-                          profile: user,
-                          outerDiameter: visualDiameter,
-                          innerRadius: avatarInnerRadius,
-                        ),
-                      );
-                    },
-                  ) ??
-                  const SizedBox.shrink(),
-            ),
-        ],
+            // ---- Settings gear (top-right, on green band) ----
+            // Hidden on mobile — moves to the dashboard header.
+            if (!isMobile)
+              Positioned(
+                top: controlOffset,
+                right: controlOffset,
+                child: _ControlHitbox(
+                  size: touchSize,
+                  alignment: Alignment.topRight,
+                  onTap: () => showSettingsModal(context),
+                  child: _DarkCircle(
+                    diameter: visualDiameter,
+                    child: Icon(
+                      Icons.settings,
+                      size: gearIconSize,
+                      color: BmoColors.accentGreen,
+                    ),
+                  ),
+                ),
+              ),
+
+            // ---- Profile avatar (bottom-right, on green band) ----
+            // Hidden on mobile — moves to the dashboard header.
+            if (!isMobile)
+              Positioned(
+                bottom: controlOffset,
+                right: controlOffset,
+                child:
+                    userAsync.whenOrNull(
+                      data: (user) {
+                        if (user == null) return const SizedBox.shrink();
+                        return _ControlHitbox(
+                          size: touchSize,
+                          alignment: Alignment.bottomRight,
+                          onTap: () => ref
+                              .read(currentUserProvider.notifier)
+                              .clearUser(),
+                          child: _FramedAvatar(
+                            profile: user,
+                            outerDiameter: visualDiameter,
+                            innerRadius: avatarInnerRadius,
+                          ),
+                        );
+                      },
+                    ) ??
+                    const SizedBox.shrink(),
+              ),
+          ],
+        ),
       ),
     );
   }
