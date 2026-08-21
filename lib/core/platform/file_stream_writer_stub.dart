@@ -9,10 +9,12 @@ bool get isFileStreamSaveAvailable => true;
 
 /// Escrita sequencial com dart:io puro (File + RandomAccessFile).
 ///
-/// O destino é um arquivo em NSTemporaryDirectory: iOS ainda não tem
-/// seletor de destino (file_selector.getSaveLocation lança
-/// UnimplementedError) — o passo 9 (share sheet) faz a entrega ao usuário.
-/// Até lá, o purge do SO cobre qualquer parcial que escape do [abort].
+/// O destino é um arquivo em NSTemporaryDirectory — ou direto na pasta
+/// escolhida, quando [destinationDirectory] é passada. A entrega ao
+/// usuário é da costura file_download: mídia vai à galeria via Gal
+/// (putImage/putVideo com o path final), não-mídia grava direto na pasta
+/// escolhida sem passar por temp. O purge do SO cobre qualquer parcial
+/// que escape do [abort].
 ///
 /// Regra: parcial nunca sobrevive. Erro em [writeChunk] ou [finalize]
 /// fecha o RAF e apaga o arquivo ANTES de propagar — todo caminho de saída
@@ -45,6 +47,9 @@ class IoFileStreamWriter implements FileStreamWriter {
     final raf = await file.open(mode: FileMode.writeOnly);
     return IoFileStreamWriter._(file, raf);
   }
+
+  @override
+  String get filePath => _file.path;
 
   @override
   Future<void> writeChunk(Uint8List bytes) async {

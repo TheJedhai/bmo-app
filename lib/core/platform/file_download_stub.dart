@@ -9,12 +9,12 @@ import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 
 import 'file_download.dart';
+import 'file_stream_writer.dart';
 
 /// Contadores de roteamento/limpeza — testes de mime routing e de
 /// vazamento de arquivo temporário.
 int fileDownloadGalImageCount = 0;
 int fileDownloadGalVideoCount = 0;
-int fileDownloadFileSaverCount = 0;
 int fileDownloadTempCreatedCount = 0;
 int fileDownloadTempDeletedCount = 0;
 
@@ -22,7 +22,12 @@ int fileDownloadTempDeletedCount = 0;
 /// de acesso falha e o put nunca roda. Trocar por `() async => true` faz o
 /// fluxo chegar no put — que então falha — e exercita a limpeza do temp.
 @visibleForTesting
-Future<bool> Function() fileDownloadGalleryAccessCheck = _ensureGalleryAccess;
+Future<bool> Function() fileDownloadGalleryAccessCheck = _galleryAccessImpl;
+
+Future<bool> _galleryAccessImpl() async {
+  if (await Gal.hasAccess()) return true;
+  return await Gal.requestAccess();
+}
 
 /// Assinatura pública única nas duas plataformas — ver file_download.dart.
 /// Fire-and-forget: falha é reportada via snackbar, nunca lançada ao caller.
@@ -38,8 +43,11 @@ void downloadBytes({
 
 /// Worker nativo — Future para os testes poderem aguardar o desfecho.
 ///
-/// Roteia por MIME: image/* e video/* vão para a galeria; qualquer outro
-/// mime cai no file_saver (Arquivos), comportamento de sempre.
+/// Caminho legado de BYTES JÁ EM MEMÓRIA (imagens do chat e da galeria):
+/// image/* e video/* vão para a galeria; qualquer outro mime grava na
+/// pasta escolhida — file_saver saiu do nativo. O cofre não passa mais por
+/// aqui: o download do cofre é sempre streaming
+/// ([singleItemDownloadMode]).
 Future<void> downloadBytesNative({
   required Uint8List bytes,
   required String fileName,
@@ -47,7 +55,11 @@ Future<void> downloadBytesNative({
 }) async {
   if (mimeType.startsWith('image/')) {
     fileDownloadGalImageCount++;
-    if (!await fileDownloadGalleryAccessCheck()) return;
+    final accessError = await ensureGalleryAccess();
+    if (accessError != null) {
+      _showError(accessError);
+      return;
+    }
     try {
       await Gal.putImageBytes(bytes, name: _nameWithoutExtension(fileName));
     } on GalException catch (e) {
@@ -58,7 +70,11 @@ Future<void> downloadBytesNative({
     }
   } else if (mimeType.startsWith('video/')) {
     fileDownloadGalVideoCount++;
-    if (!await fileDownloadGalleryAccessCheck()) return;
+    final accessError = await ensureGalleryAccess();
+    if (accessError != null) {
+      _showError(accessError);
+      return;
+    }
     // Bytes decifrados em disco: um único try/finally garante que todo
     // caminho de saída — sucesso, GalException, erro genérico — apaga o
     // temp antes de retornar.
@@ -76,22 +92,94 @@ Future<void> downloadBytesNative({
       await _deleteQuietly(file);
     }
   } else {
-    fileDownloadFileSaverCount++;
-    saveWithFileSaver(bytes: bytes, fileName: fileName, mimeType: mimeType);
+    // Não-mídia: grava direto na pasta escolhida — mesmo mecanismo do
+    // lote misto (picker + escopo de segurança + close em finally).
+    final open = await openBatchDownloadFolder();
+    if (open.choice != BatchFolderOpen.folder) return; // cancelado
+    try {
+      final writer = await openFileStreamWriter(
+        fileName,
+        destinationDirectory: open.folder!.path,
+      );
+      if (writer == null) {
+        _showError('Não foi possível criar o arquivo na pasta escolhida '
+            '(já existe?).');
+        return;
+      }
+      try {
+        await writer.writeChunk(bytes);
+        await writer.finalize();
+      } catch (e) {
+        await writer.abort();
+        debugPrint('Save to folder failed: $e');
+        _showError('Falha ao salvar na pasta escolhida.');
+      }
+    } finally {
+      await open.folder!.close();
+    }
   }
 }
 
-Future<bool> _ensureGalleryAccess() async {
+/// Nativo: o mime decide SOZINHO — nenhum gate de tamanho, em ramo
+/// nenhum. Mídia de qualquer tamanho streama para temp e vai à galeria
+/// (trade-off aceito: imagem pequena toca o disco em claro por um
+/// instante; o temp é apagado em finally). Não-mídia de qualquer tamanho
+/// grava em streaming direto na pasta escolhida (trade-off aceito: sem
+/// renomeação no diálogo — sai com o nome real do item do cofre; renomear
+/// dentro do cofre está no roadmap).
+SingleItemDownloadMode singleItemDownloadMode({
+  required int originalSize,
+  required String mimeType,
+}) {
+  final isMedia =
+      mimeType.startsWith('image/') || mimeType.startsWith('video/');
+  return isMedia
+      ? SingleItemDownloadMode.streamToGallery
+      : SingleItemDownloadMode.streamToFolder;
+}
+
+/// Garante acesso à galeria ANTES do streaming — sem acesso, o download
+/// inteiro iria para o lixo no final. Retorna mensagem de erro ou null em
+/// sucesso; quem mostra é o caller.
+Future<String?> ensureGalleryAccess() async {
   try {
-    if (await Gal.hasAccess()) return true;
-    return await Gal.requestAccess();
+    if (await fileDownloadGalleryAccessCheck()) return null;
+    return 'Acesso à galeria negado. Permita salvar fotos e vídeos nas '
+        'Configurações do iPhone.';
   } on GalException catch (e) {
-    _showError(_messageForGal(e));
-    return false;
+    return _messageForGal(e);
   } catch (e) {
     debugPrint('Gallery access check failed: $e');
-    _showError('Falha ao acessar a galeria.');
-    return false;
+    return 'Falha ao acessar a galeria.';
+  }
+}
+
+/// Entrega o arquivo finalizado (streaming em temp) à galeria via
+/// putImage/putVideo e apaga o temp em finally — inclusive em erro do
+/// Gal. Retorna mensagem de erro ou null em sucesso; quem mostra é o
+/// caller (a UI espera esta confirmação antes de limpar o progresso).
+Future<String?> deliverFileToGallery({
+  required String filePath,
+  required String fileName,
+  required String mimeType,
+}) async {
+  fileDownloadTempCreatedCount++;
+  try {
+    if (mimeType.startsWith('video/')) {
+      fileDownloadGalVideoCount++;
+      await Gal.putVideo(filePath);
+    } else {
+      fileDownloadGalImageCount++;
+      await Gal.putImage(filePath);
+    }
+    return null;
+  } on GalException catch (e) {
+    return _messageForGal(e);
+  } catch (e) {
+    debugPrint('Save to gallery failed: $e');
+    return 'Falha ao salvar na galeria.';
+  } finally {
+    await _deleteQuietly(File(filePath));
   }
 }
 

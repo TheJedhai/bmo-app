@@ -12,9 +12,9 @@ import 'package:flutter/material.dart';
 final GlobalKey<ScaffoldMessengerState> appScaffoldMessengerKey =
     GlobalKey<ScaffoldMessengerState>();
 
-/// Salva via file_saver — comportamento web e fallback nativo (mime fora
-/// de image/video): no navegador vira Blob + anchor; no iOS abre o picker
-/// "Salvar em Arquivos". Fire-and-forget com log de falha.
+/// Salva via file_saver — comportamento WEB (Blob + anchor no navegador).
+/// O caminho nativo não usa mais file_saver: mídia vai à galeria, o resto
+/// grava em streaming na pasta escolhida. Fire-and-forget com log de falha.
 void saveWithFileSaver({
   required Uint8List bytes,
   required String fileName,
@@ -94,6 +94,29 @@ abstract class BatchDownloadFolder {
   Future<void> close();
 }
 
+/// Como entregar o download de UM item nesta plataforma. Decidido por
+/// [singleItemDownloadMode] (cada branch do conditional export), para que
+/// zero kIsWeb/Platform.is viva no código do app.
+enum SingleItemDownloadMode {
+  /// Nativo, mídia (image/*, video/*): streaming para temp + galeria via
+  /// Gal (putImage/putVideo) — qualquer tamanho.
+  streamToGallery,
+
+  /// Nativo, não-mídia: pergunta a pasta e grava direto nela em streaming,
+  /// sem temp — qualquer tamanho.
+  streamToFolder,
+
+  /// Web, arquivo pequeno: decryptAll + Blob + downloadBytes (file_saver).
+  blob,
+
+  /// Web, arquivo grande, navegador com File System Access: streaming com
+  /// diálogo de salvar (showSaveFilePicker).
+  streamToPicker,
+
+  /// Web, arquivo grande, navegador sem File System Access.
+  unsupportedLarge,
+}
+
 /// Desfecho da abertura da pasta do lote.
 enum BatchFolderOpen {
   /// Nativo: pasta escolhida, escopo ativo — gravar os arquivos nela.
@@ -105,3 +128,19 @@ enum BatchFolderOpen {
   /// Nativo: usuário cancelou o picker (ou o escopo foi negado) — abortar.
   cancelled,
 }
+
+// Assinaturas definidas por cada branch do conditional export (como
+// `downloadBytes`), para a divisão de plataforma viver só na costura:
+//
+//   SingleItemDownloadMode singleItemDownloadMode({
+//     required int originalSize,
+//     required String mimeType,
+//   })
+//
+//   Future<String?> ensureGalleryAccess()
+//
+//   Future<String?> deliverFileToGallery({
+//     required String filePath,
+//     required String fileName,
+//     required String mimeType,
+//   })

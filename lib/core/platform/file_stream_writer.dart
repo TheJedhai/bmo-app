@@ -19,6 +19,13 @@ import 'dart:typed_data';
 /// - Nativo: File + RandomAccessFile em NSTemporaryDirectory (dart:io
 ///   puro). abort fecha o RAF e apaga o arquivo.
 abstract class FileStreamWriter {
+  /// Caminho do arquivo gravado depois de [finalize].
+  ///
+  /// Nativo: o path real (temp ou pasta escolhida) — é o que a costura
+  /// file_download entrega à galeria. Web: null, o destino é do browser
+  /// (handle do usuário, sem path).
+  String? get filePath;
+
   /// Escreve um chunk decifrado na posição corrente — chamadas
   /// sequenciais anexam em ordem.
   Future<void> writeChunk(Uint8List bytes);

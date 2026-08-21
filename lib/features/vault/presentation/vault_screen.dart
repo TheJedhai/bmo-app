@@ -619,10 +619,6 @@ class _UnlockedVaultView extends ConsumerStatefulWidget {
 }
 
 class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
-  /// Files above 25 MB use the streaming download path (File System Access API)
-  /// instead of decryptAll + Blob URL, to avoid doubling memory.
-  static const _kLargeFileThreshold = 25 * 1024 * 1024; // 25 MiB
-
   List<VaultItemDecrypted>? _items;
   bool _isLoading = true;
   String? _error;
@@ -833,20 +829,31 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // Download
   // ----------------------------------------------------------
 
-  /// Baixa um item pela rota de sempre — retorna null em sucesso ou a
-  /// mensagem de erro. Os call sites de item único mostram a mensagem
-  /// ([_downloadItemWithFeedback]); o lote acumula as falhas.
+  /// Baixa um item pela rota desta plataforma (costura file_download) —
+  /// retorna null em sucesso ou a mensagem de erro. Os call sites de item
+  /// único mostram a mensagem ([_downloadItemWithFeedback]); o lote
+  /// acumula as falhas.
+  ///
+  /// Nativo: sem gate de tamanho — mídia vai por streaming + galeria,
+  /// não-mídia por streaming direto na pasta escolhida. Web: como sempre,
+  /// blob até 25 MiB, streaming com picker acima (e erro sem suporte).
   Future<String?> _downloadItem(VaultItemDecrypted item) async {
-    final isLarge = item.originalSize >= _kLargeFileThreshold;
-    final canStream = isFileStreamSaveAvailable;
-
-    if (isLarge && canStream) {
-      return _downloadItemStreaming(item);
-    } else if (isLarge && !canStream) {
-      return 'Arquivo muito grande para este navegador.\n'
-          'Use Chrome ou Brave para baixar arquivos grandes.';
-    } else {
-      return _downloadItemBlob(item);
+    final mode = singleItemDownloadMode(
+      originalSize: item.originalSize,
+      mimeType: item.mimeType,
+    );
+    switch (mode) {
+      case SingleItemDownloadMode.streamToGallery:
+        return _downloadItemStreaming(item, deliverToGallery: true);
+      case SingleItemDownloadMode.streamToFolder:
+        return _downloadItemToFolder(item);
+      case SingleItemDownloadMode.blob:
+        return _downloadItemBlob(item);
+      case SingleItemDownloadMode.streamToPicker:
+        return _downloadItemStreaming(item);
+      case SingleItemDownloadMode.unsupportedLarge:
+        return 'Arquivo muito grande para este navegador.\n'
+            'Use Chrome ou Brave para baixar arquivos grandes.';
     }
   }
 
@@ -863,9 +870,16 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   /// immediately via [FileStreamWriter]. Never holds the full file in
   /// memory.
   ///
-  /// [destinationDirectory] (lote no nativo): grava solto na pasta
-  /// escolhida em vez de abrir o diálogo de destino. O escopo de segurança
-  /// da pasta é do caller ([openBatchDownloadFolder] + finally close).
+  /// [destinationDirectory] (lote e não-mídia no nativo): grava solto na
+  /// pasta escolhida em vez de abrir o diálogo de destino. O escopo de
+  /// segurança da pasta é do caller ([openBatchDownloadFolder] + finally
+  /// close).
+  ///
+  /// [deliverToGallery] (mídia no nativo): garante o acesso à galeria
+  /// antes de baixar e, depois do [FileStreamWriter.finalize], entrega o
+  /// temp via Gal (putImage/putVideo) — a entrega apaga o temp em
+  /// finally, inclusive em erro. O progresso só some quando a entrega
+  /// confirma (null em sucesso) ou devolve a mensagem de erro.
   ///
   /// Em erro/cancelamento o [FileStreamWriter.abort] descarta o parcial:
   /// web aborta o writable stream sem close() (o destino não materializa);
@@ -877,12 +891,28 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   Future<String?> _downloadItemStreaming(
     VaultItemDecrypted item, {
     String? destinationDirectory,
+    bool deliverToGallery = false,
   }) async {
     setState(() {
       _downloadingItemId = item.id;
       _downloadProgress = 0;
       _downloadFileName = item.fileName;
     });
+
+    // Mídia no nativo: sem acesso à galeria o download inteiro iria para
+    // o lixo no final — checa antes de baixar.
+    if (deliverToGallery) {
+      final accessError = await ensureGalleryAccess();
+      if (accessError != null) {
+        if (mounted) {
+          setState(() {
+            _downloadingItemId = null;
+            _downloadFileName = '';
+          });
+        }
+        return accessError;
+      }
+    }
 
     FileStreamWriter? writer;
     try {
@@ -911,12 +941,14 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           _downloadingItemId = null;
           _downloadFileName = '';
         });
-        if (destinationDirectory == null) {
-          // User cancelled the save dialog — clean up without error.
+        if (destinationDirectory == null && !deliverToGallery) {
+          // Web: usuário cancelou o diálogo de salvar — sem erro.
           return null;
         }
-        return 'Não foi possível criar o arquivo na pasta escolhida '
-            '(já existe?).';
+        return deliverToGallery
+            ? 'Não foi possível criar o arquivo temporário para o download.'
+            : 'Não foi possível criar o arquivo na pasta escolhida '
+                '(já existe?).';
       }
 
       // 4. Fetch, decrypt, and write each chunk sequentially.
@@ -957,12 +989,25 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       // 5. Finalize the file.
       await writer.finalize();
 
-      if (!mounted) return null;
+      // 6. Delivery — roda SEMPRE depois do finalize, até com a tela
+      // fechada: depois de finalize o abort é no-op e o temp (nativo) só
+      // morre na entrega, que apaga em finally. O progresso some aqui,
+      // quando a entrega confirma — nunca antes.
+      String? deliveryError;
+      if (deliverToGallery) {
+        deliveryError = await deliverFileToGallery(
+          filePath: writer.filePath!,
+          fileName: item.fileName,
+          mimeType: item.mimeType,
+        );
+      }
+
+      if (!mounted) return deliveryError;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
-      return null;
+      return deliveryError;
     } catch (e) {
       // Abort descarta o parcial em qualquer ponto — no-op seguro depois
       // de finalize(), o catch não precisa saber até onde a gravação foi.
@@ -979,9 +1024,26 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     }
   }
 
-  /// Small-file download via decryptAll + Blob URL.
-  ///
-  /// Suitable for files < 25 MB. For larger files the streaming path
+  /// Nativo, não-mídia: pergunta a pasta e grava direto nela em streaming,
+  /// sem temp — mesmo mecanismo do lote misto (picker + escopo de
+  /// segurança). Trade-off: sem renomeação no diálogo, o arquivo sai com o
+  /// nome real do item do cofre (renomear dentro do cofre está no roadmap).
+  Future<String?> _downloadItemToFolder(VaultItemDecrypted item) async {
+    final open = await openBatchDownloadFolder();
+    if (open.choice == BatchFolderOpen.cancelled) return null;
+    try {
+      return await _downloadItemStreaming(
+        item,
+        destinationDirectory: open.folder!.path,
+      );
+    } finally {
+      // Todo caminho de saída libera o escopo de segurança da pasta.
+      await open.folder?.close();
+    }
+  }
+
+  /// Web small-file download via decryptAll + Blob URL (downloadBytes ->
+  /// file_saver). For larger files the streaming path
   /// ([_downloadItemStreaming]) avoids double memory allocation.
   ///
   /// Retorna null em sucesso e a mensagem de erro em falha — quem mostra é
@@ -1008,7 +1070,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       );
       if (!mounted) return null;
 
-      // Save file via the platform download helper (file_saver).
+      // Web: save via the platform download helper (file_saver).
       downloadBytes(
         bytes: plaintext,
         fileName: item.fileName,

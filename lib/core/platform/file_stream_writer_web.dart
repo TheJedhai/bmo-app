@@ -42,6 +42,9 @@ class WebFileStreamWriter implements FileStreamWriter {
   final JSObject _stream;
   bool _finalized = false;
 
+  @override
+  String? get filePath => null; // o destino é do browser, sem path.
+
   /// Plaintext chunk goes straight to the browser's disk buffer via
   /// JSUint8Array (BufferSource) — nothing accumulates in Dart memory.
   /// Sequential calls append in order (the write cursor advances).
