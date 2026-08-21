@@ -52,7 +52,6 @@ sem necessidade real:
 - `BmoFrame` cobre a viewport: borda verde + screen escura no meio
 - Breakpoint mobile: `< 600px` (definido em `bmo_frame.dart` como `_kMobileBreakpoint`)
 - Padding da borda muda entre mobile (12) e desktop (28)
-- Web only — não otimizar para iOS/Android nativo
 
 ## Comandos
 
