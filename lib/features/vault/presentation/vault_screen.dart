@@ -639,6 +639,15 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   double _downloadProgress = 0;
   String _downloadFileName = '';
 
+  // Multi-selection state
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+  bool _batchBusy = false;
+
+  // Batch download progress (index/total appended to the progress label)
+  int _downloadBatchIndex = 0;
+  int _downloadBatchTotal = 0;
+
   // PDF preview state (native only)
   //
   // Handle of the temp file behind the Quick Look sheet. The system closes
@@ -824,20 +833,27 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // Download
   // ----------------------------------------------------------
 
-  Future<void> _downloadItem(VaultItemDecrypted item) async {
+  /// Baixa um item pela rota de sempre — retorna null em sucesso ou a
+  /// mensagem de erro. Os call sites de item único mostram a mensagem
+  /// ([_downloadItemWithFeedback]); o lote acumula as falhas.
+  Future<String?> _downloadItem(VaultItemDecrypted item) async {
     final isLarge = item.originalSize >= _kLargeFileThreshold;
     final canStream = isFileStreamSaveAvailable;
 
     if (isLarge && canStream) {
-      await _downloadItemStreaming(item);
+      return _downloadItemStreaming(item);
     } else if (isLarge && !canStream) {
-      _showError(
-        'Arquivo muito grande para este navegador.\n'
-        'Use Chrome ou Brave para baixar arquivos grandes.',
-      );
+      return 'Arquivo muito grande para este navegador.\n'
+          'Use Chrome ou Brave para baixar arquivos grandes.';
     } else {
-      await _downloadItemBlob(item);
+      return _downloadItemBlob(item);
     }
+  }
+
+  /// Item único: baixa e mostra o erro, se houver.
+  Future<void> _downloadItemWithFeedback(VaultItemDecrypted item) async {
+    final error = await _downloadItem(item);
+    if (error != null && mounted) _showError(error);
   }
 
   /// Streaming download via fetchChunkRange + seam de escrita em arquivo.
@@ -847,10 +863,21 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   /// immediately via [FileStreamWriter]. Never holds the full file in
   /// memory.
   ///
+  /// [destinationDirectory] (lote no nativo): grava solto na pasta
+  /// escolhida em vez de abrir o diálogo de destino. O escopo de segurança
+  /// da pasta é do caller ([openBatchDownloadFolder] + finally close).
+  ///
   /// Em erro/cancelamento o [FileStreamWriter.abort] descarta o parcial:
   /// web aborta o writable stream sem close() (o destino não materializa);
-  /// nativo fecha o RandomAccessFile e apaga o arquivo.
-  Future<void> _downloadItemStreaming(VaultItemDecrypted item) async {
+  /// nativo fecha o RandomAccessFile e apaga o arquivo — na pasta do
+  /// usuário ou no temp, o parcial nunca sobrevive.
+  ///
+  /// Retorna null em sucesso (ou cancelamento do diálogo) e a mensagem de
+  /// erro em falha — quem mostra é o caller.
+  Future<String?> _downloadItemStreaming(
+    VaultItemDecrypted item, {
+    String? destinationDirectory,
+  }) async {
     setState(() {
       _downloadingItemId = item.id;
       _downloadProgress = 0;
@@ -874,15 +901,22 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           VaultChunkedCipher.totalChunks(originalSize, chunkSize);
 
       // 3. Open the save destination.
-      writer = await openFileStreamWriter(item.fileName);
+      writer = await openFileStreamWriter(
+        item.fileName,
+        destinationDirectory: destinationDirectory,
+      );
       if (writer == null) {
-        // User cancelled the save dialog — clean up without error.
-        if (!mounted) return;
+        if (!mounted) return null;
         setState(() {
           _downloadingItemId = null;
           _downloadFileName = '';
         });
-        return;
+        if (destinationDirectory == null) {
+          // User cancelled the save dialog — clean up without error.
+          return null;
+        }
+        return 'Não foi possível criar o arquivo na pasta escolhida '
+            '(já existe?).';
       }
 
       // 4. Fetch, decrypt, and write each chunk sequentially.
@@ -890,7 +924,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         if (!mounted) {
           // Screen closed mid-download: discard the partial file.
           await writer.abort();
-          return;
+          return null;
         }
 
         final (plaintext, statusCode, _) = await repo.fetchChunkRange(
@@ -903,15 +937,12 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
 
         if (statusCode != 206 && plaintext.isEmpty) {
           await writer.abort();
-          if (!mounted) return;
+          if (!mounted) return null;
           setState(() {
             _downloadingItemId = null;
             _downloadFileName = '';
           });
-          _showError(
-            'Falha no download: servidor retornou status $statusCode.',
-          );
-          return;
+          return 'Falha no download: servidor retornou status $statusCode.';
         }
 
         await writer.writeChunk(plaintext);
@@ -926,26 +957,25 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       // 5. Finalize the file.
       await writer.finalize();
 
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
+      return null;
     } catch (e) {
       // Abort descarta o parcial em qualquer ponto — no-op seguro depois
       // de finalize(), o catch não precisa saber até onde a gravação foi.
       await writer?.abort();
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
       if (e is VaultApiException && e.statusCode == 410) {
-        _showError(
-            'Arquivo não encontrado no servidor. O blob foi removido.');
-      } else {
-        _showError('Falha no download: ${_friendlyError(e)}');
+        return 'Arquivo não encontrado no servidor. O blob foi removido.';
       }
+      return 'Falha no download: ${_friendlyError(e)}';
     }
   }
 
@@ -953,7 +983,10 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   ///
   /// Suitable for files < 25 MB. For larger files the streaming path
   /// ([_downloadItemStreaming]) avoids double memory allocation.
-  Future<void> _downloadItemBlob(VaultItemDecrypted item) async {
+  ///
+  /// Retorna null em sucesso e a mensagem de erro em falha — quem mostra é
+  /// o caller.
+  Future<String?> _downloadItemBlob(VaultItemDecrypted item) async {
     setState(() {
       _downloadingItemId = item.id;
       _downloadProgress = 0;
@@ -973,7 +1006,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           });
         },
       );
-      if (!mounted) return;
+      if (!mounted) return null;
 
       // Save file via the platform download helper (file_saver).
       downloadBytes(
@@ -986,25 +1019,24 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
+      return null;
     } on VaultApiException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
       if (e.statusCode == 410) {
-        _showError(
-            'Arquivo não encontrado no servidor. O blob foi removido.');
-      } else {
-        _showError('Falha no download: ${_friendlyError(e)}');
+        return 'Arquivo não encontrado no servidor. O blob foi removido.';
       }
+      return 'Falha no download: ${_friendlyError(e)}';
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       setState(() {
         _downloadingItemId = null;
         _downloadFileName = '';
       });
-      _showError('Falha no download: ${_friendlyError(e)}');
+      return 'Falha no download: ${_friendlyError(e)}';
     }
   }
 
@@ -1052,6 +1084,185 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   }
 
   // ----------------------------------------------------------
+  // Multi-selection (batch download / delete)
+  // ----------------------------------------------------------
+
+  void _enterSelectionMode() {
+    if (_items == null || _items!.isEmpty) return;
+    setState(() => _selectionMode = true);
+  }
+
+  /// Sair SEMPRE limpa a seleção.
+  void _exitSelectionMode() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  /// Baixa a seleção inteira. A costura da composição vive no
+  /// file_download.dart (zero kIsWeb/Platform.is aqui):
+  ///
+  /// - Só imagem/vídeo: cada item segue a rota individual de sempre
+  ///   (galeria no iOS sem diálogo, downloads individuais na web).
+  /// - Mistura: no nativo a pasta é escolhida UMA vez
+  ///   ([openBatchDownloadFolder]) e os arquivos são gravados soltos nela
+  ///   via streaming (sem zip); na web vira downloads individuais.
+  ///
+  /// Item que falha não interrompe o lote — o resumo no fim reporta
+  /// quantos foram e quantos falharam.
+  Future<void> _downloadSelected() async {
+    final items = _items;
+    if (items == null || _batchBusy) return;
+    final selected =
+        items.where((i) => _selectedIds.contains(i.id)).toList();
+    if (selected.isEmpty) return;
+
+    setState(() => _batchBusy = true);
+
+    final allMedia = selected.every((i) =>
+        i.mimeType.startsWith('image/') || i.mimeType.startsWith('video/'));
+
+    final ({BatchFolderOpen choice, BatchDownloadFolder? folder}) open;
+    if (allMedia) {
+      open = (choice: BatchFolderOpen.individualDownloads, folder: null);
+    } else {
+      open = await openBatchDownloadFolder();
+    }
+
+    if (open.choice == BatchFolderOpen.cancelled) {
+      // Usuário cancelou o picker (ou escopo negado) — nada acontece.
+      if (mounted) setState(() => _batchBusy = false);
+      return;
+    }
+
+    var saved = 0;
+    final failures = <String>[];
+    try {
+      setState(() {
+        _downloadBatchIndex = 0;
+        _downloadBatchTotal = selected.length;
+      });
+      for (final item in selected) {
+        if (!mounted) break;
+        setState(() => _downloadBatchIndex++);
+        final error = open.choice == BatchFolderOpen.folder
+            ? await _downloadItemStreaming(
+                item,
+                destinationDirectory: open.folder!.path,
+              )
+            : await _downloadItem(item);
+        if (error == null) {
+          saved++;
+        } else {
+          failures.add('${item.fileName}: $error');
+        }
+      }
+      setState(() {
+        _downloadBatchIndex = 0;
+        _downloadBatchTotal = 0;
+      });
+    } finally {
+      // Todo caminho de saída — sucesso, falha parcial, tela fechada —
+      // libera o escopo de segurança da pasta exatamente uma vez.
+      await open.folder?.close();
+      if (mounted) setState(() => _batchBusy = false);
+    }
+
+    if (failures.isNotEmpty && mounted) {
+      final names = failures.take(3).join('\n');
+      final more = failures.length > 3 ? '\n…' : '';
+      _showError(
+        '$saved/${selected.length} baixados. '
+        '${failures.length} falharam:\n$names$more',
+      );
+    }
+  }
+
+  /// Apaga a seleção inteira — confirmação com contagem e destaque de
+  /// perigo. Falha parcial não é silenciosa: o resumo diz quantos foram
+  /// apagados e quantos falharam, e a lista é recarregada do servidor
+  /// (consistente com o estado real).
+  Future<void> _deleteSelected() async {
+    final count = _selectedIds.length;
+    if (count == 0 || _batchBusy) return;
+
+    final label = count == 1 ? '1 item' : '$count itens';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: BmoColors.accentYellow, size: 24),
+            const SizedBox(width: 12),
+            Text(
+              'Apagar $label?',
+              style: const TextStyle(
+                  color: BmoColors.textPrimary, fontSize: 14),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Esta ação é irreversível.\n'
+          'Os arquivos serão permanentemente apagados do cofre.',
+          style: TextStyle(
+            color: BmoColors.textSecondary,
+            fontSize: 13,
+            height: 1.5,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Apagar $label'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    setState(() => _batchBusy = true);
+    final repo = ref.read(vaultRepositoryProvider);
+    var deleted = 0;
+    var failed = 0;
+    for (final id in _selectedIds.toList()) {
+      try {
+        await repo.deleteItem(_session.vaultId, id);
+        deleted++;
+      } catch (_) {
+        failed++;
+      }
+    }
+
+    // Lista consistente com o servidor — recarrega o que sobrou.
+    await _loadItems();
+    if (!mounted) return;
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+      _batchBusy = false;
+    });
+    if (failed > 0) {
+      _showError(
+        '$deleted/$count apagados, $failed falharam. Tente novamente.',
+      );
+    }
+  }
+
+  // ----------------------------------------------------------
   // Open viewer
   // ----------------------------------------------------------
 
@@ -1061,7 +1272,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       item: item,
       session: _session,
       ref: ref,
-      onDownload: () => _downloadItem(item),
+      onDownload: () => _downloadItemWithFeedback(item),
       onPdfPreviewOpened: _onPdfPreviewOpened,
     );
   }
@@ -1162,10 +1373,18 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           vaultName: _session.decryptedName,
           isMobile: isMobile,
           isUploading: _isUploading,
+          hasItems: _items?.isNotEmpty ?? false,
+          selectionMode: _selectionMode,
+          selectedCount: _selectedIds.length,
+          selectionBusy: _batchBusy,
           onAddMedia: _pickAndUploadMedia,
           onAddFile: _pickAndUploadFiles,
           onLock: () => ref.read(vaultSessionProvider.notifier).lock(),
           onDeleteVault: _deleteVault,
+          onStartSelection: _enterSelectionMode,
+          onCancelSelection: _exitSelectionMode,
+          onDownloadSelected: _downloadSelected,
+          onDeleteSelected: _deleteSelected,
         ),
         const Divider(color: BmoColors.textMuted, height: 1),
 
@@ -1182,7 +1401,10 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         if (_downloadingItemId != null)
           _ProgressBar(
             progress: _downloadProgress,
-            label: 'Baixando $_downloadFileName…',
+            label: _downloadBatchTotal > 1
+                ? 'Baixando $_downloadBatchIndex/$_downloadBatchTotal — '
+                    '$_downloadFileName…'
+                : 'Baixando $_downloadFileName…',
           ),
 
         // File list / states
@@ -1286,8 +1508,11 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           item: item,
           isDownloading: isDownloading,
           downloadProgress: isDownloading ? _downloadProgress : null,
+          selectionMode: _selectionMode,
+          selected: _selectedIds.contains(item.id),
           onTap: () => _openViewer(item),
-          onDownload: () => _downloadItem(item),
+          onToggleSelection: () => _toggleSelection(item.id),
+          onDownload: () => _downloadItemWithFeedback(item),
           onDelete: () => _deleteItem(item),
         );
       },
@@ -1303,19 +1528,35 @@ class _VaultHeader extends StatelessWidget {
   final String vaultName;
   final bool isMobile;
   final bool isUploading;
+  final bool hasItems;
+  final bool selectionMode;
+  final int selectedCount;
+  final bool selectionBusy;
   final VoidCallback onAddMedia;
   final VoidCallback onAddFile;
   final VoidCallback onLock;
   final VoidCallback onDeleteVault;
+  final VoidCallback onStartSelection;
+  final VoidCallback onCancelSelection;
+  final VoidCallback onDownloadSelected;
+  final VoidCallback onDeleteSelected;
 
   const _VaultHeader({
     required this.vaultName,
     required this.isMobile,
     required this.isUploading,
+    required this.hasItems,
+    required this.selectionMode,
+    required this.selectedCount,
+    required this.selectionBusy,
     required this.onAddMedia,
     required this.onAddFile,
     required this.onLock,
     required this.onDeleteVault,
+    required this.onStartSelection,
+    required this.onCancelSelection,
+    required this.onDownloadSelected,
+    required this.onDeleteSelected,
   });
 
   @override
@@ -1325,95 +1566,155 @@ class _VaultHeader extends StatelessWidget {
         horizontal: isMobile ? 16 : 24,
         vertical: isMobile ? 12 : 16,
       ),
-      child: Row(
-        children: [
-          // Vault icon + name
-          Icon(Icons.lock_open_outlined,
-              size: isMobile ? 20 : 24, color: BmoColors.accentGreen),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              vaultName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'PressStart2P',
-                fontSize: isMobile ? 12 : 14,
-                color: BmoColors.accentGreen,
-              ),
+      child: selectionMode
+          ? _buildSelectionBar()
+          : _buildNormalBar(),
+    );
+  }
+
+  /// Modo seleção: contador + Baixar/Apagar/Cancelar. Zero selecionados
+  /// desabilita as ações.
+  Widget _buildSelectionBar() {
+    final countLabel = selectedCount == 1
+        ? '1 selecionado'
+        : '$selectedCount selecionados';
+    final actionsEnabled = selectedCount > 0 && !selectionBusy;
+
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: selectionBusy ? null : onCancelSelection,
+          icon: const Icon(Icons.close, size: 18),
+          label: const Text('Cancelar'),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            countLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: isMobile ? 13 : 14,
+              fontWeight: FontWeight.w600,
+              color: BmoColors.textPrimary,
             ),
           ),
+        ),
+        IconButton(
+          tooltip: 'Baixar selecionados',
+          onPressed: actionsEnabled ? onDownloadSelected : null,
+          icon: const Icon(Icons.download_outlined,
+              size: 20, color: BmoColors.textSecondary),
+        ),
+        IconButton(
+          tooltip: 'Apagar selecionados',
+          onPressed: actionsEnabled ? onDeleteSelected : null,
+          icon: const Icon(Icons.delete_outline,
+              size: 20, color: Colors.redAccent),
+        ),
+      ],
+    );
+  }
 
-          // Add button — two obvious origins, one upload flow
-          PopupMenuButton<_VaultAddAction>(
-            tooltip: 'Adicionar ao cofre',
-            enabled: !isUploading,
-            padding: EdgeInsets.zero,
-            color: BmoColors.screenBgElevated,
-            onSelected: (action) {
-              if (action == _VaultAddAction.media) {
-                onAddMedia();
-              } else {
-                onAddFile();
-              }
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: _VaultAddAction.media,
-                child: _VaultAddMenuItem(
-                  icon: Icons.photo_library_outlined,
-                  label: 'Foto ou vídeo',
-                ),
-              ),
-              PopupMenuItem(
-                value: _VaultAddAction.file,
-                child: _VaultAddMenuItem(
-                  icon: Icons.insert_drive_file_outlined,
-                  label: 'Arquivo',
-                ),
-              ),
-            ],
-            icon: isUploading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: BmoColors.accentGreen,
-                    ),
-                  )
-                : const Icon(Icons.add, size: 20, color: BmoColors.textSecondary),
+  Widget _buildNormalBar() {
+    return Row(
+      children: [
+        // Vault icon + name
+        Icon(Icons.lock_open_outlined,
+            size: isMobile ? 20 : 24, color: BmoColors.accentGreen),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            vaultName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'PressStart2P',
+              fontSize: isMobile ? 12 : 14,
+              color: BmoColors.accentGreen,
+            ),
           ),
-          const SizedBox(width: 4),
+        ),
 
-          // Lock button
-          _HeaderIconButton(
-            icon: Icons.lock_outline,
-            tooltip: 'Travar cofre',
-            onPressed: onLock,
-          ),
-          const SizedBox(width: 4),
+        // Select button — discoverable entry to multi-selection mode.
+        TextButton.icon(
+          onPressed: hasItems && !isUploading ? onStartSelection : null,
+          icon: const Icon(Icons.checklist, size: 18),
+          label: const Text('Selecionar',
+              style: TextStyle(fontSize: 12)),
+        ),
+        const SizedBox(width: 4),
 
-          // More menu (delete vault)
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert,
-                size: 20, color: BmoColors.textMuted),
-            color: BmoColors.screenBgElevated,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            onSelected: (v) {
-              if (v == 'delete') onDeleteVault();
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'delete',
-                child: Text('Deletar cofre…',
-                    style: TextStyle(color: Colors.redAccent)),
+        // Add button — two obvious origins, one upload flow
+        PopupMenuButton<_VaultAddAction>(
+          tooltip: 'Adicionar ao cofre',
+          enabled: !isUploading,
+          padding: EdgeInsets.zero,
+          color: BmoColors.screenBgElevated,
+          onSelected: (action) {
+            if (action == _VaultAddAction.media) {
+              onAddMedia();
+            } else {
+              onAddFile();
+            }
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(
+              value: _VaultAddAction.media,
+              child: _VaultAddMenuItem(
+                icon: Icons.photo_library_outlined,
+                label: 'Foto ou vídeo',
               ),
-            ],
-          ),
-        ],
-      ),
+            ),
+            PopupMenuItem(
+              value: _VaultAddAction.file,
+              child: _VaultAddMenuItem(
+                icon: Icons.insert_drive_file_outlined,
+                label: 'Arquivo',
+              ),
+            ),
+          ],
+          icon: isUploading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: BmoColors.accentGreen,
+                  ),
+                )
+              : const Icon(Icons.add, size: 20, color: BmoColors.textSecondary),
+        ),
+        const SizedBox(width: 4),
+
+        // Lock button
+        _HeaderIconButton(
+          icon: Icons.lock_outline,
+          tooltip: 'Travar cofre',
+          onPressed: onLock,
+        ),
+        const SizedBox(width: 4),
+
+        // More menu (delete vault)
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert,
+              size: 20, color: BmoColors.textMuted),
+          color: BmoColors.screenBgElevated,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          onSelected: (v) {
+            if (v == 'delete') onDeleteVault();
+          },
+          itemBuilder: (_) => [
+            const PopupMenuItem(
+              value: 'delete',
+              child: Text('Deletar cofre…',
+                  style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1480,17 +1781,23 @@ class _VaultFileItem extends StatelessWidget {
   final VaultItemDecrypted item;
   final bool isDownloading;
   final double? downloadProgress;
+  final bool selectionMode;
+  final bool selected;
   final VoidCallback onDownload;
   final VoidCallback onDelete;
   final VoidCallback onTap;
+  final VoidCallback onToggleSelection;
 
   const _VaultFileItem({
     required this.item,
     required this.isDownloading,
     required this.downloadProgress,
+    required this.selectionMode,
+    required this.selected,
     required this.onDownload,
     required this.onDelete,
     required this.onTap,
+    required this.onToggleSelection,
   });
 
   @override
@@ -1499,10 +1806,11 @@ class _VaultFileItem extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Row(
         children: [
-          // Tap target: icon + text opens the viewer
+          // Tap target: in selection mode toggles the checkbox, otherwise
+          // icon + text opens the viewer.
           Expanded(
             child: InkWell(
-              onTap: onTap,
+              onTap: selectionMode ? onToggleSelection : onTap,
               borderRadius: BorderRadius.circular(8),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -1546,8 +1854,20 @@ class _VaultFileItem extends StatelessWidget {
             ),
           ),
 
+          // Selection checkbox replaces the item menu
+          if (selectionMode)
+            Checkbox(
+              value: selected,
+              onChanged: (_) => onToggleSelection(),
+              fillColor: WidgetStateProperty.resolveWith(
+                (states) => states.contains(WidgetState.selected)
+                    ? BmoColors.accentGreen
+                    : null,
+              ),
+              checkColor: BmoColors.screenBg,
+            )
           // Download progress indicator (or menu)
-          if (isDownloading)
+          else if (isDownloading)
             Padding(
               padding: const EdgeInsets.all(12),
               child: SizedBox(
