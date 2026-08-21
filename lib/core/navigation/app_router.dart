@@ -20,6 +20,7 @@ import '../identity/widgets/profile_selector.dart';
 import '../theme/bmo_theme.dart';
 import '../widgets/bmo_frame.dart';
 import '../widgets/bmo_nav_bar.dart';
+import '../widgets/bmo_top_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Navigator keys
@@ -70,7 +71,9 @@ class _AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final identityAsync = ref.watch(currentUserProvider);
-    ref.watch(eventsListenerProvider); // Prime SSE (guarded by identity inside).
+    ref.watch(
+      eventsListenerProvider,
+    ); // Prime SSE (guarded by identity inside).
 
     return identityAsync.when(
       loading: () => const BmoFrame(
@@ -83,8 +86,28 @@ class _AppShell extends ConsumerWidget {
           return const BmoFrame(child: ProfileSelector());
         }
         final isDashboard = currentLocation == '/';
-        return BmoFrame(
-          child: isDashboard
+        final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
+
+        Widget body;
+        if (isMobile) {
+          // Mobile: top bar em toda rota; nav bar só fora da dashboard.
+          body = Stack(
+            children: [
+              Positioned(
+                top: BmoTopBar.totalTopInset,
+                left: 0,
+                right: 0,
+                bottom: isDashboard ? 0 : BmoNavBar.totalBottomInset,
+                child: child,
+              ),
+              BmoTopBar(),
+              if (!isDashboard) BmoNavBar(currentLocation: currentLocation),
+            ],
+          );
+        } else {
+          // Desktop: controles sobre a faixa verde do frame; nav bar
+          // só fora da dashboard.
+          body = isDashboard
               ? child
               : Stack(
                   children: [
@@ -94,8 +117,9 @@ class _AppShell extends ConsumerWidget {
                     ),
                     BmoNavBar(currentLocation: currentLocation),
                   ],
-                ),
-        );
+                );
+        }
+        return BmoFrame(child: body);
       },
       error: (_, _) => const BmoFrame(child: ProfileSelector()),
     );
@@ -124,10 +148,8 @@ final appRouter = GoRouter(
   routes: [
     ShellRoute(
       navigatorKey: shellNavigatorKey,
-      builder: (context, state, child) => _AppShell(
-        currentLocation: state.uri.path,
-        child: child,
-      ),
+      builder: (context, state, child) =>
+          _AppShell(currentLocation: state.uri.path, child: child),
       routes: [
         GoRoute(
           path: '/',
@@ -186,20 +208,18 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) {
             final projectId = int.parse(state.pathParameters['projectId']!);
             return _buildFeaturePage(
-                CodingSessionScreen(projectId: projectId), state);
+              CodingSessionScreen(projectId: projectId),
+              state,
+            );
           },
           routes: [
             GoRoute(
               path: ':sessionId',
               pageBuilder: (context, state) {
-                final projectId =
-                    int.parse(state.pathParameters['projectId']!);
+                final projectId = int.parse(state.pathParameters['projectId']!);
                 final sessionId = state.pathParameters['sessionId']!;
                 return _buildFeaturePage(
-                  CodingChatScreen(
-                    projectId: projectId,
-                    sessionId: sessionId,
-                  ),
+                  CodingChatScreen(projectId: projectId, sessionId: sessionId),
                   state,
                 );
               },

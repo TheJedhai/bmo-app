@@ -7,10 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/identity/identity_provider.dart';
 import '../../../core/identity/identity_state.dart';
-import '../../../core/identity/user_profile.dart';
-import '../../../core/identity/widgets/profile_avatar.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../../../features/settings/widgets/settings_modal.dart';
 import '../dashboard_registry.dart';
 import '../widgets/dash_card.dart';
 
@@ -40,8 +37,7 @@ class DashboardScreen extends ConsumerWidget {
         }
 
         // ---- Desktop ----
-        final crossAxisCount =
-            (constraints.maxWidth / 380).floor().clamp(1, 4);
+        final crossAxisCount = (constraints.maxWidth / 380).floor().clamp(1, 4);
 
         return MasonryGridView.count(
           crossAxisCount: crossAxisCount,
@@ -61,10 +57,7 @@ class DashboardScreen extends ConsumerWidget {
             );
 
             if (spec.height != null) {
-              return SizedBox(
-                height: spec.height,
-                child: card,
-              );
+              return SizedBox(height: spec.height, child: card);
             }
             return card;
           },
@@ -79,8 +72,8 @@ class DashboardScreen extends ConsumerWidget {
 // ============================================================================
 
 /// Layout mobile da dashboard:
-/// 1. Header full-width com relógio + data + saudação (esquerda) e
-///    controles (engrenagem + avatar) à direita.
+/// 1. Header full-width com relógio + data + saudação.
+///    (Controles ficam no BmoTopBar, fora da dashboard.)
 /// 2. MasonryGridView de 2 colunas com os cards restantes.
 class _DashboardMobileLayout extends ConsumerWidget {
   const _DashboardMobileLayout({required this.visibleWidgets});
@@ -90,12 +83,10 @@ class _DashboardMobileLayout extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Separa o relógio dos cards
-    final clockSpec =
-        visibleWidgets.where((s) => s.id == 'relogio').firstOrNull;
-    final cardSpecs =
-        visibleWidgets.where((s) => s.id != 'relogio').toList();
-
-    final userAsync = ref.watch(currentUserProvider);
+    final clockSpec = visibleWidgets
+        .where((s) => s.id == 'relogio')
+        .firstOrNull;
+    final cardSpecs = visibleWidgets.where((s) => s.id != 'relogio').toList();
 
     return Column(
       children: [
@@ -107,19 +98,8 @@ class _DashboardMobileLayout extends ConsumerWidget {
             _kMobilePadding,
             0,
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Relógio + data + saudação
-              Expanded(
-                child: _MobileClockContent(
-                  accent: clockSpec?.accent ?? BmoColors.accentYellow,
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Controles: engrenagem + avatar
-              _MobileControls(userAsync: userAsync),
-            ],
+          child: _MobileClockContent(
+            accent: clockSpec?.accent ?? BmoColors.accentYellow,
           ),
         ),
         const SizedBox(height: 16),
@@ -185,12 +165,9 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
   void initState() {
     super.initState();
     _now = DateTime.now();
-    _timer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) {
-        if (mounted) setState(() => _now = DateTime.now());
-      },
-    );
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() => _now = DateTime.now());
+    });
   }
 
   @override
@@ -263,71 +240,6 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
               TextSpan(text: userName),
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-// ============================================================================
-// Header mobile — controles
-// ============================================================================
-
-/// Engrenagem (settings) e avatar (perfil) no canto direito do header mobile.
-///
-/// Cada controle tem hitbox de 48×48px.
-class _MobileControls extends StatelessWidget {
-  const _MobileControls({required this.userAsync});
-
-  final AsyncValue<UserProfile?> userAsync;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Engrenagem
-        SizedBox(
-          width: 48,
-          height: 48,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: () => showSettingsModal(context),
-              borderRadius: BorderRadius.circular(24),
-              child: const Icon(
-                Icons.settings,
-                size: 24,
-                color: BmoColors.accentGreen,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        // Avatar
-        SizedBox(
-          width: 48,
-          height: 48,
-          child: userAsync.whenOrNull(
-                data: (user) {
-                  if (user == null) return const SizedBox.shrink();
-                  return Consumer(
-                    builder: (context, ref, _) {
-                      return Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: () => ref
-                              .read(currentUserProvider.notifier)
-                              .clearUser(),
-                          borderRadius: BorderRadius.circular(24),
-                          child: ProfileAvatar(profile: user, radius: 18),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ) ??
-              const SizedBox.shrink(),
         ),
       ],
     );
