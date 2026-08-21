@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -38,13 +40,30 @@ class _CodingChatScreenState extends ConsumerState<CodingChatScreen> {
   String? _resolvedUuid;
   bool _historyLoaded = false;
 
+  /// Capturado no initState porque `ref` já não pode ser usado no dispose.
+  /// [activeChatEchoProvider] não é autoDispose, então o controller
+  /// sobrevive à tela.
+  late final StateController<void Function(String)?> _echo;
+
+  /// O callback que ESTA tela instalou em [_echo], para o dispose saber se
+  /// o eco corrente ainda é dela.
+  void Function(String)? _myEcho;
+
   @override
   void initState() {
     super.initState();
+    _echo = ref.read(activeChatEchoProvider.notifier);
     // Resolve o UUID (campo `id`) a partir do sessionId (bmo-xxx) que veio na
-    // rota. Lê o valor atual imediatamente — o provider pode já ter sido
-    // carregado pela tela de lista — e também escuta mudanças futuras.
-    _resolveFrom(ref.read(sessionsProvider(widget.projectId)));
+    // rota, e escuta mudanças futuras.
+    //
+    // A leitura do valor atual vai para depois do primeiro frame: o provider
+    // pode já ter sido carregado pela tela de lista, e aí o whenData de
+    // _resolveFrom roda síncrono dentro do initState — que roda dentro do
+    // buildScope. Tanto a escrita de activeChatEchoProvider quanto o setState
+    // são proibidos nessa fase.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _resolveFrom(ref.read(sessionsProvider(widget.projectId)));
+    });
     ref.listenManual(sessionsProvider(widget.projectId), (prev, next) {
       _resolveFrom(next);
     });
@@ -52,7 +71,14 @@ class _CodingChatScreenState extends ConsumerState<CodingChatScreen> {
 
   @override
   void dispose() {
-    ref.read(activeChatEchoProvider.notifier).state = null;
+    // dispose roda durante o unmount, dentro da fase de build — escrever
+    // provider ali estoura. Limpa num microtask, e só se o eco ainda for o
+    // desta tela: se outra tela de chat já apontou o eco para ela, zerar
+    // aqui deixaria os rich question cards sem para onde responder.
+    final mine = _myEcho;
+    scheduleMicrotask(() {
+      if (identical(_echo.state, mine)) _echo.state = null;
+    });
     super.dispose();
   }
 
@@ -73,8 +99,9 @@ class _CodingChatScreenState extends ConsumerState<CodingChatScreen> {
         // Configura callback de eco para rich question cards.
         final controller =
             ref.read(codingChatControllerProvider(session.id).notifier);
-        ref.read(activeChatEchoProvider.notifier).state =
+        _myEcho =
             (text) => controller.sendMessage(text, sessionId: widget.sessionId);
+        _echo.state = _myEcho;
         // Força rebuild para sair do estado de loading.
         setState(() {});
       }

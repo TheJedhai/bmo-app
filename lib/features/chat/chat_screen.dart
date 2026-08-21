@@ -43,19 +43,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
 
     // Carrega histórico e configura eco quando uma conversa é selecionada.
-    ref.listenManual<String?>(
-      selectedConversationIdProvider,
-      (prev, next) {
-        if (next == null) {
-          ref.read(activeChatEchoProvider.notifier).state = null;
-          return;
-        }
-        final controller = ref.read(chatControllerProvider(next).notifier);
-        controller.loadHistory();
-        ref.read(activeChatEchoProvider.notifier).state = controller.sendMessage;
-      },
-      fireImmediately: true,
-    );
+    ref.listenManual<String?>(selectedConversationIdProvider, (prev, next) {
+      _bindEcho(next);
+    });
+    // O estado inicial NÃO pode vir de fireImmediately: o listener rodaria
+    // síncrono dentro do initState, que roda dentro do buildScope, e escrever
+    // provider ali estoura "Tried to modify a provider while the widget tree
+    // was building". Reentrar no chat com conversa já selecionada caía nisso.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _bindEcho(ref.read(selectedConversationIdProvider));
+    });
+  }
+
+  /// Aponta o eco para [conversationId] e carrega seu histórico.
+  ///
+  /// Escreve [activeChatEchoProvider] — só pode ser chamado fora da fase
+  /// de build.
+  void _bindEcho(String? conversationId) {
+    if (conversationId == null) {
+      ref.read(activeChatEchoProvider.notifier).state = null;
+      return;
+    }
+    final controller = ref.read(chatControllerProvider(conversationId).notifier);
+    controller.loadHistory();
+    ref.read(activeChatEchoProvider.notifier).state = controller.sendMessage;
   }
 
   @override
