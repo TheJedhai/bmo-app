@@ -74,3 +74,34 @@ String stripFileExtension(String fileName, String extension) {
       return (extension: extension, mime: MimeType.custom);
   }
 }
+
+/// Pasta única para salvar a seleção mista ("qualquer outra composição").
+///
+/// Nativo (iOS): o picker de diretório foi aberto UMA vez e o escopo de
+/// segurança fica ativo até [close] — gravar na pasta sem
+/// startAccessingSecurityScopedResource falha com EPERM, e o escopo não
+/// liberado vaza recurso do kernel (o app pode perder a capacidade de
+/// adicionar locais ao sandbox até reiniciar). [close] é obrigatório em
+/// todo caminho de saída — try/finally no call site.
+///
+/// Web: a plataforma não tem pasta única — a costura vira downloads
+/// individuais (ver [BatchFolderOpen]).
+abstract class BatchDownloadFolder {
+  /// Pasta onde os arquivos são gravados soltos (com os nomes originais).
+  String get path;
+
+  /// Libera o escopo de segurança. Seguro chamar mais de uma vez.
+  Future<void> close();
+}
+
+/// Desfecho da abertura da pasta do lote.
+enum BatchFolderOpen {
+  /// Nativo: pasta escolhida, escopo ativo — gravar os arquivos nela.
+  folder,
+
+  /// Web: sem pasta única — a seleção vira downloads individuais.
+  individualDownloads,
+
+  /// Nativo: usuário cancelou o picker (ou o escopo foi negado) — abortar.
+  cancelled,
+}

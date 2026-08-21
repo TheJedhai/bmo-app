@@ -14,3 +14,9 @@ void downloadBytes({
 }) {
   saveWithFileSaver(bytes: bytes, fileName: fileName, mimeType: mimeType);
 }
+
+/// Web: não há pasta única — getDirectoryPath é UnimplementedError no
+/// browser. A seleção mista vira downloads individuais.
+Future<({BatchFolderOpen choice, BatchDownloadFolder? folder})>
+    openBatchDownloadFolder() async =>
+        (choice: BatchFolderOpen.individualDownloads, folder: null);

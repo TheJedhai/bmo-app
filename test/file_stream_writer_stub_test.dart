@@ -93,5 +93,54 @@ void main() {
 
       file.deleteSync();
     });
+
+    test('destinationDirectory grava solto na pasta com o nome original',
+        () async {
+      final dir = await Directory.systemTemp.createTemp('bmo_batch_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      final writer = await openFileStreamWriter(
+        'foto.jpg',
+        destinationDirectory: dir.path,
+      );
+      expect(writer, isNotNull);
+      await writer!.writeChunk(Uint8List.fromList([7, 8, 9]));
+      await writer.finalize();
+
+      final file = File('${dir.path}/foto.jpg');
+      expect(await file.readAsBytes(), [7, 8, 9]);
+      // Nada caiu no temp global.
+      expect(_downloadFiles(), isEmpty);
+    });
+
+    test('destinationDirectory não sobrescreve arquivo existente', () async {
+      final dir = await Directory.systemTemp.createTemp('bmo_batch_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+      final existing = File('${dir.path}/dupla.txt');
+      await existing.writeAsBytes([1, 2, 3]);
+
+      final writer = await openFileStreamWriter(
+        'dupla.txt',
+        destinationDirectory: dir.path,
+      );
+      expect(writer, isNull, reason: 'colisão vira null, não truncamento');
+
+      expect(await existing.readAsBytes(), [1, 2, 3],
+          reason: 'conteúdo existente intocado');
+    });
+
+    test('abort na pasta destino apaga o parcial', () async {
+      final dir = await Directory.systemTemp.createTemp('bmo_batch_');
+      addTearDown(() => dir.deleteSync(recursive: true));
+
+      final writer = await openFileStreamWriter(
+        'parcial.jpg',
+        destinationDirectory: dir.path,
+      );
+      await writer!.writeChunk(Uint8List.fromList([1]));
+      await writer.abort();
+
+      expect(dir.listSync(), isEmpty);
+    });
   });
 }

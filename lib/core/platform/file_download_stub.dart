@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
 
 import 'file_download.dart';
@@ -139,5 +141,84 @@ Future<void> _deleteQuietly(File file) async {
     if (await file.exists()) await file.delete();
   } catch (_) {
     // Melhor esforço: NSTemporaryDirectory é purgado pelo SO.
+  }
+}
+
+// ----------------------------------------------------------
+// Pasta única do lote (seleção mista)
+// ----------------------------------------------------------
+
+/// Seams de teste — mesmo padrão de [fileDownloadGalleryAccessCheck]:
+/// o flutter_tester não tem plugin do file_picker nem a camada nativa do
+/// canal de escopo de segurança.
+@visibleForTesting
+Future<String?> Function() fileBatchFolderPicker = _pickFolder;
+@visibleForTesting
+Future<bool> Function(String path) fileBatchFolderStartAccess =
+    _startFolderAccess;
+@visibleForTesting
+Future<void> Function(String path) fileBatchFolderStopAccess =
+    _stopFolderAccess;
+
+/// Channel registrado no AppDelegate (Runner). O file_picker 8.3.7 NÃO
+/// faz startAccessingSecurityScopedResource na URL devolvida pelo
+/// UIDocumentPicker — sem o escopo, gravar na pasta fora do sandbox do app
+/// falha com EPERM; sem o stop, o app vaza recurso do kernel.
+const MethodChannel _securityScopedChannel =
+    MethodChannel('bmo/security_scoped');
+
+Future<String?> _pickFolder() => FilePicker.platform.getDirectoryPath();
+
+Future<bool> _startFolderAccess(String path) async {
+  try {
+    return await _securityScopedChannel
+            .invokeMethod<bool>('startAccessing', path) ??
+        false;
+  } on MissingPluginException {
+    // Sem a camada nativa (flutter_tester/desktop): filesystem aberto,
+    // sem sandbox — acesso direto.
+    return true;
+  }
+}
+
+Future<void> _stopFolderAccess(String path) async {
+  try {
+    await _securityScopedChannel.invokeMethod<void>('stopAccessing', path);
+  } on MissingPluginException {
+    // Sem a camada nativa: nada a liberar.
+  }
+}
+
+/// Abre a pasta única do lote — picker UMA vez, escopo ativo até o
+/// [BatchDownloadFolder.close] (obrigatório em finally no call site).
+Future<({BatchFolderOpen choice, BatchDownloadFolder? folder})>
+    openBatchDownloadFolder() async {
+  final path = await fileBatchFolderPicker();
+  if (path == null) {
+    return (choice: BatchFolderOpen.cancelled, folder: null);
+  }
+  if (!await fileBatchFolderStartAccess(path)) {
+    _showError('Não foi possível acessar a pasta escolhida.');
+    return (choice: BatchFolderOpen.cancelled, folder: null);
+  }
+  return (
+    choice: BatchFolderOpen.folder,
+    folder: _NativeBatchDownloadFolder(path),
+  );
+}
+
+class _NativeBatchDownloadFolder implements BatchDownloadFolder {
+  _NativeBatchDownloadFolder(this.path);
+
+  @override
+  final String path;
+
+  bool _closed = false;
+
+  @override
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await fileBatchFolderStopAccess(path);
   }
 }

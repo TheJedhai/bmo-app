@@ -35,3 +35,15 @@ abstract class FileStreamWriter {
 // `openFileStreamWriter` e `isFileStreamSaveAvailable` são definidas por
 // cada branch do conditional export (web/stub), como `createVideoSource`
 // em video_source.dart — declarar aqui roubaria a resolução do export.
+//
+// Assinatura única nas duas plataformas:
+//
+//   Future<FileStreamWriter?> openFileStreamWriter(
+//     String suggestedName, {
+//     String? destinationDirectory,
+//   })
+//
+// [destinationDirectory] só age no nativo — grava o arquivo SOLTO nessa
+// pasta com o nome [suggestedName] (seleção mista do cofre). Na web é
+// ignorado: o diálogo de salvar decide o destino. Sem o parâmetro, o
+// nativo continua gravando em NSTemporaryDirectory.

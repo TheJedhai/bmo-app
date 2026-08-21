@@ -25,13 +25,23 @@ class IoFileStreamWriter implements FileStreamWriter {
   RandomAccessFile? _raf;
   bool _finalized = false;
 
-  static Future<IoFileStreamWriter> create(String suggestedName) async {
+  static Future<IoFileStreamWriter> create(
+    String suggestedName, {
+    String? destinationDirectory,
+  }) async {
     final file = File(
-      '${Directory.systemTemp.path}/bmo_download_'
-      '${DateTime.now().microsecondsSinceEpoch}'
-      '_${Random().nextInt(1 << 32)}'
-      '_${_safeName(suggestedName)}',
+      destinationDirectory == null
+          ? '${Directory.systemTemp.path}/bmo_download_'
+              '${DateTime.now().microsecondsSinceEpoch}'
+              '_${Random().nextInt(1 << 32)}'
+              '_${_safeName(suggestedName)}'
+          : '$destinationDirectory/${_safeName(suggestedName)}',
     );
+    // Na pasta do usuário, truncar um arquivo existente seria perda
+    // silenciosa — o caller recebe null e reporta o item como falho.
+    if (destinationDirectory != null && await file.exists()) {
+      throw FileSystemException('File already exists', file.path);
+    }
     final raf = await file.open(mode: FileMode.writeOnly);
     return IoFileStreamWriter._(file, raf);
   }
@@ -97,10 +107,17 @@ class IoFileStreamWriter implements FileStreamWriter {
 String _safeName(String suggestedName) =>
     suggestedName.replaceAll(RegExp(r'[/\\]'), '_');
 
-Future<FileStreamWriter?> openFileStreamWriter(String suggestedName) async {
+Future<FileStreamWriter?> openFileStreamWriter(
+  String suggestedName, {
+  String? destinationDirectory,
+}) async {
   try {
-    return await IoFileStreamWriter.create(suggestedName);
+    return await IoFileStreamWriter.create(
+      suggestedName,
+      destinationDirectory: destinationDirectory,
+    );
   } catch (_) {
-    return null; // sem disco/nome inválido — caller trata como cancelado.
+    // Sem disco/nome inválido/arquivo já existente na pasta — caller trata.
+    return null;
   }
 }

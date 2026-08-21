@@ -77,7 +77,11 @@ class WebFileStreamWriter implements FileStreamWriter {
 
 /// Abre o diálogo de destino e o writable stream. `null` = usuário
 /// cancelou o diálogo (AbortError) ou API indisponível.
-Future<FileStreamWriter?> openFileStreamWriter(String suggestedName) async {
+/// [destinationDirectory] é ignorado na web — o diálogo decide o destino.
+Future<FileStreamWriter?> openFileStreamWriter(
+  String suggestedName, {
+  String? destinationDirectory,
+}) async {
   final options = JSObject();
   options['suggestedName'] = suggestedName.toJS;
 

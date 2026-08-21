@@ -15,7 +15,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:bmo_app/core/platform/file_download_stub.dart';
+import 'package:bmo_app/core/platform/file_download.dart';
 
 List<String> _tempDownloads() => Directory.systemTemp
     .listSync()
@@ -130,4 +130,52 @@ void main() {
       expect(fileDownloadGalVideoCount, 0);
     },
   );
+
+  group('openBatchDownloadFolder (pasta única do lote)', skip: kIsWeb, () {
+    final originalPicker = fileBatchFolderPicker;
+    final originalStart = fileBatchFolderStartAccess;
+    final originalStop = fileBatchFolderStopAccess;
+    tearDown(() {
+      fileBatchFolderPicker = originalPicker;
+      fileBatchFolderStartAccess = originalStart;
+      fileBatchFolderStopAccess = originalStop;
+    });
+
+    test('picker cancelado vira cancelled', () async {
+      fileBatchFolderPicker = () async => null;
+
+      final (:choice, :folder) = await openBatchDownloadFolder();
+      expect(choice, BatchFolderOpen.cancelled);
+      expect(folder, isNull);
+    });
+
+    test('escopo de acesso negado vira cancelled, sem folder', () async {
+      fileBatchFolderPicker = () async => '/tmp/negada';
+      fileBatchFolderStartAccess = (_) async => false;
+
+      final (:choice, :folder) = await openBatchDownloadFolder();
+      expect(choice, BatchFolderOpen.cancelled);
+      expect(folder, isNull);
+    });
+
+    test('pasta aceita: escopo ativo, close libera UMA vez', () async {
+      fileBatchFolderPicker = () async => '/tmp/pasta';
+      var starts = 0;
+      var stops = 0;
+      fileBatchFolderStartAccess = (_) async {
+        starts++;
+        return true;
+      };
+      fileBatchFolderStopAccess = (_) async => stops++;
+
+      final (:choice, :folder) = await openBatchDownloadFolder();
+      expect(choice, BatchFolderOpen.folder);
+      expect(folder!.path, '/tmp/pasta');
+      expect(starts, 1, reason: 'escopo abre uma vez com a pasta');
+
+      await folder.close();
+      await folder.close(); // idempotente
+      expect(stops, 1, reason: 'stop chamado uma vez só');
+    });
+  });
 }
