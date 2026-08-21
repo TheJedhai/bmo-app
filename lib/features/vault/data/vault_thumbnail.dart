@@ -6,8 +6,15 @@
 ///
 /// ## Supported MIME types
 /// - `image/*` — decoded and resized with package:image, exported as JPEG.
-/// - `video/*` — frame at ~1s captured via get_thumbnail_video. Skipped if
-///   the file exceeds [kVideoThumbnailMaxBytes] (200 MiB).
+/// - `video/*` — frame at ~1s captured via get_thumbnail_video. Two routes,
+///   decided by data, never by platform:
+///   - With [generateThumbnail]'s `sourcePath` (original file path on iOS,
+///     blob URL backed by the picked File on web) — the platform demuxer
+///     reads the file directly. No full-file RAM materialization, so NO
+///     size cap.
+///   - Without `sourcePath` (file_picker on web delivers only bytes) —
+///     bytes go through a [VideoSource] and the [kVideoThumbnailMaxBytes]
+///     (200 MiB) cap applies.
 /// - Everything else (PDF, text, audio, etc.) — returns `null`.
 ///
 /// ## Robustness
@@ -38,7 +45,10 @@ import '../../../core/platform/video_source.dart';
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Maximum video file size for which a thumbnail is attempted (200 MiB).
+/// Maximum video file size for which a bytes-based thumbnail is attempted
+/// (200 MiB). Applies ONLY when the video arrives as bytes (no original file
+/// access — file_picker on web). See [getThumbnailVideoFromPath] for the
+/// uncapped route.
 const int kVideoThumbnailMaxBytes = 200 * 1024 * 1024;
 
 /// Maximum width or height of the generated thumbnail in pixels.
@@ -59,9 +69,15 @@ const int _kMaxThumbnailBytes = 100 * 1024; // 100 KiB
 
 /// Generates a JPEG thumbnail from [fileBytes] based on [mimeType].
 ///
+/// [sourcePath], when provided, is the ORIGINAL picked file (real path on
+/// iOS, blob URL backed by the picked File on web). Video thumbnails then
+/// come from the file itself — no cap. Without it (file_picker on web,
+/// bytes only), video thumbnails come from [fileBytes] under
+/// [kVideoThumbnailMaxBytes].
+///
 /// Returns the JPEG bytes on success, or `null` if:
 /// - The MIME type is not supported (PDF, text, audio, etc.).
-/// - The file is too large (video over [kVideoThumbnailMaxBytes]).
+/// - The bytes-based video is too large (over [kVideoThumbnailMaxBytes]).
 /// - Any step in the generation pipeline fails (corrupted file, timeout,
 ///   format not decodable, etc.).
 ///
@@ -70,13 +86,17 @@ const int _kMaxThumbnailBytes = 100 * 1024; // 100 KiB
 /// - [VideoSource] instances are disposed even on failure.
 Future<Uint8List?> generateThumbnail(
   Uint8List fileBytes,
-  String mimeType,
-) async {
+  String mimeType, {
+  String? sourcePath,
+}) async {
   try {
     if (mimeType.startsWith('image/')) {
       return _generateImageThumbnail(fileBytes);
     }
     if (mimeType.startsWith('video/')) {
+      if (sourcePath != null) {
+        return await getThumbnailVideoFromPath(sourcePath);
+      }
       return await getThumbnailVideo(fileBytes, mimeType);
     }
     return null; // Unsupported MIME type
@@ -128,9 +148,14 @@ Uint8List? _generateImageThumbnail(Uint8List fileBytes) {
 
 /// Generates a JPEG thumbnail of the frame at ~1s of [fileBytes].
 ///
-/// The bytes go through a [VideoSource]: blob URL on web, temp file on
-/// native — the seam resolves the platform. The source wraps decrypted
-/// bytes, so it is disposed even on failure.
+/// Bytes-only route — used when there is NO access to the original file
+/// (file_picker on web delivers only bytes). The bytes go through a
+/// [VideoSource]: blob URL on web, temp file on native — the seam resolves
+/// the platform. The source wraps decrypted bytes, so it is disposed even
+/// on failure.
+///
+/// Capped at [kVideoThumbnailMaxBytes]: building the source materializes
+/// the bytes again, so big files would spike RAM for a thumbnail.
 ///
 /// The frame is captured at original resolution and then goes through the
 /// same image pipeline: the plugin's own maxWidth/maxHeight fit-box would
@@ -161,6 +186,51 @@ Future<Uint8List?> getThumbnailVideo(
     return null;
   } finally {
     source.dispose();
+  }
+}
+
+/// Generates a JPEG thumbnail of the frame at ~1s of the video at
+/// [sourcePath] — the ORIGINAL picked file, never bytes.
+///
+/// [sourcePath] is a real file path (iOS: image_picker XFile, file_picker
+/// cached copy) or a blob URL backed by the picked File (web:
+/// image_picker_for_web). The platform demuxer reads the file directly —
+/// on web the browser streams from disk on demand, no full-file RAM
+/// materialization.
+///
+/// WHY THERE IS NO SIZE CAP HERE (do not re-add one): the 200 MiB cap
+/// guarded against materializing the whole file in RAM to build a
+/// [VideoSource] from bytes. With the original file, that materialization
+/// never happens, so the cap protects nothing and only loses thumbnails
+/// for big videos.
+///
+/// Discarded alternatives (do not retry without new information):
+/// - Upgrading file_picker to 11.x for a web path: its blob URL is built
+///   from the SAME materialized bytes — zero RAM gain — and it brings
+///   breaking changes.
+/// - A custom web picker exposing the File: would solve file_picker's web
+///   case, but costs a lot for a case the "Foto ou vídeo" button
+///   (image_picker) already covers.
+///
+/// No [VideoSource] is created — there are no wrapped bytes to dispose;
+/// the blob URL (web) belongs to the picker, the path (iOS) to the OS.
+///
+/// Returns `null` if the frame capture fails or times out (missing file,
+/// corrupt video), or the result exceeds [_kMaxThumbnailBytes].
+Future<Uint8List?> getThumbnailVideoFromPath(String sourcePath) async {
+  try {
+    final frameBytes = await VideoThumbnail.thumbnailData(
+      video: sourcePath,
+      imageFormat: ImageFormat.JPEG,
+      maxWidth: 0, // original resolution — resized by the image pipeline
+      maxHeight: 0,
+      timeMs: 1000, // ~1s for a representative frame
+      quality: 90, // intermediate; final JPEG uses kThumbnailJpegQuality
+    ).timeout(kVideoSeekTimeout);
+
+    return _generateImageThumbnail(frameBytes);
+  } catch (_) {
+    return null;
   }
 }
 

@@ -6,14 +6,17 @@
 // 1. generateThumbnail for valid images → returns JPEG bytes
 // 2. generateThumbnail for PDF/unsupported → null
 // 3. generateThumbnail for corrupted bytes → null (no crash)
-// 4. generateThumbnail for video > 200 MiB → null
+// 4. generateThumbnail for video > 200 MiB (bytes, no path) → null
 // 5. generateThumbnail for invalid video bytes → null (no crash)
 // 6. scaling — aspect ratio, degenerate, no-upscale, via decoding the output
 // 7. pixel probes — sub-256 images keep real pixels (not white)
 // 8. VideoSource create/dispose balance on every video attempt
+// 9. path-based video: inaccessible path → null (no crash, no VideoSource)
 //
 // Chrome-only (skipped on VM):
-// 9. real MP4 → JPEG thumbnail of the ~1s frame, not the first frame
+// 10. real MP4 → JPEG thumbnail of the ~1s frame, not the first frame
+// 11. path-based video: blob URL path → thumbnail, no VideoSource created
+// 12. path-based video: bytes over the cap + path → thumbnail (no size reject)
 //
 // Run: flutter test --platform=chrome test/vault_thumbnail_test.dart
 //      flutter test test/vault_thumbnail_test.dart
@@ -326,6 +329,83 @@ void main() {
         final firstCenter = _centerPixel(_decode(firstFrame));
         final rDiff = (center.r - firstCenter.r).abs();
         expect(rDiff, greaterThan(80));
+      },
+    );
+  });
+
+  // =========================================================================
+  // Video thumbnail — path-based (original file, no cap)
+  // =========================================================================
+  group('video thumbnail from path', () {
+    setUp(() {
+      videoSourceCreatedCount = 0;
+      videoSourceDisposedCount = 0;
+      // No-op on VM; chrome tests hang on plugin channels without it.
+      registerVideoThumbnailForTest();
+    });
+
+    test('inaccessible path → null, no crash, no VideoSource', () async {
+      final thumb = await getThumbnailVideoFromPath('/nonexistent/nope.mp4');
+      expect(thumb, isNull);
+
+      // The path route never builds a VideoSource — nothing to dispose.
+      expect(videoSourceCreatedCount, 0);
+      expect(videoSourceDisposedCount, 0);
+    });
+
+    // Browser-only: real video decode + frame capture needs a video element.
+    test(
+      'blob URL path → thumbnail of the ~1s frame, no VideoSource',
+      skip: !kIsWeb,
+      () async {
+        // Real blob URL over the probe MP4 — the same shape image_picker
+        // delivers on web. Created before resetting the counters, so the
+        // assertions below attribute only the thumbnail call.
+        final source = await createVideoSource(_probeMp4, 'video/mp4');
+        videoSourceCreatedCount = 0;
+        videoSourceDisposedCount = 0;
+
+        final thumb = await getThumbnailVideoFromPath(source.uri.toString());
+        expect(thumb, isNotNull);
+        expect(thumb![0], 0xFF);
+        expect(thumb[1], 0xD8);
+
+        // The path route never builds a VideoSource.
+        expect(videoSourceCreatedCount, 0);
+        expect(videoSourceDisposedCount, 0);
+
+        source.dispose();
+        expect(videoSourceDisposedCount, 1);
+
+        final decoded = _decode(thumb);
+        // 160×90 source, no upscale: stays 160×90.
+        expect(decoded.width, 160);
+        expect(decoded.height, 90);
+
+        // Not black.
+        final center = _centerPixel(decoded);
+        expect(center.r + center.g + center.b, greaterThan(60));
+      },
+    );
+
+    test(
+      'bytes over the cap + path → thumbnail (size never checked)',
+      skip: !kIsWeb,
+      () async {
+        final source = await createVideoSource(_probeMp4, 'video/mp4');
+
+        // 200 MiB + 1 — the exact size that kills the bytes route. The path
+        // route must never look at these bytes.
+        final largeBytes = Uint8List(kVideoThumbnailMaxBytes + 1);
+
+        final thumb = await generateThumbnail(
+          largeBytes,
+          'video/mp4',
+          sourcePath: source.uri.toString(),
+        );
+        expect(thumb, isNotNull);
+
+        source.dispose();
       },
     );
   });

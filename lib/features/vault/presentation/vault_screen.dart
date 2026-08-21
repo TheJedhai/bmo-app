@@ -702,7 +702,8 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     if (result == null || result.files.isEmpty) return;
 
     final failures = <String>[];
-    final pending = <({Uint8List bytes, String fileName, String mimeType})>[];
+    final pending =
+        <({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>[];
     for (final file in result.files) {
       // On web and iOS, withData (default) populates `bytes` fully in memory.
       final bytes = file.bytes;
@@ -710,12 +711,22 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         failures.add('${file.name}: não foi possível ler o arquivo.');
         continue;
       }
+      // PlatformFile.path NÃO é null na web — ACESSA O GETTER LANÇA
+      // (file_picker 8.3.7: path indisponível, só bytes). Catch em vez de
+      // null-check, sem checagem de plataforma.
+      String? sourcePath;
+      try {
+        sourcePath = file.path;
+      } catch (_) {
+        sourcePath = null;
+      }
       pending.add((
         bytes: bytes,
         fileName: file.name,
         // Mime pelos bytes, não pela extensão (HEIC renomeado para .jpg
         // vinha do picker como image/jpeg e ficava salvo errado).
         mimeType: detectMimeType(bytes: bytes, fileName: file.name),
+        sourcePath: sourcePath,
       ));
     }
 
@@ -732,7 +743,8 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     if (files.isEmpty) return;
 
     final failures = <String>[];
-    final pending = <({Uint8List bytes, String fileName, String mimeType})>[];
+    final pending =
+        <({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>[];
     for (final file in files) {
       final Uint8List bytes;
       try {
@@ -748,6 +760,9 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         // Blob.type e extensão são metadado editável (foto HEIC do app
         // Fotos chega como .jpg).
         mimeType: detectMimeType(bytes: bytes, fileName: file.name),
+        // XFile.path nunca lança: caminho real (iOS) ou blob URL apoiado no
+        // File escolhido (web, image_picker_for_web).
+        sourcePath: file.path,
       ));
     }
 
@@ -759,9 +774,11 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   }
 
   /// Fluxo único de upload — cifragem, thumbnail e envio iguais para
-  /// qualquer origem; só os bytes mudam.
+  /// qualquer origem; só os bytes (e o path do arquivo original, quando
+  /// existe) mudam.
   Future<void> _uploadFiles(
-    List<({Uint8List bytes, String fileName, String mimeType})> files,
+    List<({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>
+        files,
     List<String> failures,
   ) async {
     if (!mounted) return;
@@ -791,6 +808,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           file.bytes,
           fileName,
           file.mimeType,
+          sourcePath: file.sourcePath,
           onProgress: (sent, total) {
             if (!mounted) return;
             setState(() {

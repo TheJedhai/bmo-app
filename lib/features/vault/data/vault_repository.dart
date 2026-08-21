@@ -172,14 +172,19 @@ final class VaultRepository {
   ///    via AES-GCM single-shot (small, one round-trip).
   /// 2. Splits [fileBytes] into 1 MiB chunks and encrypts each with
   ///    [VaultChunkedCipher].
-  /// 3. Generates a JPEG thumbnail from [fileBytes] if the MIME type is
-  ///    image/* or video/* (under 200 MiB). PDFs and other types produce no
-  ///    thumbnail. Encrypts the thumbnail bytes with [VaultCipher] (single-shot
-  ///    GCM, fresh IV).
+  /// 3. Generates a JPEG thumbnail if the MIME type is image/* or video/*.
+  ///    PDFs and other types produce no thumbnail. Video with [sourcePath]
+  ///    (original file) generates without a size cap; video without it
+  ///    (file_picker on web — bytes only) stays under 200 MiB. Encrypts the
+  ///    thumbnail bytes with [VaultCipher] (single-shot GCM, fresh IV).
   /// 4. Posts the encrypted blob + metadata + optional thumbnail to the server.
   ///
   /// [dek] is the 32-byte data encryption key from unlock.
   /// [fileBytes] is the full plaintext file content.
+  /// [sourcePath] is the ORIGINAL picked file when accessible: real path on
+  /// iOS (both pickers), blob URL backed by the picked File on web
+  /// (image_picker). Null when the picker delivered only bytes (file_picker
+  /// on web).
   ///
   /// [onProgress] is called with `(bytesSent, totalBytes)` during the
   /// upload phase (encryption happens first, then upload progress).
@@ -198,6 +203,7 @@ final class VaultRepository {
     String fileName,
     String mimeType, {
     void Function(int sent, int total)? onProgress,
+    String? sourcePath,
   }) async {
     // 1. Encrypt metadata (single-shot GCM).
     final metadataJson = jsonEncode({
@@ -228,7 +234,11 @@ final class VaultRepository {
     String? thumbnailBlobBase64;
     String? thumbnailIvBase64;
     try {
-      final thumbnailBytes = await generateThumbnail(fileBytes, mimeType);
+      final thumbnailBytes = await generateThumbnail(
+        fileBytes,
+        mimeType,
+        sourcePath: sourcePath,
+      );
       if (thumbnailBytes != null) {
         const cipher = VaultCipher();
         final (thumbIv, thumbBlob) = await cipher.encrypt(dek, thumbnailBytes);
