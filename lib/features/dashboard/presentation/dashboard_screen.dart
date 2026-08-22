@@ -89,6 +89,7 @@ class _DashboardMobileLayout extends ConsumerWidget {
     final cardSpecs = visibleWidgets.where((s) => s.id != 'relogio').toList();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ---- Header ----
         Padding(
