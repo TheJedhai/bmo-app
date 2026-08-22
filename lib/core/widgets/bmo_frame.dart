@@ -90,7 +90,17 @@ class BmoFrame extends ConsumerWidget {
                 // SafeArea interno inseta de novo por cima da faixa.
                 child: ClipRSuperellipse(
                   borderRadius: BorderRadius.circular(innerRadius),
-                  child: ColoredBox(color: BmoColors.screenBg, child: child),
+                  child: ColoredBox(
+                    color: BmoColors.screenBg,
+                    // Material transparente fornece o DefaultTextStyle correto
+                    // aos Text sem estilo explícito. Sem ele (dashboard não
+                    // tem Scaffold), o DefaultTextStyle.fallback de debug pinta
+                    // sublinhado duplo amarelo embaixo dos textos.
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: child,
+                    ),
+                  ),
                 ),
               ),
             ),
