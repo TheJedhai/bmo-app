@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/file_download.dart';
+import '../../../core/platform/file_picker_data_mode.dart';
 import '../../../core/platform/file_range_reader.dart';
 import '../../../core/platform/pdf_preview.dart';
 import '../../../core/theme/bmo_theme.dart';
@@ -699,10 +700,18 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   // ----------------------------------------------------------
 
   /// "Arquivo" — qualquer tipo, múltiplos, sem limite de tamanho.
+  ///
+  /// Onde houver arquivo ORIGINAL acessível (nativo, `withData: false`) usa a
+  /// mesma rota streamada do "Foto ou vídeo": o `PlatformFile.xFile` aponta
+  /// para a cópia em cache do arquivo em disco e o upload nunca materializa o
+  /// inteiro. Na web o `file_picker` entrega só bytes materializados — sem
+  /// original, fica na rota em memória. A ramificação é sobre o DADO
+  /// (`file.bytes != null`), não sobre a plataforma.
   Future<void> _pickAndUploadFiles() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       type: FileType.any,
+      withData: filePickerWithData,
     );
     // `null` means the user cancelled the picker.
     if (result == null || result.files.isEmpty) return;
@@ -711,34 +720,42 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     final pending =
         <({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})>[];
     for (final file in result.files) {
-      // On web and iOS, withData (default) populates `bytes` fully in memory.
-      final bytes = file.bytes;
-      if (bytes == null) {
-        failures.add('${file.name}: não foi possível ler o arquivo.');
-        continue;
+      if (file.bytes != null) {
+        // Com bytes (`withData: true`, web): sem arquivo original acessível,
+        // então a rota em memória — igual ao comportamento de hoje.
+        final bytes = file.bytes!;
+        // PlatformFile.path NÃO é null na web — ACESSA O GETTER LANÇA
+        // (file_picker 8.3.7: path indisponível, só bytes). Catch em vez de
+        // null-check, sem checagem de plataforma.
+        String? sourcePath;
+        try {
+          sourcePath = file.path;
+        } catch (_) {
+          sourcePath = null;
+        }
+        pending.add((
+          bytes: bytes,
+          fileName: file.name,
+          // Mime pelos bytes, não pela extensão (HEIC renomeado para .jpg
+          // vinha do picker como image/jpeg e ficava salvo errado).
+          mimeType: detectMimeType(bytes: bytes, fileName: file.name),
+          sourcePath: sourcePath,
+          originalFile: null,
+        ));
+      } else {
+        // Sem bytes (`withData: false`, nativo): o XFile do PlatformFile
+        // aponta para a cópia em cache do arquivo — original acessível.
+        final item = await buildPendingForUpload(
+          file.xFile,
+          fileName: file.name,
+          maxBytes: _kMimeSniffMaxBytes,
+        );
+        if (item == null) {
+          failures.add('${file.name}: não foi possível ler o arquivo.');
+          continue;
+        }
+        pending.add(item);
       }
-      // PlatformFile.path NÃO é null na web — ACESSA O GETTER LANÇA
-      // (file_picker 8.3.7: path indisponível, só bytes). Catch em vez de
-      // null-check, sem checagem de plataforma.
-      String? sourcePath;
-      try {
-        sourcePath = file.path;
-      } catch (_) {
-        sourcePath = null;
-      }
-      pending.add((
-        bytes: bytes,
-        fileName: file.name,
-        // Mime pelos bytes, não pela extensão (HEIC renomeado para .jpg
-        // vinha do picker como image/jpeg e ficava salvo errado).
-        mimeType: detectMimeType(bytes: bytes, fileName: file.name),
-        sourcePath: sourcePath,
-        // ponytail: file_picker still delivers materialized bytes (withData),
-        // so there's no memory win from streaming here — keep the in-memory
-        // route (which is also the spec's fallback). Stream when file_picker
-        // can hand us the original file without materializing it.
-        originalFile: null,
-      ));
     }
 
     if (pending.isEmpty) {
@@ -762,38 +779,16 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     final pending =
         <({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})>[];
     for (final file in files) {
-      // Sniff mime pela cabeça do arquivo — magic numbers ficam no início.
-      final Uint8List headBytes;
-      try {
-        headBytes = await _readHead(file, _kMimeSniffMaxBytes);
-      } catch (_) {
+      final item = await buildPendingForUpload(
+        file,
+        fileName: file.name,
+        maxBytes: _kMimeSniffMaxBytes,
+      );
+      if (item == null) {
         failures.add('${file.name}: não foi possível ler o arquivo.');
         continue;
       }
-      final mimeType = detectMimeType(bytes: headBytes, fileName: file.name);
-
-      // Imagem gera thumbnail dos bytes — como são pequenas, lemos inteiras.
-      // Vídeo/outros não: o conteúdo vai por streaming e a thumbnail de vídeo
-      // sai do arquivo original (path), sem bytes em memória.
-      Uint8List? fullBytes;
-      if (mimeType.startsWith('image/')) {
-        try {
-          fullBytes = await file.readAsBytes();
-        } catch (_) {
-          failures.add('${file.name}: não foi possível ler o arquivo.');
-          continue;
-        }
-      }
-
-      pending.add((
-        bytes: fullBytes,
-        fileName: file.name,
-        mimeType: mimeType,
-        // XFile.path nunca lança: caminho real (iOS) ou blob URL apoiado no
-        // File escolhido (web, image_picker_for_web).
-        sourcePath: file.path,
-        originalFile: file,
-      ));
+      pending.add(item);
     }
 
     if (pending.isEmpty) {
@@ -801,18 +796,6 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
       return;
     }
     await _uploadFiles(pending, failures);
-  }
-
-  /// Lê até [maxBytes] da cabeça de [file] via a costura de faixa — na web
-  /// fatia o blob (`Blob.slice`), lendo só a cabeça; no nativo lê do
-  /// dart:io File. Nenhum dos dois materializa o arquivo inteiro.
-  Future<Uint8List> _readHead(XFile file, int maxBytes) async {
-    final reader = await openFileRangeReader(file);
-    try {
-      return await reader.readRange(0, maxBytes);
-    } finally {
-      reader.dispose();
-    }
   }
 
   /// Fluxo único de upload — cifragem, thumbnail e envio iguais para
@@ -2468,5 +2451,65 @@ class _VaultErrorView extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Constrói o registro de upload de um [XFile] por streaming: mime pela
+/// cabeça (costura de faixa, sem materializar o inteiro) e bytes só para
+/// imagem (thumbnail — pequenas). Compartilhado entre "Foto ou vídeo" e o
+/// caminho streamado do "Arquivo" (nativo). Retorna `null` se não deu ler.
+///
+/// Top-level (sem `this`) para ser testável em [test] síncrono real — a leitura
+/// da cabeça é I/O de arquivo, que o fake-async do WidgetTester não resolve.
+Future<({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})?>
+    buildPendingForUpload(
+  XFile file, {
+  required String fileName,
+  required int maxBytes,
+}) async {
+  // Sniff mime pela cabeça do arquivo — magic numbers ficam no início.
+  final Uint8List headBytes;
+  try {
+    headBytes = await readFileHead(file, maxBytes);
+  } catch (_) {
+    return null;
+  }
+  final mimeType = detectMimeType(bytes: headBytes, fileName: fileName);
+
+  // Imagem gera thumbnail dos bytes — como são pequenas, lemos inteiras.
+  // Vídeo/outros não: o conteúdo vai por streaming e a thumbnail de vídeo
+  // sai do arquivo original (path), sem bytes em memória.
+  Uint8List? fullBytes;
+  if (mimeType.startsWith('image/')) {
+    try {
+      fullBytes = await file.readAsBytes();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  return (
+    bytes: fullBytes,
+    // [fileName] é o nome ORIGINAL do picker — no nativo `XFile.name` deriva
+    // do path em cache em disco (e.g. `/tmp/file_picker/123_nome.bin`), que
+    // não é o nome que o usuário escolheu.
+    fileName: fileName,
+    mimeType: mimeType,
+    // XFile.path nunca lança: caminho real (iOS) ou blob URL apoiado no
+    // File escolhido (web, image_picker_for_web).
+    sourcePath: file.path,
+    originalFile: file,
+  );
+}
+
+/// Lê até [maxBytes] da cabeça de [file] via a costura de faixa — na web
+/// fatia o blob (`Blob.slice`), lendo só a cabeça; no nativo lê do
+/// dart:io File. Nenhum dos dois materializa o arquivo inteiro.
+Future<Uint8List> readFileHead(XFile file, int maxBytes) async {
+  final reader = await openFileRangeReader(file);
+  try {
+    return await reader.readRange(0, maxBytes);
+  } finally {
+    reader.dispose();
   }
 }
