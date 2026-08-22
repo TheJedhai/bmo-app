@@ -29,6 +29,10 @@ import 'widgets/vault_card.dart';
 ///
 /// [pulseDelay] define o atraso inicial da animação de glow.
 ///
+/// [mobileSpan] define quantas colunas o card ocupa no grid mobile de 2
+/// colunas (1 = meia largura, 2 = largura cheia).
+/// [mobileHeight] altura fixa opcional no mobile; null = altura intrínseca.
+///
 /// [showInNavBar] se true, o card aparece como atalho na barra de navegação
 /// inferior. [navIcon] e [route] são obrigatórios quando [showInNavBar] é true
 /// — [navIcon] define o ícone e [route] a rota de destino (usada com go()).
@@ -44,6 +48,8 @@ class DashWidgetSpec {
   final bool showInNavBar;
   final IconData? navIcon;
   final String? route;
+  final int mobileSpan;
+  final double? mobileHeight;
 
   const DashWidgetSpec({
     required this.id,
@@ -57,6 +63,8 @@ class DashWidgetSpec {
     this.showInNavBar = false,
     this.navIcon,
     this.route,
+    this.mobileSpan = 1,
+    this.mobileHeight,
   });
 }
 
