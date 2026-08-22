@@ -1090,6 +1090,11 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   /// file_saver). For larger files the streaming path
   /// ([_downloadItemStreaming]) avoids double memory allocation.
   ///
+  /// WEB-ONLY: chega aqui só quando [SingleItemDownloadMode] é `blob`, que o
+  /// `singleItemDownloadMode` NATIVO nunca retorna (nativo decide só pelo
+  /// mime: mídia -> galeria, senão pasta). Logo este caminho nunca roda no
+  /// iOS.
+  ///
   /// Retorna null em sucesso e a mensagem de erro em falha — quem mostra é
   /// o caller.
   Future<String?> _downloadItemBlob(VaultItemDecrypted item) async {

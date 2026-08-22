@@ -128,7 +128,7 @@ void runFileDownloadStubTests() {
     });
   });
 
-  group('downloadBytes legado (bytes já em memória)', skip: kIsWeb, () {
+  group('downloadBytes (bytes em memória)', skip: kIsWeb, () {
     test('image mime routes to gal, access denied leaves no temp', () async {
       fileDownloadGalImageCount = 0;
       fileDownloadGalVideoCount = 0;
@@ -143,10 +143,38 @@ void runFileDownloadStubTests() {
         mimeType: 'image/png',
       );
 
-      expect(fileDownloadGalImageCount, 1, reason: 'image routes to gal');
+      // Contagem conta o PUT (entrega), não o ramo: acesso negado não chega
+      // ao putImageBytes, então o contador fica 0.
+      expect(fileDownloadGalImageCount, 0,
+          reason: 'acesso negado: nem chega ao putImageBytes');
       expect(fileDownloadGalVideoCount, 0);
       expect(fileDownloadTempCreatedCount, 0,
           reason: 'no temp before access granted');
+      expect(_tempDownloads(), before);
+    });
+
+    test('image with access granted: putImageBytes, sem temp em disco',
+        () async {
+      fileDownloadGalImageCount = 0;
+      fileDownloadGalVideoCount = 0;
+      fileDownloadTempCreatedCount = 0;
+      fileDownloadTempDeletedCount = 0;
+      final before = _tempDownloads();
+
+      // Access granted; sem plugin do gal no tester o putImageBytes falha.
+      // O que importa: bytes vão por putImageBytes, NENHUM temp é criado.
+      fileDownloadGalleryAccessCheck = () async => true;
+      await downloadBytesNative(
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+        fileName: 'bmo-image-2.png',
+        mimeType: 'image/png',
+      );
+
+      expect(fileDownloadGalImageCount, 1, reason: 'image goes to putImageBytes');
+      expect(fileDownloadGalVideoCount, 0);
+      expect(fileDownloadTempCreatedCount, 0,
+          reason: 'bytes em memória não passam por disco');
+      expect(fileDownloadTempDeletedCount, 0);
       expect(_tempDownloads(), before);
     });
 

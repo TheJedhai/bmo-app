@@ -31,6 +31,11 @@ Future<bool> _galleryAccessImpl() async {
 
 /// Assinatura pública única nas duas plataformas — ver file_download.dart.
 /// Fire-and-forget: falha é reportada via snackbar, nunca lançada ao caller.
+///
+/// Caminho de BYTES JÁ EM MÃO (imagem gerada do chat, galeria). Roteia pela
+/// MESMA decisão do cofre ([singleItemDownloadMode], mime decide) e entrega
+/// com os mesmos helpers (putImageBytes/putVideo + pasta escolhida). Para
+/// arquivo em disco (item grande), use o fluxo do cofre em vault_screen.
 void downloadBytes({
   required Uint8List bytes,
   required String fileName,
@@ -43,80 +48,120 @@ void downloadBytes({
 
 /// Worker nativo — Future para os testes poderem aguardar o desfecho.
 ///
-/// Caminho legado de BYTES JÁ EM MEMÓRIA (imagens do chat e da galeria):
-/// image/* e video/* vão para a galeria; qualquer outro mime grava na
-/// pasta escolhida — file_saver saiu do nativo. O cofre não passa mais por
-/// aqui: o download do cofre é sempre streaming
-/// ([singleItemDownloadMode]).
+/// Roteia por [singleItemDownloadMode] — a decisão de PARA ONDE VAI existe
+/// num lugar só no projeto. A diferença para o cofre é só a PRIMITIVA de
+/// entrega: aqui os bytes já estão em memória (imagem vai por putImageBytes
+/// sem tocar disco; vídeo escreve um temp e entrega por path), enquanto o
+/// cofre streama o arquivo grande e usa putImage(path).
 Future<void> downloadBytesNative({
   required Uint8List bytes,
   required String fileName,
   required String mimeType,
 }) async {
+  final mode = singleItemDownloadMode(
+    originalSize: bytes.length,
+    mimeType: mimeType,
+  );
+  switch (mode) {
+    case SingleItemDownloadMode.streamToGallery:
+      await _deliverMediaBytes(bytes, fileName, mimeType);
+      break;
+    case SingleItemDownloadMode.streamToFolder:
+      await _deliverBytesToFolder(bytes, fileName);
+      break;
+    case SingleItemDownloadMode.blob:
+    case SingleItemDownloadMode.streamToPicker:
+    case SingleItemDownloadMode.unsupportedLarge:
+      // Nativo com bytes nunca chega aqui: singleItemDownloadMode nativo
+      // decide só pelo mime (mídia -> galeria, senão pasta).
+      break;
+  }
+}
+
+/// Entrega mídia (image/*|video/*) com bytes em mão. Acesso à galeria é
+/// checado aqui, uma vez, para imagem e vídeo.
+Future<void> _deliverMediaBytes(
+  Uint8List bytes,
+  String fileName,
+  String mimeType,
+) async {
+  final accessError = await ensureGalleryAccess();
+  if (accessError != null) {
+    _showError(accessError);
+    return;
+  }
   if (mimeType.startsWith('image/')) {
-    fileDownloadGalImageCount++;
-    final accessError = await ensureGalleryAccess();
-    if (accessError != null) {
-      _showError(accessError);
-      return;
-    }
-    try {
-      await Gal.putImageBytes(bytes, name: _nameWithoutExtension(fileName));
-    } on GalException catch (e) {
-      _showError(_messageForGal(e));
-    } catch (e) {
-      debugPrint('Save to gallery failed: $e');
-      _showError('Falha ao salvar na galeria.');
-    }
-  } else if (mimeType.startsWith('video/')) {
-    fileDownloadGalVideoCount++;
-    final accessError = await ensureGalleryAccess();
-    if (accessError != null) {
-      _showError(accessError);
-      return;
-    }
-    // Bytes decifrados em disco: um único try/finally garante que todo
-    // caminho de saída — sucesso, GalException, erro genérico — apaga o
-    // temp antes de retornar.
+    // Imagem: bytes já em memória, putImageBytes sem escrever temp.
+    final err = await _deliverImageBytesToGallery(
+      bytes: bytes,
+      fileName: fileName,
+    );
+    if (err != null) _showError(err);
+  } else {
+    // Vídeo: a galeria pede um path — grava o temp e entrega pela MESMA via
+    // do cofre ([deliverFileToGallery] apaga em finally, inclusive em erro).
     final file = File(_tempPath(fileName));
     try {
       await file.writeAsBytes(bytes, flush: true);
-      fileDownloadTempCreatedCount++;
-      await Gal.putVideo(file.path);
-    } on GalException catch (e) {
-      _showError(_messageForGal(e));
     } catch (e) {
-      debugPrint('Save to gallery failed: $e');
-      _showError('Falha ao salvar na galeria.');
-    } finally {
+      debugPrint('Temp write failed: $e');
       await _deleteQuietly(file);
+      _showError('Falha ao salvar na galeria.');
+      return;
     }
-  } else {
-    // Não-mídia: grava direto na pasta escolhida — mesmo mecanismo do
-    // lote misto (picker + escopo de segurança + close em finally).
-    final open = await openBatchDownloadFolder();
-    if (open.choice != BatchFolderOpen.folder) return; // cancelado
+    final err = await deliverFileToGallery(
+      filePath: file.path,
+      fileName: fileName,
+      mimeType: mimeType,
+    );
+    if (err != null) _showError(err);
+  }
+}
+
+/// Não-mídia com bytes: grava direto na pasta escolhida — mesmo mecanismo
+/// do cofre (picker + escopo de segurança + close em finally).
+Future<void> _deliverBytesToFolder(Uint8List bytes, String fileName) async {
+  final open = await openBatchDownloadFolder();
+  if (open.choice != BatchFolderOpen.folder) return; // cancelado
+  try {
+    final writer = await openFileStreamWriter(
+      fileName,
+      destinationDirectory: open.folder!.path,
+    );
+    if (writer == null) {
+      _showError('Não foi possível criar o arquivo na pasta escolhida '
+          '(já existe?).');
+      return;
+    }
     try {
-      final writer = await openFileStreamWriter(
-        fileName,
-        destinationDirectory: open.folder!.path,
-      );
-      if (writer == null) {
-        _showError('Não foi possível criar o arquivo na pasta escolhida '
-            '(já existe?).');
-        return;
-      }
-      try {
-        await writer.writeChunk(bytes);
-        await writer.finalize();
-      } catch (e) {
-        await writer.abort();
-        debugPrint('Save to folder failed: $e');
-        _showError('Falha ao salvar na pasta escolhida.');
-      }
-    } finally {
-      await open.folder!.close();
+      await writer.writeChunk(bytes);
+      await writer.finalize();
+    } catch (e) {
+      await writer.abort();
+      debugPrint('Save to folder failed: $e');
+      _showError('Falha ao salvar na pasta escolhida.');
     }
+  } finally {
+    await open.folder!.close();
+  }
+}
+
+/// Entrega bytes de imagem à galeria via putImageBytes — sem temp (o byte já
+/// está em memória). Retorna mensagem de erro ou null em sucesso; quem
+/// mostra é o caller. Mesma forma de [deliverFileToGallery].
+Future<String?> _deliverImageBytesToGallery({
+  required Uint8List bytes,
+  required String fileName,
+}) async {
+  fileDownloadGalImageCount++;
+  try {
+    await Gal.putImageBytes(bytes, name: _nameWithoutExtension(fileName));
+    return null;
+  } on GalException catch (e) {
+    return _messageForGal(e);
+  } catch (e) {
+    debugPrint('Save to gallery failed: $e');
+    return 'Falha ao salvar na galeria.';
   }
 }
 
