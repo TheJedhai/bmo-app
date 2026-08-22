@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'app.dart';
 import 'core/config/env.dart';
 import 'core/identity/identity_provider.dart';
+import 'core/platform/temp_orphan_sweep.dart';
 import 'core/platform/url_strategy.dart';
 import 'features/chat/data/bmo_rich_registry.dart';
 import 'features/chat/widgets/bmo_rich_image_card.dart';
@@ -18,6 +21,12 @@ void main() async {
   );
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Varredura de temporários órfãos do BMO (nativo). Fire-and-forget: os
+  // finally/dispose apagam no caso normal, mas morte do processo (crash,
+  // force-quit, Jetsam) deixa `bmo_*` no NSTemporaryDirectory até o iOS
+  // purgar. Não bloqueia o boot. Web: no-op.
+  unawaited(sweepOrphanTempFiles());
 
   // Carrega SharedPreferences antes do app iniciar — o identity provider
   // depende dele para persistir/carregar o userId escolhido.
