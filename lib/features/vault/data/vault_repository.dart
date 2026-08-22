@@ -16,6 +16,8 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
+
 import '../crypto/vault_chunked_cipher.dart';
 import '../crypto/vault_cipher.dart';
 import '../crypto/vault_crypto.dart' as crypto;
@@ -52,8 +54,23 @@ final class VaultRepository {
   final VaultClient _client;
   final VaultKdf _kdf;
 
-  VaultRepository(this._client, {VaultKdf? kdf})
-      : _kdf = kdf ?? const Argon2Kdf();
+  /// Max PUT attempts per chunk before the upload is aborted. 409 and other
+  /// 4xx responses are NOT retried (they are real errors — see
+  /// [_putChunkWithRetry]); only transient network failures and 5xx/429 are.
+  final int _maxChunkAttempts;
+
+  /// Base backoff between chunk PUT retries. Multiplied by the attempt number
+  /// (attempt 1 → 1×, attempt 2 → 2×). Default: 500ms, 1s.
+  final Duration _chunkRetryDelay;
+
+  VaultRepository(
+    this._client, {
+    VaultKdf? kdf,
+    int maxChunkAttempts = 3,
+    Duration chunkRetryDelay = const Duration(milliseconds: 500),
+  })  : _kdf = kdf ?? const Argon2Kdf(),
+        _maxChunkAttempts = maxChunkAttempts,
+        _chunkRetryDelay = chunkRetryDelay;
 
   // ============================================================
   // Create
@@ -168,26 +185,33 @@ final class VaultRepository {
 
   /// Uploads an encrypted item to a vault.
   ///
-  /// 1. Encrypts [fileName], [mimeType], and [fileBytes].length as metadata
-  ///    via AES-GCM single-shot (small, one round-trip).
-  /// 2. Splits [fileBytes] into 1 MiB chunks and encrypts each with
-  ///    [VaultChunkedCipher].
-  /// 3. Generates a JPEG thumbnail if the MIME type is image/* or video/*.
-  ///    PDFs and other types produce no thumbnail. Video with [sourcePath]
-  ///    (original file) generates without a size cap; video without it
-  ///    (file_picker on web — bytes only) stays under 200 MiB. Encrypts the
-  ///    thumbnail bytes with [VaultCipher] (single-shot GCM, fresh IV).
-  /// 4. Posts the encrypted blob + metadata + optional thumbnail to the server.
+  /// 1. Encrypts [fileName], [mimeType], and the file's original size as
+  ///    metadata via AES-GCM single-shot (small, one round-trip).
+  /// 2. Generates a JPEG thumbnail if the MIME type is image/* or video/*
+  ///    (always an enhancement — never breaks the upload).
+  /// 3. Uploads the content. Two routes, chosen by whether the ORIGINAL file
+  ///    is accessible ([originalFile] != null), never by platform:
+  ///    - **Streaming** (image_picker; any picker that hands us the original
+  ///      file): loops `read slice → encrypt → PUT → discard`, one chunk in
+  ///      memory at a time. Progress fires BEFORE the first chunk.
+  ///    - **In-memory** (bytes-only, e.g. file_picker on web): the old
+  ///      `_splitIntoChunks → encryptChunks → _concatBlob` route, a single
+  ///      multipart POST.
   ///
   /// [dek] is the 32-byte data encryption key from unlock.
-  /// [fileBytes] is the full plaintext file content.
-  /// [sourcePath] is the ORIGINAL picked file when accessible: real path on
+  /// [fileBytes] is the full plaintext content for the in-memory route; may be
+  /// null when [originalFile] is provided (content is streamed straight from
+  /// the file, so the caller never materializes it).
+  /// [originalFile] is the ORIGINAL picked file when accessible: real path on
   /// iOS (both pickers), blob URL backed by the picked File on web
   /// (image_picker). Null when the picker delivered only bytes (file_picker
   /// on web).
+  /// [sourcePath] keeps the path-based thumbnail route; the effective path is
+  /// `originalFile?.path ?? sourcePath`.
   ///
-  /// [onProgress] is called with `(bytesSent, totalBytes)` during the
-  /// upload phase (encryption happens first, then upload progress).
+  /// [onProgress] is called with `(bytesSent, totalBytes)` during the upload
+  /// phase. In the streaming route the first call fires before any chunk is
+  /// sent (the UI cannot show a frozen screen), then once per chunk.
   ///
   /// Returns [VaultItemDecrypted] with the server-assigned id and timestamps.
   ///
@@ -199,45 +223,35 @@ final class VaultRepository {
   Future<VaultItemDecrypted> uploadItem(
     String vaultId,
     Uint8List dek,
-    Uint8List fileBytes,
+    Uint8List? fileBytes,
     String fileName,
     String mimeType, {
     void Function(int sent, int total)? onProgress,
+    XFile? originalFile,
     String? sourcePath,
   }) async {
+    final originalSize =
+        originalFile != null ? await originalFile.length() : fileBytes!.length;
+
     // 1. Encrypt metadata (single-shot GCM).
     final metadataJson = jsonEncode({
       'fileName': fileName,
       'mimeType': mimeType,
-      'originalSize': fileBytes.length,
+      'originalSize': originalSize,
     });
     final (metadataIv, metadataBlob) = await const VaultCipher().encrypt(
       dek,
       Uint8List.fromList(utf8.encode(metadataJson)),
     );
 
-    // 2. Encrypt content (chunked GCM).
-    final plaintextChunks = _splitIntoChunks(
-      fileBytes,
-      VaultChunkedCipher.defaultChunkSize,
-    );
-    const chunked = VaultChunkedCipher();
-    final (header, encryptedChunks) = await chunked.encryptChunks(
-      dek,
-      plaintextChunks,
-    );
-
-    // 3. Build full blob: header + all encrypted chunks.
-    final blob = _concatBlob(header, encryptedChunks);
-
-    // 4. Generate and encrypt thumbnail (optional — never breaks upload).
+    // 2. Generate and encrypt thumbnail (optional — never breaks upload).
     String? thumbnailBlobBase64;
     String? thumbnailIvBase64;
     try {
-      final thumbnailBytes = await generateThumbnail(
+      final thumbnailBytes = await _generateUploadThumbnail(
         fileBytes,
         mimeType,
-        sourcePath: sourcePath,
+        sourcePath: originalFile?.path ?? sourcePath,
       );
       if (thumbnailBytes != null) {
         const cipher = VaultCipher();
@@ -251,25 +265,41 @@ final class VaultRepository {
       thumbnailIvBase64 = null;
     }
 
-    // 5. Upload to server.
-    final item = await _client.uploadItem(
-      vaultId: vaultId,
-      encryptedBlob: blob,
-      metadataBlobBase64: base64Encode(metadataBlob),
-      metadataIvBase64: base64Encode(metadataIv),
-      encryptionScheme: 'gcm_chunked',
-      chunkSize: VaultChunkedCipher.defaultChunkSize,
-      thumbnailBlobBase64: thumbnailBlobBase64,
-      thumbnailIvBase64: thumbnailIvBase64,
-      onProgress: onProgress,
-    );
+    // 3. Upload content.
+    final VaultItem item;
+    if (originalFile != null) {
+      item = await _uploadChunked(
+        vaultId: vaultId,
+        dek: dek,
+        originalFile: originalFile,
+        originalSize: originalSize,
+        metadataBlob: metadataBlob,
+        metadataIv: metadataIv,
+        thumbnailBlobBase64: thumbnailBlobBase64,
+        thumbnailIvBase64: thumbnailIvBase64,
+        onProgress: onProgress,
+      );
+    } else {
+      final blob = await _buildFullBlob(dek, fileBytes!);
+      item = await _client.uploadItem(
+        vaultId: vaultId,
+        encryptedBlob: blob,
+        metadataBlobBase64: base64Encode(metadataBlob),
+        metadataIvBase64: base64Encode(metadataIv),
+        encryptionScheme: 'gcm_chunked',
+        chunkSize: VaultChunkedCipher.defaultChunkSize,
+        thumbnailBlobBase64: thumbnailBlobBase64,
+        thumbnailIvBase64: thumbnailIvBase64,
+        onProgress: onProgress,
+      );
+    }
 
     return VaultItemDecrypted(
       id: item.id,
       vaultId: item.vaultId,
       fileName: fileName,
       mimeType: mimeType,
-      originalSize: fileBytes.length,
+      originalSize: originalSize,
       encryptionScheme: item.encryptionScheme,
       chunkSize: item.chunkSize,
       sizeBytes: item.sizeBytes,
@@ -603,5 +633,160 @@ final class VaultRepository {
       offset += chunk.length;
     }
     return blob;
+  }
+
+  /// Builds the full encrypted blob (header + all chunks) in memory. Used on
+  /// the in-memory route only — routed here when there is no original file to
+  /// stream (bytes-only, e.g. web file_picker).
+  Future<Uint8List> _buildFullBlob(Uint8List dek, Uint8List fileBytes) async {
+    final plaintextChunks = _splitIntoChunks(
+      fileBytes,
+      VaultChunkedCipher.defaultChunkSize,
+    );
+    const chunked = VaultChunkedCipher();
+    final (header, encryptedChunks) = await chunked.encryptChunks(
+      dek,
+      plaintextChunks,
+    );
+    return _concatBlob(header, encryptedChunks);
+  }
+
+  /// Streams the original [originalFile] to the server chunk-by-chunk, never
+  /// holding more than one chunk in memory: read slice → encrypt → PUT →
+  /// discard.
+  ///
+  /// The wire format is identical to the in-memory route (same 21-byte
+  /// header, same per-chunk nonce/AAD) — the server just assembles the chunks
+  /// into the same blob, and the existing download path reads it unchanged.
+  /// On any failure [VaultClient.abortChunkedUpload] is called so no partial
+  /// item is left behind.
+  Future<VaultItem> _uploadChunked({
+    required String vaultId,
+    required Uint8List dek,
+    required XFile originalFile,
+    required int originalSize,
+    required Uint8List metadataBlob,
+    required Uint8List metadataIv,
+    required String? thumbnailBlobBase64,
+    required String? thumbnailIvBase64,
+    required void Function(int sent, int total)? onProgress,
+  }) async {
+    const chunked = VaultChunkedCipher();
+    final chunkSize = VaultChunkedCipher.defaultChunkSize;
+    final total = VaultChunkedCipher.totalChunks(originalSize, chunkSize);
+    final header = VaultChunkedCipher.newHeader(
+      chunkSize: chunkSize,
+      originalSize: originalSize,
+    );
+
+    final session = await _client.beginChunkedUpload(
+      vaultId: vaultId,
+      header: header,
+    );
+
+    var contentSent = 0;
+    try {
+      // Progress BEFORE the first chunk — the user must not see a frozen
+      // screen while the first chunk is read + encrypted + uploaded.
+      onProgress?.call(0, originalSize);
+
+      for (var i = 0; i < total; i++) {
+        final isLast = i == total - 1;
+        final start = i * chunkSize;
+        final end = isLast ? originalSize : start + chunkSize;
+        final plaintext = await _readRange(originalFile, start, end);
+        final encrypted = await chunked.encryptChunk(
+          dek,
+          header,
+          i,
+          isLast,
+          plaintext,
+        );
+        await _putChunkWithRetry(vaultId, session.uploadId, i, encrypted);
+        contentSent += plaintext.length;
+        // plaintext & encrypted drop out of scope here — one chunk at a time.
+        onProgress?.call(contentSent, originalSize);
+      }
+
+      return await _client.completeChunkedUpload(
+        vaultId: vaultId,
+        uploadId: session.uploadId,
+        metadataBlobBase64: base64Encode(metadataBlob),
+        metadataIvBase64: base64Encode(metadataIv),
+        chunkSize: chunkSize,
+        thumbnailBlobBase64: thumbnailBlobBase64,
+        thumbnailIvBase64: thumbnailIvBase64,
+      );
+    } catch (e) {
+      // Every failure path aborts so no partial item is left on the server.
+      try {
+        await _client.abortChunkedUpload(
+          vaultId: vaultId,
+          uploadId: session.uploadId,
+        );
+      } catch (_) {
+        // Abort is best-effort — the original error propagates.
+      }
+      rethrow;
+    }
+  }
+
+  /// Reads bytes `[start]..[end)` of [file] into one buffer via
+  /// `XFile.openRead(start, end)` — native reads a dart:io file slice, web
+  /// reads a Blob.slice — neither materializes the whole file.
+  static Future<Uint8List> _readRange(XFile file, int start, int end) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(start, end)) {
+      builder.add(chunk);
+    }
+    return builder.takeBytes();
+  }
+
+  /// PUTs one chunk, retrying transient failures (network / HTTP 5xx / 429)
+  /// on the SAME index — the PUT is idempotent per index. 409
+  /// `chunk_out_of_order` and all other 4xx are real errors: never retried,
+  /// the whole upload is aborted.
+  Future<void> _putChunkWithRetry(
+    String vaultId,
+    String uploadId,
+    int index,
+    Uint8List encryptedChunk,
+  ) async {
+    for (var attempt = 1; ; attempt++) {
+      try {
+        await _client.putChunk(
+          vaultId: vaultId,
+          uploadId: uploadId,
+          index: index,
+          encryptedChunk: encryptedChunk,
+        );
+        return;
+      } on VaultApiException catch (e) {
+        if (e.statusCode < 500) rethrow; // 409 + other 4xx: real error
+        if (attempt >= _maxChunkAttempts) rethrow;
+        await Future<void>.delayed(_chunkRetryDelay * attempt);
+      } catch (_) {
+        // Transient network failure (SocketException, ClientException, etc.).
+        if (attempt >= _maxChunkAttempts) rethrow;
+        await Future<void>.delayed(_chunkRetryDelay * attempt);
+      }
+    }
+  }
+
+  /// Generates the upload thumbnail. Uses the bytes-based route when
+  /// [fileBytes] is present (covers images and bytes-only video), else the
+  /// path-based route for video when the original file is accessible.
+  static Future<Uint8List?> _generateUploadThumbnail(
+    Uint8List? fileBytes,
+    String mimeType, {
+    String? sourcePath,
+  }) async {
+    if (fileBytes != null) {
+      return generateThumbnail(fileBytes, mimeType, sourcePath: sourcePath);
+    }
+    if (mimeType.startsWith('video/') && sourcePath != null) {
+      return getThumbnailVideoFromPath(sourcePath);
+    }
+    return null;
   }
 }

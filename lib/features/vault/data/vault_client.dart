@@ -204,6 +204,96 @@ final class VaultClient {
     );
   }
 
+  // ============================================================
+  // Chunked upload (streaming) — see VaultRepository._uploadChunked
+  // ============================================================
+
+  /// Begins a chunked upload. Body is `{ header: b64 }` — the 21-byte blob
+  /// header, from which the server derives expected size and chunk layout.
+  ///
+  /// Returns a [VaultUploadSession] whose [VaultUploadSession.uploadId] is
+  /// passed to every subsequent chunk PUT and to complete/abort.
+  Future<VaultUploadSession> beginChunkedUpload({
+    required String vaultId,
+    required Uint8List header,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/uploads'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'header': base64Encode(header)}),
+    );
+    _ensureOk(response);
+    return VaultUploadSession.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// PUTs one encrypted chunk (`ciphertext ‖ GCM tag`) at [index].
+  ///
+  /// Idempotent per index — retrying the same index after a transient
+  /// failure is safe. 409 `chunk_out_of_order` signals a missing earlier
+  /// chunk and is a real error (callers must NOT retry it).
+  Future<void> putChunk({
+    required String vaultId,
+    required String uploadId,
+    required int index,
+    required Uint8List encryptedChunk,
+  }) async {
+    final response = await _client.put(
+      Uri.parse(
+        '$_baseUrl/api/v1/vaults/$vaultId/items/uploads/$uploadId/chunks/$index',
+      ),
+      headers: {'Content-Type': 'application/octet-stream'},
+      body: encryptedChunk,
+    );
+    _ensureOk(response);
+  }
+
+  /// Finalizes the upload: sends encrypted metadata + optional thumbnail,
+  /// then the server assembles the item. Returns the created [VaultItem].
+  Future<VaultItem> completeChunkedUpload({
+    required String vaultId,
+    required String uploadId,
+    required String metadataBlobBase64,
+    required String metadataIvBase64,
+    required int chunkSize,
+    String? thumbnailBlobBase64,
+    String? thumbnailIvBase64,
+  }) async {
+    final body = <String, dynamic>{
+      'metadata_blob': metadataBlobBase64,
+      'metadata_iv': metadataIvBase64,
+      'encryption_scheme': 'gcm_chunked',
+      'chunk_size': chunkSize,
+      if (thumbnailBlobBase64 != null && thumbnailIvBase64 != null) ...{
+        'thumbnail_blob': thumbnailBlobBase64,
+        'thumbnail_iv': thumbnailIvBase64,
+      },
+    };
+    final response = await _client.post(
+      Uri.parse(
+        '$_baseUrl/api/v1/vaults/$vaultId/items/uploads/$uploadId/complete',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    _ensureOk(response);
+    return VaultItem.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// Aborts an in-progress chunked upload, discarding uploaded chunks.
+  Future<void> abortChunkedUpload({
+    required String vaultId,
+    required String uploadId,
+  }) async {
+    final response = await _client.delete(
+      Uri.parse('$_baseUrl/api/v1/vaults/$vaultId/items/uploads/$uploadId'),
+    );
+    _ensureOk(response);
+  }
+
   /// Lists all items in a vault.
   ///
   /// Returns metadata for each item. Content blobs are NOT included —

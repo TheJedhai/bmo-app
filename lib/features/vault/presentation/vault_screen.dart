@@ -631,6 +631,10 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   int _uploadIndex = 0;
   int _uploadTotal = 0;
 
+  // Bytes lidos da cabeça de um arquivo para sniffar o mime — magic numbers
+  // ficam nos primeiros bytes, não precisa ler o arquivo inteiro.
+  static const int _kMimeSniffMaxBytes = 4096;
+
   // Download state
   String? _downloadingItemId;
   double _downloadProgress = 0;
@@ -704,7 +708,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
 
     final failures = <String>[];
     final pending =
-        <({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>[];
+        <({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})>[];
     for (final file in result.files) {
       // On web and iOS, withData (default) populates `bytes` fully in memory.
       final bytes = file.bytes;
@@ -728,6 +732,11 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
         // vinha do picker como image/jpeg e ficava salvo errado).
         mimeType: detectMimeType(bytes: bytes, fileName: file.name),
         sourcePath: sourcePath,
+        // ponytail: file_picker still delivers materialized bytes (withData),
+        // so there's no memory win from streaming here — keep the in-memory
+        // route (which is also the spec's fallback). Stream when file_picker
+        // can hand us the original file without materializing it.
+        originalFile: null,
       ));
     }
 
@@ -739,31 +748,50 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
   }
 
   /// "Foto ou vídeo" — galeria (PHPicker no iOS, seletor filtrado na web).
+  ///
+  /// O XFile carrega o arquivo ORIGINAL (path real no iOS, blob URL apoiado
+  /// no File no web) — o upload então faz streaming, nunca materializando o
+  /// arquivo inteiro em memória. Só lemos os bytes completos para imagens
+  /// (para gerar a thumbnail; fotos são pequenas).
   Future<void> _pickAndUploadMedia() async {
     final files = await ImagePicker().pickMultipleMedia();
     if (files.isEmpty) return;
 
     final failures = <String>[];
     final pending =
-        <({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>[];
+        <({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})>[];
     for (final file in files) {
-      final Uint8List bytes;
+      // Sniff mime pela cabeça do arquivo — magic numbers ficam no início.
+      final Uint8List headBytes;
       try {
-        bytes = await file.readAsBytes();
-      } catch (e) {
+        headBytes = await _readHead(file, _kMimeSniffMaxBytes);
+      } catch (_) {
         failures.add('${file.name}: não foi possível ler o arquivo.');
         continue;
       }
+      final mimeType = detectMimeType(bytes: headBytes, fileName: file.name);
+
+      // Imagem gera thumbnail dos bytes — como são pequenas, lemos inteiras.
+      // Vídeo/outros não: o conteúdo vai por streaming e a thumbnail de vídeo
+      // sai do arquivo original (path), sem bytes em memória.
+      Uint8List? fullBytes;
+      if (mimeType.startsWith('image/')) {
+        try {
+          fullBytes = await file.readAsBytes();
+        } catch (_) {
+          failures.add('${file.name}: não foi possível ler o arquivo.');
+          continue;
+        }
+      }
+
       pending.add((
-        bytes: bytes,
+        bytes: fullBytes,
         fileName: file.name,
-        // Mime pelos bytes, não pelo mimeType do picker nem pela extensão:
-        // Blob.type e extensão são metadado editável (foto HEIC do app
-        // Fotos chega como .jpg).
-        mimeType: detectMimeType(bytes: bytes, fileName: file.name),
+        mimeType: mimeType,
         // XFile.path nunca lança: caminho real (iOS) ou blob URL apoiado no
         // File escolhido (web, image_picker_for_web).
         sourcePath: file.path,
+        originalFile: file,
       ));
     }
 
@@ -774,11 +802,22 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     await _uploadFiles(pending, failures);
   }
 
+  /// Lê até [maxBytes] da cabeça de [file] via `XFile.openRead` — na web lê
+  /// só a fatia do blob, não o arquivo todo.
+  Future<Uint8List> _readHead(XFile file, int maxBytes) async {
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(0, maxBytes)) {
+      builder.add(chunk);
+      if (builder.length >= maxBytes) break;
+    }
+    return builder.takeBytes();
+  }
+
   /// Fluxo único de upload — cifragem, thumbnail e envio iguais para
   /// qualquer origem; só os bytes (e o path do arquivo original, quando
   /// existe) mudam.
   Future<void> _uploadFiles(
-    List<({Uint8List bytes, String fileName, String mimeType, String? sourcePath})>
+    List<({Uint8List? bytes, String fileName, String mimeType, String? sourcePath, XFile? originalFile})>
         files,
     List<String> failures,
   ) async {
@@ -809,6 +848,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
           file.bytes,
           fileName,
           file.mimeType,
+          originalFile: file.originalFile,
           sourcePath: file.sourcePath,
           onProgress: (sent, total) {
             if (!mounted) return;

@@ -33,6 +33,7 @@ import 'package:bmo_app/features/vault/crypto/vault_kdf.dart';
 import 'package:bmo_app/features/vault/data/vault_client.dart';
 import 'package:bmo_app/features/vault/data/vault_models.dart';
 import 'package:bmo_app/features/vault/data/vault_repository.dart';
+import 'package:cross_file/cross_file.dart';
 
 // ---------------------------------------------------------------------------
 // Mock KDF — fast, deterministic, no WASM needed
@@ -60,12 +61,23 @@ final class MockKdf implements VaultKdf {
 // ---------------------------------------------------------------------------
 
 /// Creates a [VaultRepository] with a [MockClient].
-VaultRepository _createRepo(MockClient mockClient) {
+///
+/// [chunkRetryDelay] defaults to zero so the chunked-retry test doesn't sleep.
+VaultRepository _createRepo(
+  MockClient mockClient, {
+  int maxChunkAttempts = 3,
+  Duration chunkRetryDelay = Duration.zero,
+}) {
   final client = VaultClient(
     client: mockClient,
     baseUrl: 'http://localhost:8089',
   );
-  return VaultRepository(client, kdf: const MockKdf());
+  return VaultRepository(
+    client,
+    kdf: const MockKdf(),
+    maxChunkAttempts: maxChunkAttempts,
+    chunkRetryDelay: chunkRetryDelay,
+  );
 }
 
 /// Creates a [Vault] JSON response body.
@@ -199,6 +211,122 @@ MockClient _mockForUpload({
     }
     return http.Response('not found', 404);
   });
+}
+
+// ---------------------------------------------------------------------------
+// Chunked upload mock — emulate the server-side upload session lifecycle.
+// ---------------------------------------------------------------------------
+
+/// In-memory view of a chunked upload as seen by the mock server.
+final class _ChunkedUploadMock {
+  Uint8List? header;
+  final Map<int, Uint8List> chunks = {};
+  final Map<int, int> attempts = {};
+  int putAcks = 0;
+  bool aborted = false;
+  bool completed = false;
+}
+
+/// Builds a MockClient for the chunked upload lifecycle: begin → N×PUT →
+/// complete, plus abort and a final `GET /items/{id}` that serves the
+/// assembled blob — so tests can round-trip through [VaultRepository.downloadItem].
+///
+/// [failIndex] injects [failStatus] for that chunk's first [failTimes]
+/// attempts (tracked in [state.attempts]). Statuses ≥ 500 are transient and
+/// retried by the repository; 409 is a real error.
+MockClient _mockChunkedServer(
+  _ChunkedUploadMock state, {
+  int? failIndex,
+  int failStatus = 409,
+  int failTimes = 1,
+}) {
+  return MockClient((request) async {
+    final path = request.url.path;
+
+    // Begin.
+    if (request.method == 'POST' && path.endsWith('/items/uploads')) {
+      final json = jsonDecode(request.body) as Map<String, dynamic>;
+      state.header = base64Decode(json['header'] as String);
+      return http.Response(
+        jsonEncode({'upload_id': 'u1', 'expected_size': 0}),
+        201,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    // PUT a chunk.
+    final chunkMatch =
+        RegExp(r'/uploads/u1/chunks/(\d+)$').firstMatch(path);
+    if (request.method == 'PUT' && chunkMatch != null) {
+      final index = int.parse(chunkMatch.group(1)!);
+      state.attempts[index] = (state.attempts[index] ?? 0) + 1;
+      if (failIndex == index && state.attempts[index]! <= failTimes) {
+        return http.Response(
+          jsonEncode({'error': 'chunk_failed', 'message': 'inject'}),
+          failStatus,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      state.chunks[index] = Uint8List.fromList(request.bodyBytes);
+      state.putAcks++;
+      return http.Response('', 204);
+    }
+
+    // Complete.
+    if (request.method == 'POST' && path.endsWith('/uploads/u1/complete')) {
+      state.completed = true;
+      return http.Response(
+        jsonEncode(_itemJson(
+          id: '10',
+          vaultId: '1',
+          metadataBlob: Uint8List(16),
+          metadataIv: Uint8List(12),
+          encryptionScheme: 'gcm_chunked',
+          chunkSize: VaultChunkedCipher.defaultChunkSize,
+          sizeBytes: 0,
+        )),
+        201,
+        headers: {'content-type': 'application/json'},
+      );
+    }
+
+    // Abort.
+    if (request.method == 'DELETE' && path.endsWith('/uploads/u1')) {
+      state.aborted = true;
+      return http.Response('', 204);
+    }
+
+    // Serve the assembled blob (round-trip via downloadItem).
+    if (request.method == 'GET' &&
+        path == '/api/v1/vaults/1/items/10') {
+      final blob = _assembleChunkedBlob(state);
+      return http.Response.bytes(
+        blob,
+        200,
+        headers: {
+          'content-type': 'application/octet-stream',
+          'content-length': blob.length.toString(),
+        },
+      );
+    }
+
+    return http.Response('not found', 404);
+  });
+}
+
+/// Concatenates the captured header + chunks in index order into the same
+/// blob format the in-memory route produces (and the download path expects).
+Uint8List _assembleChunkedBlob(_ChunkedUploadMock state) {
+  final header = state.header!;
+  final (_, _, chunkSize, originalSize) =
+      VaultChunkedCipher.parseHeader(header);
+  final total = VaultChunkedCipher.totalChunks(originalSize, chunkSize);
+  final builder = BytesBuilder(copy: false);
+  builder.add(header);
+  for (var i = 0; i < total; i++) {
+    builder.add(state.chunks[i]!);
+  }
+  return builder.takeBytes();
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,6 +1217,131 @@ void runVaultItemRepositoryTests() {
         () => repo.deleteItem('1', '99'),
         throwsA(isA<VaultApiException>()),
       );
+    });
+  });
+
+  // =========================================================================
+  // 8. uploadItem — chunked streaming route
+  // =========================================================================
+  group('uploadItem — chunked streaming', () {
+    // The streaming route uses the format's fixed defaultChunkSize (1 MiB),
+    // so test data must exceed 1 MiB to span multiple chunks.
+    final repoChunkSize = VaultChunkedCipher.defaultChunkSize;
+
+    test('writes a blob the current download reads back byte-identical', () async {
+      final fileBytes =
+          _testBytes(repoChunkSize * 3 + 137, seed: 11); // 4 chunks
+      final state = _ChunkedUploadMock();
+      final repo = _createRepo(_mockChunkedServer(state));
+
+      // Stream from the original file — bytes are NOT pre-materialized.
+      final result = await repo.uploadItem(
+        '1',
+        testDek,
+        null,
+        'video.mp4',
+        'video/mp4',
+        originalFile: XFile.fromData(fileBytes),
+      );
+
+      expect(result.id, '10');
+      expect(state.completed, isTrue);
+      expect(state.aborted, isFalse);
+      final total =
+          VaultChunkedCipher.totalChunks(fileBytes.length, repoChunkSize);
+      expect(state.chunks.length, total);
+
+      // Round-trip: the CURRENT download path decrypts what streaming wrote.
+      final decrypted = await repo.downloadItem('1', testDek, '10');
+      expect(decrypted, fileBytes);
+    });
+
+    test('mid-upload failure aborts and never completes', () async {
+      final fileBytes = _testBytes(repoChunkSize * 3, seed: 12); // 3 chunks
+      final state = _ChunkedUploadMock();
+      final repo = _createRepo(
+        _mockChunkedServer(state, failIndex: 1, failStatus: 409, failTimes: 1),
+        chunkRetryDelay: Duration.zero,
+      );
+
+      await expectLater(
+        () => repo.uploadItem(
+          '1',
+          testDek,
+          null,
+          'a.bin',
+          'application/octet-stream',
+          originalFile: XFile.fromData(fileBytes),
+        ),
+        throwsA(isA<VaultApiException>()),
+      );
+
+      expect(state.aborted, isTrue);
+      expect(state.completed, isFalse);
+    });
+
+    test('retries the same chunk index on transient failure without corrupting', () async {
+      final fileBytes = _testBytes(repoChunkSize * 2, seed: 13); // 2 chunks
+      final state = _ChunkedUploadMock();
+      final repo = _createRepo(
+        _mockChunkedServer(state, failIndex: 0, failStatus: 500, failTimes: 2),
+        chunkRetryDelay: Duration.zero,
+      );
+
+      await repo.uploadItem(
+        '1',
+        testDek,
+        null,
+        'b.bin',
+        'application/octet-stream',
+        originalFile: XFile.fromData(fileBytes),
+      );
+
+      // Index 0 was attempted 3 times (2 injected failures + 1 success).
+      expect(state.attempts[0], 3);
+      // Stored exactly once, and no corruption in the round-trip.
+      expect(state.chunks[0], isNotNull);
+      final decrypted = await repo.downloadItem('1', testDek, '10');
+      expect(decrypted, fileBytes);
+    });
+
+    test('no original file → in-memory route (multipart), not chunked', () async {
+      final chunkedCalls = <String>[];
+      final mockClient = MockClient((request) async {
+        if (request.url.path.contains('/uploads')) {
+          chunkedCalls.add('${request.method} ${request.url.path}');
+          return http.Response('not found', 404);
+        }
+        if (request.method == 'POST' &&
+            request.url.path == '/api/v1/vaults/1/items') {
+          return http.Response(
+            jsonEncode(_itemJson(
+              id: '10',
+              vaultId: '1',
+              metadataBlob: Uint8List(16),
+              metadataIv: Uint8List(12),
+              encryptionScheme: 'gcm_chunked',
+              chunkSize: VaultChunkedCipher.defaultChunkSize,
+              sizeBytes: 500,
+            )),
+            201,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        return http.Response('not found', 404);
+      });
+      final repo = _createRepo(mockClient);
+
+      final fileBytes = _testBytes(300, seed: 14);
+      await repo.uploadItem(
+        '1',
+        testDek,
+        fileBytes,
+        'c.bin',
+        'application/octet-stream',
+      );
+
+      expect(chunkedCalls, isEmpty);
     });
   });
 }

@@ -843,5 +843,31 @@ void main() {
         throwsA(isA<VaultCipherException>()),
       );
     });
+
+    test('encryptChunk/decryptChunk round-trip matches encryptChunks for '
+        'the same index (streaming upload path)', () async {
+      const chunked = VaultChunkedCipher();
+      final dek = VaultCipher.generateKey();
+      final original = _patternBytes(testChunkSize * 3 + 50);
+      final plaintextChunks = _splitChunks(original, testChunkSize);
+
+      // The streaming path builds a header via newHeader, then encrypts chunk
+      // by chunk with encryptChunk. That must produce the exact same ciphertext
+      // as the batch encryptChunks for the same index, so the download path
+      // reads both blobs identically.
+      final header = VaultChunkedCipher.newHeader(
+        chunkSize: testChunkSize,
+        originalSize: original.length,
+      );
+
+      for (var i = 0; i < plaintextChunks.length; i++) {
+        final isLast = i == plaintextChunks.length - 1;
+        final enc = await chunked.encryptChunk(
+          dek, header, i, isLast, plaintextChunks[i]);
+        // Round-trips back to the exact plaintext slice.
+        final dec = await chunked.decryptChunk(dek, header, i, enc);
+        expect(dec, plaintextChunks[i]);
+      }
+    });
   });
 }

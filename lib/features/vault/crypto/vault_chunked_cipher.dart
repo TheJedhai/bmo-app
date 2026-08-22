@@ -97,7 +97,7 @@ const int _offsetOriginalSize = 13;
 
 /// Random nonce prefix length in bytes. The remaining 4 bytes of the 12-byte
 /// GCM nonce carry the chunk index as u32 big-endian.
-const int _noncePrefixLength = 8;
+const int noncePrefixLength = 8;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -137,7 +137,7 @@ final class VaultChunkedCipher {
   }) {
     final header = Uint8List(headerByteLength);
     header[0] = _formatVersion;
-    header.setRange(_offsetNoncePrefix, _offsetNoncePrefix + _noncePrefixLength,
+    header.setRange(_offsetNoncePrefix, _offsetNoncePrefix + noncePrefixLength,
         noncePrefix);
     _encodeUint32BE(header, _offsetChunkSize, chunkSize);
     _encodeUint64BE(header, _offsetOriginalSize, originalSize);
@@ -165,7 +165,7 @@ final class VaultChunkedCipher {
     final noncePrefix = Uint8List.sublistView(
       header,
       _offsetNoncePrefix,
-      _offsetNoncePrefix + _noncePrefixLength,
+      _offsetNoncePrefix + noncePrefixLength,
     );
     final chunkSize = _decodeUint32BE(header, _offsetChunkSize);
     final originalSize = _decodeUint64BE(header, _offsetOriginalSize);
@@ -181,6 +181,21 @@ final class VaultChunkedCipher {
   static int totalChunks(int originalSize, int chunkSize) {
     if (originalSize == 0) return 1; // sentinel chunk for empty files
     return (originalSize + chunkSize - 1) ~/ chunkSize;
+  }
+
+  /// Builds a fresh v2 header with a new random nonce prefix.
+  ///
+  /// Single source of truth for header construction in the streaming upload
+  /// path — the caller never needs to generate nonce bytes itself.
+  static Uint8List newHeader({
+    required int chunkSize,
+    required int originalSize,
+  }) {
+    return buildHeader(
+      noncePrefix: VaultCipher.randomBytes(noncePrefixLength),
+      chunkSize: chunkSize,
+      originalSize: originalSize,
+    );
   }
 
   // -- Encryption ------------------------------------------------------------
@@ -203,7 +218,7 @@ final class VaultChunkedCipher {
     int chunkSize = defaultChunkSize,
   }) async {
     const cipher = VaultCipher();
-    final noncePrefix = VaultCipher.randomBytes(_noncePrefixLength);
+    final noncePrefix = VaultCipher.randomBytes(noncePrefixLength);
 
     // Ensure at least one sentinel chunk for an empty file so decryption
     // always authenticates the is_last flag (never accepts "0 chunks").
@@ -239,6 +254,32 @@ final class VaultChunkedCipher {
     }
 
     return (header, encryptedChunks);
+  }
+
+  /// Encrypts a single chunk at [chunkIndex], binding the full [header] +
+  /// index + is-last flag as AAD. Mirrors [decryptChunk].
+  ///
+  /// Used by the streaming upload path to encrypt one chunk in isolation, so
+  /// the whole file never needs to be in memory. The caller reads [plaintext]
+  /// from the original file, encrypts it here, and discards it.
+  Future<Uint8List> encryptChunk(
+    Uint8List dek,
+    Uint8List header,
+    int chunkIndex,
+    bool isLast,
+    Uint8List plaintext,
+  ) async {
+    final (_, noncePrefix, _, _) = parseHeader(header);
+    final nonce = _buildChunkNonce(noncePrefix, chunkIndex);
+    final aad = _buildChunkAad(header, chunkIndex, isLast);
+    const cipher = VaultCipher();
+    final (_, ciphertext) = await cipher.encrypt(
+      dek,
+      plaintext,
+      iv: nonce,
+      additionalData: aad,
+    );
+    return ciphertext;
   }
 
   // -- Decryption ------------------------------------------------------------
@@ -398,8 +439,8 @@ final class VaultChunkedCipher {
 /// ```
 Uint8List _buildChunkNonce(Uint8List noncePrefix, int chunkIndex) {
   final nonce = Uint8List(VaultCipher.ivLength);
-  nonce.setRange(0, _noncePrefixLength, noncePrefix);
-  _encodeUint32BE(nonce, _noncePrefixLength, chunkIndex);
+  nonce.setRange(0, noncePrefixLength, noncePrefix);
+  _encodeUint32BE(nonce, noncePrefixLength, chunkIndex);
   return nonce;
 }
 

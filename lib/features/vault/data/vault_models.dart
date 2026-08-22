@@ -136,6 +136,26 @@ final class VaultItem {
   }
 }
 
+/// A server-assigned session for a chunked upload (`POST .../items/uploads`).
+///
+/// Returned by the begin step. [uploadId] is passed to every subsequent
+/// chunk PUT and to complete/abort. [expectedSize] is the total encrypted
+/// blob size the server expects — informational; the client drives progress
+/// from its own chunk accounting.
+final class VaultUploadSession {
+  final String uploadId;
+  final int expectedSize;
+
+  const VaultUploadSession({required this.uploadId, required this.expectedSize});
+
+  factory VaultUploadSession.fromJson(Map<String, dynamic> json) {
+    return VaultUploadSession(
+      uploadId: json['upload_id']?.toString() ?? '',
+      expectedSize: json['expected_size'] as int? ?? 0,
+    );
+  }
+}
+
 /// A vault item with decrypted metadata (file name, MIME type, original size).
 ///
 /// This is the in-memory view returned by [VaultRepository.listItems] after
