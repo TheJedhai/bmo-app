@@ -18,6 +18,7 @@ import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
 
+import '../../../core/platform/file_range_reader.dart';
 import '../crypto/vault_chunked_cipher.dart';
 import '../crypto/vault_cipher.dart';
 import '../crypto/vault_crypto.dart' as crypto;
@@ -684,8 +685,18 @@ final class VaultRepository {
       header: header,
     );
 
+    // One reader for the whole upload: the platform seam holds a single file
+    // handle (dart:io file / rehydrated Blob) and reads each range from it.
+    // XFile.openRead on web re-hidrata o blob via XHR a cada chamada — inviável
+    // para upload de arquivo grande (issue #91867). Abrir UMA vez e fatiar.
+    FileRangeReader? reader;
     var contentSent = 0;
     try {
+      // Abrir o reader DENTRO do try: se re-hidratar o blob falhar (ex.: URL
+      // revogado), o catch aborta a sessão do servidor em vez de deixar item
+      // parcial órfão.
+      reader = await openFileRangeReader(originalFile);
+
       // Progress BEFORE the first chunk — the user must not see a frozen
       // screen while the first chunk is read + encrypted + uploaded.
       onProgress?.call(0, originalSize);
@@ -694,7 +705,7 @@ final class VaultRepository {
         final isLast = i == total - 1;
         final start = i * chunkSize;
         final end = isLast ? originalSize : start + chunkSize;
-        final plaintext = await _readRange(originalFile, start, end);
+        final plaintext = await reader.readRange(start, end);
         final encrypted = await chunked.encryptChunk(
           dek,
           header,
@@ -728,18 +739,9 @@ final class VaultRepository {
         // Abort is best-effort — the original error propagates.
       }
       rethrow;
+    } finally {
+      reader?.dispose();
     }
-  }
-
-  /// Reads bytes `[start]..[end)` of [file] into one buffer via
-  /// `XFile.openRead(start, end)` — native reads a dart:io file slice, web
-  /// reads a Blob.slice — neither materializes the whole file.
-  static Future<Uint8List> _readRange(XFile file, int start, int end) async {
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in file.openRead(start, end)) {
-      builder.add(chunk);
-    }
-    return builder.takeBytes();
   }
 
   /// PUTs one chunk, retrying transient failures (network / HTTP 5xx / 429)

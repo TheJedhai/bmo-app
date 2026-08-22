@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/platform/file_download.dart';
+import '../../../core/platform/file_range_reader.dart';
 import '../../../core/platform/pdf_preview.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
@@ -802,15 +803,16 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
     await _uploadFiles(pending, failures);
   }
 
-  /// Lê até [maxBytes] da cabeça de [file] via `XFile.openRead` — na web lê
-  /// só a fatia do blob, não o arquivo todo.
+  /// Lê até [maxBytes] da cabeça de [file] via a costura de faixa — na web
+  /// fatia o blob (`Blob.slice`), lendo só a cabeça; no nativo lê do
+  /// dart:io File. Nenhum dos dois materializa o arquivo inteiro.
   Future<Uint8List> _readHead(XFile file, int maxBytes) async {
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in file.openRead(0, maxBytes)) {
-      builder.add(chunk);
-      if (builder.length >= maxBytes) break;
+    final reader = await openFileRangeReader(file);
+    try {
+      return await reader.readRange(0, maxBytes);
+    } finally {
+      reader.dispose();
     }
-    return builder.takeBytes();
   }
 
   /// Fluxo único de upload — cifragem, thumbnail e envio iguais para
