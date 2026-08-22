@@ -94,7 +94,9 @@ class _AppShell extends ConsumerWidget {
           body = Stack(
             children: [
               Positioned(
-                top: BmoTopBar.totalTopInset,
+                // Dashboard começa no topo (o header do relógio divide a
+                // faixa com os controles); features mantêm o inset da barra.
+                top: isDashboard ? 0 : BmoTopBar.totalTopInset,
                 left: 0,
                 right: 0,
                 bottom: isDashboard ? 0 : BmoNavBar.totalBottomInset,

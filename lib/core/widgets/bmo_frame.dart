@@ -8,6 +8,7 @@ import '../../features/settings/widgets/settings_modal.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_avatar.dart';
 import '../theme/bmo_theme.dart';
+import 'dark_circle.dart';
 
 const kMobileBreakpoint = 600.0;
 
@@ -115,7 +116,7 @@ class BmoFrame extends ConsumerWidget {
                   size: touchSize,
                   alignment: Alignment.topRight,
                   onTap: () => showSettingsModal(context),
-                  child: _DarkCircle(
+                  child: DarkCircle(
                     diameter: visualDiameter,
                     child: Icon(
                       Icons.settings,
@@ -194,28 +195,6 @@ class _ControlHitbox extends StatelessWidget {
         height: size,
         child: Align(alignment: alignment, child: child),
       ),
-    );
-  }
-}
-
-/// Círculo escuro ([BmoColors.screenBg]) usado como fundo de contraste
-/// para controles que ficam sobre o chassi verde claro.
-class _DarkCircle extends StatelessWidget {
-  final double diameter;
-  final Widget child;
-
-  const _DarkCircle({required this.diameter, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: diameter,
-      height: diameter,
-      decoration: const BoxDecoration(
-        color: BmoColors.screenBg,
-        shape: BoxShape.circle,
-      ),
-      child: Center(child: child),
     );
   }
 }

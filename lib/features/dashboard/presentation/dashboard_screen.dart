@@ -15,6 +15,10 @@ const _kSpacing = 28.0;
 const _kPadding = 28.0;
 const _kMobilePadding = 16.0;
 
+/// Largura reservada na linha da hora para os controles da BmoTopBar
+/// (engrenagem 48 + gap 4 + avatar 48 + padding direito 12).
+const _kTopBarControlReserve = 112.0;
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -71,9 +75,12 @@ class DashboardScreen extends ConsumerWidget {
 // ============================================================================
 
 /// Layout mobile da dashboard:
-/// 1. Header full-width com relógio + data + saudação.
-///    (Controles ficam no BmoTopBar, fora da dashboard.)
-/// 2. MasonryGridView de 2 colunas com os cards restantes.
+/// 1. Scroll único: header full-width (relógio + data + saudação) entra no
+///    mesmo scroll dos cards — sem header fixo, sem Expanded. A linha da
+///    hora reserva [_kTopBarControlReserve] à direita, a faixa dos
+///    controles do BmoTopBar (que ficam por cima da dashboard no shell).
+/// 2. MasonryGridView de 2 colunas (shrinkWrap, sem scroll próprio) com os
+///    cards restantes.
 class _DashboardMobileLayout extends ConsumerWidget {
   const _DashboardMobileLayout({required this.visibleWidgets});
 
@@ -87,25 +94,27 @@ class _DashboardMobileLayout extends ConsumerWidget {
         .firstOrNull;
     final cardSpecs = visibleWidgets.where((s) => s.id != 'relogio').toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ---- Header ----
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            _kMobilePadding,
-            _kMobilePadding,
-            _kMobilePadding,
-            0,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ---- Header ----
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _kMobilePadding,
+              _kMobilePadding,
+              _kMobilePadding,
+              0,
+            ),
+            child: _MobileClockContent(
+              accent: clockSpec?.accent ?? BmoColors.accentYellow,
+            ),
           ),
-          child: _MobileClockContent(
-            accent: clockSpec?.accent ?? BmoColors.accentYellow,
-          ),
-        ),
-        const SizedBox(height: 16),
-        // ---- Grid de cards (2 colunas) ----
-        Expanded(
-          child: MasonryGridView.count(
+          const SizedBox(height: 16),
+          // ---- Grid de cards (2 colunas) ----
+          MasonryGridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             crossAxisCount: 2,
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
@@ -133,8 +142,8 @@ class _DashboardMobileLayout extends ConsumerWidget {
               return card;
             },
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -172,24 +181,33 @@ class _MobileClockContent extends ConsumerWidget {
       children: [
         // Hora — height 1.0 compensa o ascent/descent da PressStart2P
         // (linha box alta demais); FittedBox encolhe se a largura faltar.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            hourFormatter.format(now),
-            style: TextStyle(
-              fontFamily: 'PressStart2P',
-              fontSize: 36,
-              height: 1.0,
-              color: accent,
-              shadows: [
-                Shadow(
-                  color: accent.withValues(alpha: 0.40),
-                  blurRadius: 8,
+        // O Expanded ocupa a faixa à esquerda dos controles da top bar,
+        // que ficam na mesma linha (dashboard começa no topo do shell).
+        Row(
+          children: [
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  hourFormatter.format(now),
+                  style: TextStyle(
+                    fontFamily: 'PressStart2P',
+                    fontSize: 36,
+                    height: 1.0,
+                    color: accent,
+                    shadows: [
+                      Shadow(
+                        color: accent.withValues(alpha: 0.40),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: _kTopBarControlReserve),
+          ],
         ),
         const SizedBox(height: 6),
         // Data curta

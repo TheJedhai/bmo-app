@@ -5,6 +5,7 @@ import '../../features/settings/widgets/settings_modal.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_avatar.dart';
 import '../theme/bmo_theme.dart';
+import 'dark_circle.dart';
 
 /// Controles do dispositivo (settings + perfil) para mobile.
 ///
@@ -27,49 +28,60 @@ class BmoTopBar extends ConsumerWidget {
       top: 16,
       left: 0,
       right: 0,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Engrenagem
-          SizedBox(
-            width: 48,
-            height: 48,
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => showSettingsModal(context),
-                borderRadius: BorderRadius.circular(24),
-                child: const Icon(
-                  Icons.settings,
-                  size: 24,
-                  color: BmoColors.accentGreen,
+      child: Padding(
+        // Sem o padding o avatar encosta na borda direita da tela.
+        padding: const EdgeInsets.only(right: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            // Engrenagem
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => showSettingsModal(context),
+                  borderRadius: BorderRadius.circular(24),
+                  child: const DarkCircle(
+                    diameter: 48,
+                    child: Icon(
+                      Icons.settings,
+                      size: 24,
+                      color: BmoColors.accentGreen,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 4),
-          // Avatar
-          SizedBox(
-            width: 48,
-            height: 48,
-            child:
-                userAsync.whenOrNull(
-                  data: (user) {
-                    if (user == null) return const SizedBox.shrink();
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () =>
-                            ref.read(currentUserProvider.notifier).clearUser(),
-                        borderRadius: BorderRadius.circular(24),
-                        child: ProfileAvatar(profile: user, radius: 18),
-                      ),
-                    );
-                  },
-                ) ??
-                const SizedBox.shrink(),
-          ),
-        ],
+            const SizedBox(width: 4),
+            // Avatar
+            SizedBox(
+              width: 48,
+              height: 48,
+              child:
+                  userAsync.whenOrNull(
+                    data: (user) {
+                      if (user == null) return const SizedBox.shrink();
+                      return Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => ref
+                              .read(currentUserProvider.notifier)
+                              .clearUser(),
+                          borderRadius: BorderRadius.circular(24),
+                          child: DarkCircle(
+                            diameter: 48,
+                            child: ProfileAvatar(profile: user, radius: 18),
+                          ),
+                        ),
+                      );
+                    },
+                  ) ??
+                  const SizedBox.shrink(),
+            ),
+          ],
+        ),
       ),
     );
   }
