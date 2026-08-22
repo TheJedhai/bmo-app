@@ -15,14 +15,22 @@ import 'bmo_density.dart';
 /// Chevron › à direita quando [onTap] != null.
 ///
 /// Hover (desktop): AnimatedContainer 150ms, translateY −3px + scale 1.008.
+/// Press state (touch): escala 0.98 via Listener no lugar do MouseRegion
+/// (touch nao dispara hover).
 ///
 /// Estrutura:
-/// MouseRegion → AnimatedContainer →
-///   Stack [
-///     Container (superfície + borda + glow),
-///     CustomPaint (cantoneiras L),
-///     Column (header + child, mainAxisSize.min)
-///   ]
+/// RepaintBoundary → MouseRegion → Listener →
+///   AnimatedContainer →
+///     AnimatedBuilder (glow) →
+///       Stack [
+///         Container (superfície + borda + glow),
+///         CustomPaint (cantoneiras L),
+///         Column (header + child, mainAxisSize.min)
+///       ]
+///
+/// O RepaintBoundary isola o glow continuo de cada card: o repaint da
+/// sombra de um card nao arrasta irmaos nem a pagina. Estruturas acima
+/// do card ja sao cacheadas via `child:` do AnimatedBuilder.
 class DashCard extends StatefulWidget {
   const DashCard({
     super.key,
@@ -42,23 +50,14 @@ class DashCard extends StatefulWidget {
   /// Número em destaque no estilo dashboard:
   /// PressStart2P, cor [accent], com sombra glow. [fontSize] segue a
   /// [BmoDensity] do contexto (34 regular, 24 compact).
-  static Widget highlightNumber(
-    String text,
-    Color accent, {
-    double? fontSize,
-  }) {
+  static Widget highlightNumber(String text, Color accent, {double? fontSize}) {
     return Text(
       text,
       style: TextStyle(
         fontFamily: 'PressStart2P',
         fontSize: fontSize ?? 34,
         color: accent,
-        shadows: [
-          Shadow(
-            color: accent.withValues(alpha: 0.40),
-            blurRadius: 8,
-          ),
-        ],
+        shadows: [Shadow(color: accent.withValues(alpha: 0.40), blurRadius: 8)],
       ),
     );
   }
@@ -72,6 +71,7 @@ class _DashCardState extends State<DashCard>
   late final AnimationController _glowController;
   late final Animation<double> _glowAnimation;
   bool _isHovered = false;
+  bool _isPressed = false;
 
   @override
   void initState() {
@@ -103,103 +103,116 @@ class _DashCardState extends State<DashCard>
   }
 
   Color get _surfaceColor => Color.alphaBlend(
-        widget.accent.withValues(alpha: 0.10),
-        BmoColors.screenBgElevated,
-      );
+    widget.accent.withValues(alpha: 0.10),
+    BmoColors.screenBgElevated,
+  );
 
   @override
   Widget build(BuildContext context) {
     final density = BmoDensity.of(context);
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        transform: () {
-          final m = Matrix4.identity();
-          m.setTranslationRaw(0.0, _isHovered ? -3.0 : 0.0, 0.0);
-          final s = _isHovered ? 1.008 : 1.0;
-          m.setEntry(0, 0, s);
-          m.setEntry(1, 1, s);
-          return m;
-        }(),
-        child: AnimatedBuilder(
-          animation: _glowAnimation,
-          builder: (context, child) {
-            return Container(
-              decoration: BoxDecoration(
-                color: _surfaceColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: widget.accent.withValues(alpha: 0.50),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  // Halo interno — forte e tight
-                  BoxShadow(
-                    color: widget.accent.withValues(alpha: 0.55),
-                    blurRadius: _glowAnimation.value,
-                    spreadRadius: (_glowAnimation.value - 12) / 8 + 1,
-                  ),
-                  // Bloom externo — difuso e amplo
-                  BoxShadow(
-                    color: widget.accent.withValues(alpha: 0.30),
-                    blurRadius: _glowAnimation.value * 1.8,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: child!,
-            );
-          },
-          // Cacheia a sub-árvore estática — só o BoxShadow reconstrói a cada frame.
-          child: Stack(
-            children: [
-              // Cantoneiras em L nos 4 cantos
-              Positioned.fill(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: CustomPaint(
-                    painter: _LCornerPainter(
-                      color: widget.accent,
-                      strokeLength: density.cornerStrokeLength,
-                      strokeWidth: 2.5,
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: Listener(
+          behavior: HitTestBehavior.opaque,
+          onPointerDown: (_) => setState(() => _isPressed = true),
+          onPointerUp: (_) => setState(() => _isPressed = false),
+          onPointerCancel: (_) => setState(() => _isPressed = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            transform: () {
+              final m = Matrix4.identity();
+              if (_isPressed) {
+                // Press state (touch): o card encolhe para 0.98.
+                m.setEntry(0, 0, 0.98);
+                m.setEntry(1, 1, 0.98);
+              } else if (_isHovered) {
+                // Hover (desktop): levanta 3px + leve zoom.
+                m.setTranslationRaw(0.0, -3.0, 0.0);
+                m.setEntry(0, 0, 1.008);
+                m.setEntry(1, 1, 1.008);
+              }
+              return m;
+            }(),
+            child: AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: _surfaceColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: widget.accent.withValues(alpha: 0.50),
+                      width: 1.5,
                     ),
-                  ),
-                ),
-              ),
-              // Conteúdo do card
-              Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  onTap:
-                      widget.onTap != null
-                          ? () => widget.onTap!(context)
-                          : null,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (widget.title != null)
-                        _DashCardHeader(
-                          title: widget.title!,
-                          accent: widget.accent,
-                          showChevron: widget.onTap != null,
-                        ),
-                      Flexible(
-                        child: Padding(
-                          padding: EdgeInsets.all(density.contentPadding),
-                          child: widget.child,
-                        ),
+                    boxShadow: [
+                      // Halo interno — forte e tight
+                      BoxShadow(
+                        color: widget.accent.withValues(alpha: 0.55),
+                        blurRadius: _glowAnimation.value,
+                        spreadRadius: (_glowAnimation.value - 12) / 8 + 1,
+                      ),
+                      // Bloom externo — difuso e amplo
+                      BoxShadow(
+                        color: widget.accent.withValues(alpha: 0.30),
+                        blurRadius: _glowAnimation.value * 1.8,
+                        spreadRadius: 2,
                       ),
                     ],
                   ),
-                ),
+                  child: child!,
+                );
+              },
+              // Cacheia a sub-árvore estática — só o BoxShadow reconstrói a cada frame.
+              child: Stack(
+                children: [
+                  // Cantoneiras em L nos 4 cantos
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: CustomPaint(
+                        painter: _LCornerPainter(
+                          color: widget.accent,
+                          strokeLength: density.cornerStrokeLength,
+                          strokeWidth: 2.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Conteúdo do card
+                  Material(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      onTap: widget.onTap != null
+                          ? () => widget.onTap!(context)
+                          : null,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.title != null)
+                            _DashCardHeader(
+                              title: widget.title!,
+                              accent: widget.accent,
+                              showChevron: widget.onTap != null,
+                            ),
+                          Flexible(
+                            child: Padding(
+                              padding: EdgeInsets.all(density.contentPadding),
+                              child: widget.child,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -225,12 +238,11 @@ class _LCornerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..strokeWidth = strokeWidth
-          ..strokeCap = StrokeCap.round
-          ..style = PaintingStyle.stroke;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
     final inset = strokeWidth / 2 + 3; // ligeiro recuo da borda
 
@@ -241,14 +253,7 @@ class _LCornerPainter extends CustomPainter {
     // Inferior esquerdo
     _drawCorner(canvas, paint, inset, size.height - inset, 1, -1);
     // Inferior direito
-    _drawCorner(
-      canvas,
-      paint,
-      size.width - inset,
-      size.height - inset,
-      -1,
-      -1,
-    );
+    _drawCorner(canvas, paint, size.width - inset, size.height - inset, -1, -1);
   }
 
   void _drawCorner(
@@ -260,17 +265,9 @@ class _LCornerPainter extends CustomPainter {
     int dirY,
   ) {
     // Traço horizontal
-    canvas.drawLine(
-      Offset(x, y),
-      Offset(x + dirX * strokeLength, y),
-      paint,
-    );
+    canvas.drawLine(Offset(x, y), Offset(x + dirX * strokeLength, y), paint);
     // Traço vertical
-    canvas.drawLine(
-      Offset(x, y),
-      Offset(x, y + dirY * strokeLength),
-      paint,
-    );
+    canvas.drawLine(Offset(x, y), Offset(x, y + dirY * strokeLength), paint);
   }
 
   @override
