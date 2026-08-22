@@ -79,8 +79,8 @@ class DashboardScreen extends ConsumerWidget {
 ///    mesmo scroll dos cards — sem header fixo, sem Expanded. A linha da
 ///    hora reserva [_kTopBarControlReserve] à direita, a faixa dos
 ///    controles do BmoTopBar (que ficam por cima da dashboard no shell).
-/// 2. MasonryGridView de 2 colunas (shrinkWrap, sem scroll próprio) com os
-///    cards restantes.
+/// 2. StaggeredGrid de 2 colunas com os cards restantes, cada um ocupando
+///    spec.mobileSpan colunas (Chat e Galeria = 2, largura cheia).
 class _DashboardMobileLayout extends ConsumerWidget {
   const _DashboardMobileLayout({required this.visibleWidgets});
 
@@ -112,35 +112,39 @@ class _DashboardMobileLayout extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
           // ---- Grid de cards (2 colunas) ----
-          MasonryGridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            clipBehavior: Clip.none,
+          Padding(
             padding: const EdgeInsets.fromLTRB(
               _kMobilePadding,
               0,
               _kMobilePadding,
               _kMobilePadding,
             ),
-            itemCount: cardSpecs.length,
-            itemBuilder: (context, index) {
-              final spec = cardSpecs[index];
-              final card = DashCard(
-                title: spec.title,
-                accent: spec.accent,
-                pulseDelay: spec.pulseDelay,
-                onTap: spec.onTap,
-                child: spec.builder(context, spec.accent),
-              );
+            child: StaggeredGrid.count(
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              children: [
+                for (final spec in cardSpecs)
+                  StaggeredGridTile.fit(
+                    crossAxisCellCount: spec.mobileSpan,
+                    child: Builder(builder: (context) {
+                      final card = DashCard(
+                        title: spec.title,
+                        accent: spec.accent,
+                        pulseDelay: spec.pulseDelay,
+                        onTap: spec.onTap,
+                        child: spec.builder(context, spec.accent),
+                      );
 
-              if (spec.height != null) {
-                return SizedBox(height: spec.height, child: card);
-              }
-              return card;
-            },
+                      final height = spec.mobileHeight ?? spec.height;
+                      if (height != null) {
+                        return SizedBox(height: height, child: card);
+                      }
+                      return card;
+                    }),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
