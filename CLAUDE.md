@@ -49,9 +49,35 @@ sem necessidade real:
 
 ## Layout
 
-- `BmoFrame` cobre a viewport: borda verde + screen escura no meio
-- Breakpoint mobile: `< 600px` (definido em `bmo_frame.dart` como `_kMobileBreakpoint`)
-- Padding da borda muda entre mobile (12) e desktop (28)
+- `BmoFrame` cobre a viewport: borda verde + screen escura no meio. É ele
+  que provê o `Material` da árvore (ver abaixo).
+- **Safe area**: no mobile a faixa verde ABSORVE a safe area via
+  `viewPadding` (não `padding` — viewPadding não zera quando o teclado
+  sobe). Features NÃO devem usar `SafeArea`: o frame já consumiu o inset e
+  faz `MediaQuery.removePadding` em todos os lados. Mínimo de 14px para o
+  bezel não afinar demais em aparelhos sem inset.
+- **Insets de conteúdo**: `BmoTopBar.totalTopInset` (48 + 16) e
+  `BmoNavBar.totalBottomInset` (68 + 16) são os insets que as features
+  reservam para a top bar / nav bar. Na dashboard o conteúdo passa POR BAIXO
+  dessas barras (`top: 0` / `bottom: 0` — o header do relógio divide a faixa
+  com os controles); nas demais rotas os insets viram padding-top/bottom.
+- **Material ausente**: `BmoFrame` provê o `Material` da árvore. Texto sem
+  `Material` acima herda `DefaultTextStyle.fallback` e aparece com
+  sublinhado duplo amarelo — que NÃO loga overflow. Se aparecerem barras
+  amarelas em textos, é isso, não é bug de layout.
+- **Breakpoint**: `kMobileBreakpoint` (600.0) é o ÚNICO breakpoint, definido
+  em `bmo_frame.dart`. Não criar cópias privadas (`_kMobileBreakpoint`) nem
+  repetir `< 600` em features — importar a constante. Dica: `maxWidth:
+  isMobile ? double.infinity : 600` em modais é LARGURA de modal, não
+  breakpoint (não virar a constante).
+- **Densidade**: `BmoDensity` (regular/compact) expõe `BmoDensityMode` via
+  `InheritedWidget`. Cards leem densidade do contexto
+  (`BmoDensity.of(context)`), não recebem `isMobile` por construtor.
+- **Dashboard**: `DashWidgetSpec` tem `mobileSpan` (colunas no grid mobile de
+  2) e `mobileHeight` (altura fixa opcional no mobile). A ordem da lista
+  `dashboardWidgets` é a ordem de renderização; o registry é a fonte única
+  dos cards.
+- Padding da borda do frame: mobile 14+ (safe area) vs desktop 28.
 
 ## Comandos
 
