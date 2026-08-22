@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
@@ -8,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/identity/identity_provider.dart';
 import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/time/current_minute_provider.dart';
 import '../dashboard_registry.dart';
 import '../widgets/dash_card.dart';
 
@@ -146,48 +145,23 @@ class _DashboardMobileLayout extends ConsumerWidget {
 
 /// Conteúdo do relógio para o header mobile, extraído do [ClockCard].
 ///
-/// Mostra hora (PressStart2P 36px), data por extenso (Inter 13px) e saudação
-/// com nome do usuário (Inter 14px). O timer atualiza a cada minuto.
-class _MobileClockContent extends ConsumerStatefulWidget {
+/// Mostra hora (PressStart2P 36px), data curta "qui, 21 ago" (Inter 13px)
+/// e saudação com nome do usuário (Inter 14px). A hora vem do
+/// [currentMinuteProvider] — atualiza a cada minuto alinhado e sobrevive
+/// à suspensão do iOS via AppLifecycleListener.
+class _MobileClockContent extends ConsumerWidget {
   const _MobileClockContent({required this.accent});
 
   final Color accent;
 
   @override
-  ConsumerState<_MobileClockContent> createState() =>
-      _MobileClockContentState();
-}
-
-class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
-  Timer? _timer;
-  late DateTime _now;
-
-  @override
-  void initState() {
-    super.initState();
-    _now = DateTime.now();
-    _timer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() => _now = DateTime.now());
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _greeting(int hour) {
-    if (hour >= 6 && hour < 12) return 'Bom dia,';
-    if (hour >= 12 && hour < 18) return 'Boa tarde,';
-    return 'Boa noite,';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hourFormat = DateFormat('HH:mm');
-    final dateFormat = DateFormat.yMMMMEEEEd('pt_BR');
-    final hour = _now.hour;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(currentMinuteProvider);
+    // pt_BR renderiza "qui., 21 ago."; sem os pontos fica "qui, 21 ago".
+    final date = DateFormat('EEE, d MMM', 'pt_BR')
+        .format(now)
+        .replaceAll('.', '');
+    final hour = now.hour;
 
     final userAsync = ref.watch(currentUserProvider);
     final userName = userAsync.whenOrNull(data: (u) => u?.name) ?? '';
@@ -202,15 +176,15 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
           child: Text(
-            hourFormat.format(_now),
+            hourFormatter.format(now),
             style: TextStyle(
               fontFamily: 'PressStart2P',
               fontSize: 36,
               height: 1.0,
-              color: widget.accent,
+              color: accent,
               shadows: [
                 Shadow(
-                  color: widget.accent.withValues(alpha: 0.40),
+                  color: accent.withValues(alpha: 0.40),
                   blurRadius: 8,
                 ),
               ],
@@ -218,9 +192,9 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
           ),
         ),
         const SizedBox(height: 6),
-        // Data
+        // Data curta
         Text(
-          dateFormat.format(_now),
+          date,
           style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 13,
@@ -238,10 +212,10 @@ class _MobileClockContentState extends ConsumerState<_MobileClockContent> {
             ),
             children: [
               TextSpan(
-                text: '${_greeting(hour)} ',
+                text: '${greetingForHour(hour)} ',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: widget.accent,
+                  color: accent,
                 ),
               ),
               TextSpan(text: userName),

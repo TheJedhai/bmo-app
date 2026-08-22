@@ -1,60 +1,26 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/identity/identity_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/time/current_minute_provider.dart';
 
-/// Relógio + data + saudação.
+/// Relógio + data + saudação (desktop).
 ///
 /// Mostra a hora em PressStart2P 44px na cor do accent, data por extenso
-/// em pt-BR e saudação por período do dia com nome do usuário.
-class ClockCard extends ConsumerStatefulWidget {
+/// em pt-BR e saudação por período do dia com nome do usuário. A hora vem
+/// do [currentMinuteProvider] — atualiza a cada minuto alinhado.
+class ClockCard extends ConsumerWidget {
   const ClockCard({super.key, required this.accent});
 
   final Color accent;
 
   @override
-  ConsumerState<ClockCard> createState() => _ClockCardState();
-}
-
-class _ClockCardState extends ConsumerState<ClockCard> {
-  Timer? _timer;
-  late DateTime _now;
-
-  @override
-  void initState() {
-    super.initState();
-    _now = DateTime.now();
-    _timer = Timer.periodic(
-      const Duration(minutes: 1),
-      (_) {
-        setState(() {
-          _now = DateTime.now();
-        });
-      },
-    );
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _greeting(int hour) {
-    if (hour >= 6 && hour < 12) return 'Bom dia,';
-    if (hour >= 12 && hour < 18) return 'Boa tarde,';
-    return 'Boa noite,';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hourFormat = DateFormat('HH:mm');
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(currentMinuteProvider);
     final dateFormat = DateFormat.yMMMMEEEEd('pt_BR');
-    final hour = _now.hour;
+    final hour = now.hour;
 
     final userAsync = ref.watch(currentUserProvider);
     final userName = userAsync.whenOrNull(data: (u) => u?.name) ?? '';
@@ -64,14 +30,14 @@ class _ClockCardState extends ConsumerState<ClockCard> {
       children: [
         // Hora em destaque
         Text(
-          hourFormat.format(_now),
+          hourFormatter.format(now),
           style: TextStyle(
             fontFamily: 'PressStart2P',
             fontSize: 44,
-            color: widget.accent,
+            color: accent,
             shadows: [
               Shadow(
-                color: widget.accent.withValues(alpha: 0.40),
+                color: accent.withValues(alpha: 0.40),
                 blurRadius: 8,
               ),
             ],
@@ -80,7 +46,7 @@ class _ClockCardState extends ConsumerState<ClockCard> {
         const SizedBox(height: 10),
         // Data por extenso
         Text(
-          dateFormat.format(_now),
+          dateFormat.format(now),
           style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 14,
@@ -98,10 +64,10 @@ class _ClockCardState extends ConsumerState<ClockCard> {
             ),
             children: [
               TextSpan(
-                text: '${_greeting(hour)} ',
+                text: '${greetingForHour(hour)} ',
                 style: TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: widget.accent,
+                  color: accent,
                 ),
               ),
               TextSpan(text: userName),
