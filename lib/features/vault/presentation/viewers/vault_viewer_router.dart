@@ -18,6 +18,7 @@ import 'vault_viewer_image.dart';
 import 'vault_viewer_pdf.dart';
 import 'vault_viewer_text.dart';
 import 'vault_viewer_video.dart';
+import '../../../../core/widgets/bmo_frame.dart';
 
 // ---------------------------------------------------------------------------
 // Size thresholds
@@ -57,7 +58,7 @@ void openVaultItemViewer(
 }) {
   final mime = item.mimeType.toLowerCase();
   final repo = ref.read(vaultRepositoryProvider);
-  final isMobile = MediaQuery.of(context).size.width < 600;
+  final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
   if (mime.startsWith('image/')) {
     _checkSizeThenOpen(

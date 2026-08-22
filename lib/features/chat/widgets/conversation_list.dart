@@ -6,8 +6,7 @@ import 'package:bmo_app/features/memories/widgets/memories_modal.dart';
 import '../data/conversation.dart';
 import '../providers/chat_providers.dart';
 import 'rename_conversation_dialog.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../../core/widgets/bmo_frame.dart';
 
 class ConversationList extends ConsumerStatefulWidget {
   /// Callback chamado depois que uma conversa é selecionada (ou criada).
@@ -283,7 +282,7 @@ class _ConversationItemState extends State<_ConversationItem> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final showActions = isMobile || _hovering || widget.selected;
 
     final bg = widget.selected

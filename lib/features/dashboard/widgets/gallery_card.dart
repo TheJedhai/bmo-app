@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../gallery/data/image_model.dart';
 import '../../gallery/providers/images_provider.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 /// Card da galeria.
 ///
@@ -203,7 +204,7 @@ class _GalleryCardState extends ConsumerState<GalleryCard> {
   @override
   Widget build(BuildContext context) {
     final imagesAsync = ref.watch(imagesProvider);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return imagesAsync.when(
       loading: () => const _LoadingState(),

@@ -5,8 +5,7 @@ import 'package:flutter/services.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/memory_model.dart';
 import '../providers/memories_provider.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../../core/widgets/bmo_frame.dart';
 
 void showMemoriesModal(BuildContext context) {
   showDialog(
@@ -160,7 +159,7 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final memoriesAsync = ref.watch(memoriesProvider);
 
     return Dialog(

@@ -7,6 +7,7 @@ import '../../../core/platform/file_download.dart';
 import '../data/image_filename.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 /// Full-resolution detail view for a single gallery image.
 ///
@@ -53,7 +54,7 @@ class _GalleryImageDetailState extends ConsumerState<GalleryImageDetail> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final hasMeta = widget.image.prompt != null ||
         widget.image.model != null ||
         widget.image.strength != null;

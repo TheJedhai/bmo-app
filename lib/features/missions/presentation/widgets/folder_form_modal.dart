@@ -5,6 +5,7 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../data/missions_client.dart';
 import '../../data/missions_providers.dart';
 import '../../data/models/folder.dart';
+import '../../../../core/widgets/bmo_frame.dart';
 
 class FolderFormModal extends ConsumerStatefulWidget {
   final Folder? folder;
@@ -75,7 +76,7 @@ class _FolderFormModalState extends ConsumerState<FolderFormModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,

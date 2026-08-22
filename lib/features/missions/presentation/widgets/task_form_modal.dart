@@ -6,6 +6,7 @@ import '../../data/missions_client.dart';
 import '../../data/missions_providers.dart';
 import '../../data/models/folder.dart';
 import '../../data/models/task.dart';
+import '../../../../core/widgets/bmo_frame.dart';
 
 class TaskFormModal extends ConsumerStatefulWidget {
   final Task? task;
@@ -290,7 +291,7 @@ class _TaskFormModalState extends ConsumerState<TaskFormModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final foldersAsync = ref.watch(foldersProvider);
 
     // Resolve effective folder ID: use task's folder, initialFolderId, or find default "Geral"

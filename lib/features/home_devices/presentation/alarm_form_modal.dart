@@ -8,6 +8,7 @@ import '../data/device_alarm.dart';
 
 import '../providers/alarms_providers.dart';
 import '../providers/devices_providers.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 class AlarmFormModal extends ConsumerStatefulWidget {
   final DeviceAlarm? alarm;
@@ -234,7 +235,7 @@ class _AlarmFormModalState extends ConsumerState<AlarmFormModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final scenesAsync = ref.watch(scenesProvider);
     final devicesAsync = ref.watch(devicesProvider);
     final hasScenes = scenesAsync.hasValue && scenesAsync.value!.isNotEmpty;

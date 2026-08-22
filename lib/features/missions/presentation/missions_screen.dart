@@ -6,8 +6,8 @@ import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import 'widgets/folders_sidebar.dart';
 import 'widgets/tasks_list.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
-const _kMobileBreakpoint = 600.0;
 const _kSidebarWidth = 260.0;
 
 class MissionsScreen extends ConsumerStatefulWidget {
@@ -23,7 +23,7 @@ class _MissionsScreenState extends ConsumerState<MissionsScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile =
-        MediaQuery.of(context).size.width < _kMobileBreakpoint;
+        MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Scaffold(
       key: _scaffoldKey,

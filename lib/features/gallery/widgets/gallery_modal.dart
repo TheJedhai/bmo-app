@@ -8,8 +8,7 @@ import '../data/image_filename.dart';
 import '../data/image_model.dart';
 import '../providers/images_provider.dart';
 import 'gallery_image_detail.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../../core/widgets/bmo_frame.dart';
 
 void showGalleryModal(BuildContext context) {
   showDialog(
@@ -80,7 +79,7 @@ class _GalleryModalState extends ConsumerState<_GalleryModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final imagesAsync = ref.watch(imagesProvider);
 
     return Dialog(

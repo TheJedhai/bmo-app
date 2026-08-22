@@ -8,8 +8,7 @@ import '../../../core/identity/widgets/profile_avatar.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/flux_model.dart';
 import '../providers/settings_provider.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../../core/widgets/bmo_frame.dart';
 
 // ============================================================
 // Entry point
@@ -99,7 +98,7 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final settingsAsync = ref.watch(settingsProvider);
     final selectedId = ref.watch(_selectedSectionId);
 

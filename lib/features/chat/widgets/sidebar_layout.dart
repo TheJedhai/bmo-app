@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import 'conversation_list.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
-const _kMobileBreakpoint = 600.0;
 const _kSidebarWidth = 260.0;
 
 /// Layout adaptativo para o chat.
@@ -18,7 +18,7 @@ class SidebarLayout extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     if (isMobile) return child;
 
     return Row(

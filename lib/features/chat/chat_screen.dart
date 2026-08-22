@@ -11,6 +11,7 @@ import 'widgets/chat_input.dart';
 import 'widgets/chat_message_list.dart';
 import 'widgets/conversation_list.dart';
 import 'widgets/sidebar_layout.dart';
+import '../../core/widgets/bmo_frame.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -71,7 +72,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Scaffold(
       key: _scaffoldKey,

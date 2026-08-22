@@ -9,8 +9,8 @@ import '../data/rss_providers.dart';
 import 'selected_view_provider.dart';
 import 'widgets/article_list.dart';
 import 'widgets/feed_form_modal.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
-const _kMobileBreakpoint = 600.0;
 const _kSidebarWidth = 260.0;
 
 class RssScreen extends ConsumerStatefulWidget {
@@ -26,7 +26,7 @@ class _RssScreenState extends ConsumerState<RssScreen> {
   @override
   Widget build(BuildContext context) {
     final isMobile =
-        MediaQuery.of(context).size.width < _kMobileBreakpoint;
+        MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Scaffold(
       key: _scaffoldKey,

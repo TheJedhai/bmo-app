@@ -8,6 +8,7 @@ import '../data/device_alarm.dart';
 import '../data/scene.dart';
 import '../providers/alarms_providers.dart';
 import 'alarm_form_modal.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 class AlarmsListModal extends ConsumerStatefulWidget {
   const AlarmsListModal({super.key});
@@ -21,7 +22,7 @@ class _AlarmsListModalState extends ConsumerState<AlarmsListModal> {
   Widget build(BuildContext context) {
     final alarmsAsync = ref.watch(alarmsProvider);
     final scenesAsync = ref.watch(scenesProvider);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,

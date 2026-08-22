@@ -9,8 +9,7 @@ import 'chat_avatar.dart';
 import 'delegation_chip.dart';
 import 'reasoning_box.dart';
 import 'speech_bubble.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../../core/widgets/bmo_frame.dart';
 
 /// Remove prefixos injetados pelo backend ([contexto: ...], [projeto: ...],
 /// [regra: ...]) de mensagens de usuário para exibição. Os blocos podem ser
@@ -35,7 +34,7 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final width = MediaQuery.of(context).size.width;
-    final isMobile = width < _kMobileBreakpoint;
+    final isMobile = width < kMobileBreakpoint;
     final isUser = message.role == ChatRole.user;
 
     final avatarSize = isMobile ? 30.0 : 36.0;

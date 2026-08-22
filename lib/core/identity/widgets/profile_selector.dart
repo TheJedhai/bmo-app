@@ -9,8 +9,7 @@ import '../data/users_repository.dart';
 import '../identity_provider.dart';
 import '../user_profile.dart';
 import 'profile_avatar.dart';
-
-const _kMobileBreakpoint = 600.0;
+import '../../widgets/bmo_frame.dart';
 
 // ============================================================
 // Infra providers
@@ -56,7 +55,7 @@ class _ProfileSelectorState extends ConsumerState<ProfileSelector> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Scaffold(
       backgroundColor: BmoColors.screenBg,

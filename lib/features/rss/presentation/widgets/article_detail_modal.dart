@@ -11,6 +11,7 @@ import '../../data/rss_client.dart';
 import '../../data/rss_providers.dart';
 import '../helpers.dart';
 import 'feed_form_modal.dart';
+import '../../../../core/widgets/bmo_frame.dart';
 
 enum _ContentStatus { idle, loading, available, unavailable }
 
@@ -139,7 +140,7 @@ class _ArticleDetailModalState extends ConsumerState<ArticleDetailModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,

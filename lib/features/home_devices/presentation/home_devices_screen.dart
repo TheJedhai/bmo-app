@@ -7,6 +7,7 @@ import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../providers/devices_providers.dart';
 import 'alarms_list_modal.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 class HomeDevicesScreen extends ConsumerWidget {
   const HomeDevicesScreen({super.key});
@@ -58,7 +59,7 @@ class _DeviceList extends ConsumerWidget {
         if (devices.isEmpty) return const _EmptyState();
         return LayoutBuilder(
           builder: (context, constraints) {
-            final isMobile = constraints.maxWidth < 600;
+            final isMobile = constraints.maxWidth < kMobileBreakpoint;
             return _DeviceGrid(
               devices: devices,
               pendingToggles: pendingToggles,

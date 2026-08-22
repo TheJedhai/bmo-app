@@ -17,6 +17,7 @@ import '../data/vault_models.dart';
 import '../crypto/vault_chunked_cipher.dart';
 import '../providers/vault_providers.dart';
 import 'viewers/vault_viewer_router.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 // ============================================================
 // Screen root
@@ -196,7 +197,7 @@ class _UnlockViewState extends ConsumerState<_UnlockView> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Center(
       child: SingleChildScrollView(
@@ -434,7 +435,7 @@ class _CreateVaultViewState extends ConsumerState<_CreateVaultView> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Center(
       child: SingleChildScrollView(
@@ -1460,7 +1461,7 @@ class _UnlockedVaultViewState extends ConsumerState<_UnlockedVaultView> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     // "Todos marcados" deriva do tamanho da seleção vs total — nunca um
     // segundo estado que possa sair de sincronia.

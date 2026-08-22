@@ -10,8 +10,8 @@ import '../../../core/time/current_minute_provider.dart';
 import '../dashboard_registry.dart';
 import '../widgets/bmo_density.dart';
 import '../widgets/dash_card.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
-const _kMobileBreakpoint = 600.0;
 const _kSpacing = 28.0;
 const _kPadding = 28.0;
 const _kMobilePadding = 16.0;
@@ -34,7 +34,7 @@ class DashboardScreen extends ConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < _kMobileBreakpoint;
+        final isMobile = constraints.maxWidth < kMobileBreakpoint;
 
         if (isMobile) {
           return _DashboardMobileLayout(visibleWidgets: visibleWidgets);

@@ -5,6 +5,7 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../data/models/feed.dart';
 import '../../data/rss_client.dart';
 import '../../data/rss_providers.dart';
+import '../../../../core/widgets/bmo_frame.dart';
 
 class FeedFormModal extends ConsumerStatefulWidget {
   final Feed? feed;
@@ -174,7 +175,7 @@ class _FeedFormModalState extends ConsumerState<FeedFormModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
     return Dialog(
       backgroundColor: BmoColors.screenBg,

@@ -9,6 +9,7 @@ import 'package:bmo_app/features/settings/data/flux_model.dart';
 import 'package:bmo_app/features/settings/providers/settings_provider.dart';
 import '../data/images_client.dart';
 import '../providers/images_provider.dart';
+import '../../../core/widgets/bmo_frame.dart';
 
 void showImg2ImgFormModal(BuildContext context) {
   showDialog(
@@ -134,7 +135,7 @@ class _Img2ImgFormModalState extends ConsumerState<_Img2ImgFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
     final modelsAsync = ref.watch(imageModelsProvider);
     final settingsAsync = ref.watch(settingsProvider);
 
