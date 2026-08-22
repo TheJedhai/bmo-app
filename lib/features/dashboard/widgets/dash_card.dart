@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import 'bmo_density.dart';
 
 /// Chassi visual comum de todo widget da dashboard.
 ///
@@ -39,13 +40,18 @@ class DashCard extends StatefulWidget {
   final Widget child;
 
   /// Número em destaque no estilo dashboard:
-  /// PressStart2P 34px, cor [accent], com sombra glow.
-  static Widget highlightNumber(String text, Color accent) {
+  /// PressStart2P, cor [accent], com sombra glow. [fontSize] segue a
+  /// [BmoDensity] do contexto (34 regular, 24 compact).
+  static Widget highlightNumber(
+    String text,
+    Color accent, {
+    double? fontSize,
+  }) {
     return Text(
       text,
       style: TextStyle(
         fontFamily: 'PressStart2P',
-        fontSize: 34,
+        fontSize: fontSize ?? 34,
         color: accent,
         shadows: [
           Shadow(
@@ -103,6 +109,7 @@ class _DashCardState extends State<DashCard>
 
   @override
   Widget build(BuildContext context) {
+    final density = BmoDensity.of(context);
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -156,7 +163,7 @@ class _DashCardState extends State<DashCard>
                   child: CustomPaint(
                     painter: _LCornerPainter(
                       color: widget.accent,
-                      strokeLength: 18,
+                      strokeLength: density.cornerStrokeLength,
                       strokeWidth: 2.5,
                     ),
                   ),
@@ -184,7 +191,7 @@ class _DashCardState extends State<DashCard>
                         ),
                       Flexible(
                         child: Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: EdgeInsets.all(density.contentPadding),
                           child: widget.child,
                         ),
                       ),
@@ -288,7 +295,12 @@ class _DashCardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+      padding: EdgeInsets.fromLTRB(
+        BmoDensity.of(context).contentPadding,
+        14,
+        8,
+        0,
+      ),
       child: Row(
         children: [
           Text(

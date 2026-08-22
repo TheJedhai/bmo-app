@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/navigation/app_router.dart';
+
+import 'bmo_density.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../chat/data/conversation.dart';
 import '../../chat/providers/chat_providers.dart';
@@ -102,7 +104,7 @@ class _ChatContent extends StatelessWidget {
           const SizedBox(height: 12),
           Icon(Icons.chat_bubble_outline, size: 28, color: accent),
           const SizedBox(height: 12),
-          ...conversations.take(3).map(
+          ...conversations.take(BmoDensity.of(context).isCompact ? 2 : 3).map(
                 (conv) => _ConversationRow(conversation: conv),
               ),
         ],

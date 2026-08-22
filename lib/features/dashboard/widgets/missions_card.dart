@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../missions/data/models/task.dart';
 import '../../missions/data/missions_providers.dart';
+import 'bmo_density.dart';
 import 'dash_card.dart';
 
 /// Card de missões pendentes.
@@ -62,13 +63,18 @@ class _MissionsContent extends StatelessWidget {
     final withDue =
         allTasks.where((t) => t.dueDate != null).toList()
           ..sort((a, b) => a.dueDate!.compareTo(b.dueDate!));
-    final upcoming = withDue.take(3).toList();
+    final density = BmoDensity.of(context);
+    final upcoming = withDue.take(density.isCompact ? 2 : 3).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Contagem em destaque
-        DashCard.highlightNumber('$pendingCount', accent),
+        DashCard.highlightNumber(
+          '$pendingCount',
+          accent,
+          fontSize: BmoDensity.of(context).highlightFontSize,
+        ),
         const SizedBox(height: 4),
         Text(
           pendingCount == 1 ? 'missão pendente' : 'missões pendentes',

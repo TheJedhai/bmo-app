@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/navigation/app_router.dart';
+
+import 'bmo_density.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../rss/data/models/article.dart';
 import '../../rss/data/models/feed.dart';
@@ -88,13 +90,18 @@ class _RssContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final recent = articles.take(3).toList();
+    final density = BmoDensity.of(context);
+    final recent = articles.take(density.isCompact ? 2 : 3).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Contagem em destaque
-        DashCard.highlightNumber('$unreadCount', accent),
+        DashCard.highlightNumber(
+          '$unreadCount',
+          accent,
+          fontSize: BmoDensity.of(context).highlightFontSize,
+        ),
         const SizedBox(height: 4),
         Text(
           unreadCount == 1 ? 'artigo não lido' : 'artigos não lidos',

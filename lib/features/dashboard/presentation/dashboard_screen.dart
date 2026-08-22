@@ -8,6 +8,7 @@ import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/time/current_minute_provider.dart';
 import '../dashboard_registry.dart';
+import '../widgets/bmo_density.dart';
 import '../widgets/dash_card.dart';
 
 const _kMobileBreakpoint = 600.0;
@@ -94,7 +95,9 @@ class _DashboardMobileLayout extends ConsumerWidget {
         .firstOrNull;
     final cardSpecs = visibleWidgets.where((s) => s.id != 'relogio').toList();
 
-    return SingleChildScrollView(
+    return BmoDensity(
+      mode: BmoDensityMode.compact,
+      child: SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -147,6 +150,7 @@ class _DashboardMobileLayout extends ConsumerWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

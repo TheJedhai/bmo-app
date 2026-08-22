@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../../core/theme/bmo_theme.dart';
+
+import '../../../dashboard/widgets/bmo_density.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart';
 
@@ -14,7 +16,10 @@ class CalendarDashCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final upcomingAsync = ref.watch(upcomingEventsProvider(5));
+    final density = BmoDensity.of(context);
+    final upcomingAsync = ref.watch(
+      upcomingEventsProvider(density.isCompact ? 3 : 5),
+    );
 
     return upcomingAsync.when(
       loading: () => const _LoadingContent(),

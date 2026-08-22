@@ -7,6 +7,8 @@ import '../../home_devices/data/device_alarm.dart';
 import '../../home_devices/providers/alarms_providers.dart';
 import '../../home_devices/providers/devices_providers.dart';
 
+import 'bmo_density.dart';
+
 /// Card de luzes da casa.
 ///
 /// Mostra switches inline para ligar/desligar cada luz (até 4),
@@ -64,7 +66,7 @@ class _LightsContent extends ConsumerWidget {
     if (total == 0) return const _EmptyState();
 
     final nextAlarm = _findNextLightAlarm(alarms);
-    const maxToShow = 4;
+    final maxToShow = BmoDensity.of(context).isCompact ? 3 : 4;
     final overflow = total > maxToShow ? total - maxToShow : 0;
     final visibleEntries = entries.take(maxToShow).toList();
 
@@ -247,8 +249,10 @@ class _AlarmRow extends StatelessWidget {
               fontSize: 12,
               color: BmoColors.textSecondary,
             ),
+            // Compact: quebra em 2 linhas — título inteiro cabe, sem
+            // cortar em "acender Quarto ...".
             overflow: TextOverflow.ellipsis,
-            maxLines: 1,
+            maxLines: BmoDensity.of(context).isCompact ? 2 : 1,
           ),
         ),
       ],
