@@ -6,29 +6,30 @@
 /// sem crash.
 library;
 
-/// Rotas top-level sem parâmetro. Espelha a lista de `GoRoute` em
-/// `app_router.dart` — quando uma rota nova entrar lá, entra aqui também.
-const _topRoutes = <String>{
-  '/',
-  '/chat',
-  '/missoes',
-  '/casa',
-  '/noticias',
-  '/cofre',
-  '/calendario',
-  '/calendarios',
-  '/financas',
-  '/coding',
-};
+import '../navigation/app_router.dart';
 
-/// `/coding/:projectId[/:sessionId]`. O `projectId` é lido com `int.parse`
-/// no pageBuilder e estouraria num valor não numérico, então só dígitos;
-/// o `sessionId` é String livre.
-final _codingRoute = RegExp(r'^/coding/\d+(/.+)?$');
-
-/// Se [path] é uma rota que o go_router conhece.
+/// Consulta o go_router: esta rota existe?
+///
+/// A fonte única é a [RouteConfiguration] de que o [appRouter] foi construído
+/// — não uma lista espelhada aqui. Adicionar uma rota no router faz o deep
+/// link aceitá-la automaticamente; esquecer de registrar deixa de ser um erro
+/// silencioso. `findMatch` retorna `error != null` quando não há rota para o
+/// location (path desconhecido, path com trailing-slash, etc.).
 bool isKnownRoute(String path) =>
-    _topRoutes.contains(path) || _codingRoute.hasMatch(path);
+    appRouter.configuration.findMatch(Uri(path: path)).error == null;
+
+/// Guarda de crash do que o router casa mas o pageBuilder quebra.
+///
+/// `/coding/:projectId` é lido com `int.parse` no pageBuilder. O router casa
+/// `abc` como `projectId` (parâmetro é String pro matcher), mas o `int.parse`
+/// estouraria — o guard fica aqui, fora do `findMatch`, porque o router não
+/// conhece o tipo do parâmetro. `sessionId` é String livre e não entra.
+bool _paramCrashesPageBuilder(String path) {
+  final parts = path.split('/');
+  // parts = ['', 'coding', '<projectId>', ...]
+  if (parts.length < 3 || parts[1] != 'coding') return false;
+  return int.tryParse(parts[2]) == null;
+}
 
 /// Resolve um deep link bmo:// para o path de destino.
 ///
@@ -36,14 +37,17 @@ bool isKnownRoute(String path) =>
 /// * `null` — não é deep link nosso (scheme ≠ `bmo`, ex. o https inicial da
 ///   web). Ignorar, sem navegar.
 /// * `'/'` — é bmo:// mas fora do formato conhecido (host ≠ `go`, path que o
-///   router não conhece). Vai para a raiz.
+///   router não conhece ou que estouraria no pageBuilder). Vai para a raiz.
 /// * o path da rota — link válido, navega.
 String? resolveDeepLinkPath(Uri uri) {
   if (uri.scheme != 'bmo') return null;
   if (uri.host != 'go') return '/';
   final path = uri.path;
   if (path.isEmpty) return '/';
-  return isKnownRoute(path) ? path : '/';
+  if (!isKnownRoute(path)) return '/';
+  // Rota conhecida, mas o valor do parâmetro quebraria o pageBuilder.
+  if (_paramCrashesPageBuilder(path)) return '/';
+  return path;
 }
 
 /// Handler único de deep links.

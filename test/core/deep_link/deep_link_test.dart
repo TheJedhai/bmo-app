@@ -1,5 +1,31 @@
 import 'package:bmo_app/core/deep_link/deep_link.dart';
+import 'package:bmo_app/core/navigation/app_router.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+
+/// Andar na árvore de rotas do router e coletar os full paths de [GoRoute].
+///
+/// Paths de rotas aninhadas são relativos (ex.: `:sessionId` sob
+/// `/coding/:projectId`), então o full path compõe o parent. A shell não
+/// contribui path.
+List<String> _collectFullPaths(List<RouteBase> routes, String parent) {
+  final out = <String>[];
+  for (final route in routes) {
+    if (route is ShellRoute) {
+      out.addAll(_collectFullPaths(route.routes, parent));
+    } else if (route is GoRoute) {
+      final full =
+          route.path.startsWith('/') ? route.path : '$parent/${route.path}';
+      out.add(full);
+      out.addAll(_collectFullPaths(route.routes, full));
+    }
+  }
+  return out;
+}
+
+/// Substitui segmentos `:param` por um valor de exemplo válido.
+String _substituteParams(String path) =>
+    path.replaceAllMapped(RegExp(r':[A-Za-z_]+'), (_) => '1');
 
 void main() {
   group('resolveDeepLinkPath', () {
@@ -34,6 +60,22 @@ void main() {
 
     test('bmo:// fora do formato (host ≠ go) -> /', () {
       expect(resolveDeepLinkPath(Uri.parse('bmo://outro/x')), '/');
+    });
+  });
+
+  group('cobertura contra o router', () {
+    test('toda rota do go_router é deep-link-al (rede contra lista manual)', () {
+      final paths = _collectFullPaths(appRouter.configuration.routes, '');
+      expect(paths, isNotEmpty, reason: 'router deveria ter rotas');
+      for (final raw in paths) {
+        final target = _substituteParams(raw);
+        final uri = Uri.parse('bmo://go$target');
+        expect(
+          resolveDeepLinkPath(uri),
+          target,
+          reason: 'rota "$raw" (como $uri) deveria resolver, não cair na raiz',
+        );
+      }
     });
   });
 
