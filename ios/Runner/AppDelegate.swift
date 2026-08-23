@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import WidgetKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -45,6 +46,26 @@ import UIKit
         if !path.hasPrefix(NSHomeDirectory()) {
           let url = URL(fileURLWithPath: path)
           url.stopAccessingSecurityScopedResource()
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // Recarga SOB DEMANDA do widget: chamada pelo app não consome o
+    // orçamento diário do WidgetKit (só o refresh automático da timeline
+    // consome). O Dart dispara quando uma luz muda via WebSocket (debounce)
+    // e quando o app vai pro background. Na web é no-op (canal inexistente).
+    let widgetChannel = FlutterMethodChannel(
+      name: "bmo/widget_reload",
+      binaryMessenger: engineBridge.applicationRegistrar.messenger())
+    widgetChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "reloadTimelines":
+        // Runner roda com deployment 13.0; WidgetCenter é iOS 14+.
+        if #available(iOS 14.0, *) {
+          WidgetCenter.shared.reloadAllTimelines()
         }
         result(nil)
       default:

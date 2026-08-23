@@ -7,6 +7,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
+import '../../../core/platform/widget_refresh.dart';
 import '../data/device.dart';
 import '../data/devices_client.dart';
 import '../data/devices_ws_client.dart';
@@ -141,6 +142,10 @@ class Devices extends _$Devices {
         });
         ref.read(pendingTogglesProvider.notifier)
             .update((s) => s.difference({deviceName}));
+        // Estado de luz mudou PELO APP (ou ecoa pro app): pede recarga do
+        // widget. Debounced — rajada de StateUpdate não dispara dezenas de
+        // recargas; vira uma após o silêncio.
+        requestWidgetReload(debounced: true);
     }
   }
 

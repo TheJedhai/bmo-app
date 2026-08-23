@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/home_devices/providers/devices_providers.dart';
 import '../events/events_provider.dart';
+import '../platform/widget_refresh.dart';
 
 /// Força reconexão do SSE de negócio e do WebSocket de devices quando o app
 /// volta do background.
@@ -31,7 +32,13 @@ class _AppLifecycleReconnectState extends ConsumerState<AppLifecycleReconnect> {
   void initState() {
     super.initState();
     _listener = AppLifecycleListener(
-      onPause: () => _backgrounded = true,
+      onPause: () {
+        _backgrounded = true;
+        // App indo pro background: recarrega o widget AGORA com o estado
+        // mais recente (sem debounce — um timer de 2s poderia ser cortado
+        // pela suspensão). O iOS suspende o app logo após o onPause.
+        requestWidgetReload();
+      },
       onResume: () {
         // iOS manda inactive → resumed também no cold start; sem flag
         // isso derrubaria a conexão recém-aberta a cada launch.
