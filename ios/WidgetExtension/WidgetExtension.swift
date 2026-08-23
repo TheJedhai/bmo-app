@@ -106,14 +106,22 @@ enum LightsToggleError: Error {
 }
 
 // Chama o servidor SEM ir pro app. Identidade via header X-User-Id estático.
+// Rota /on|/off (não /toggle): determinística e idempotente — o intent já
+// recebe o estado NOVO (value), então expressar o alvo direto evita alternar
+// às cegas quando a view do widget está desatualizada.
 enum LightsToggleService {
-    static func toggle(name: String) async throws {
+    static func set(name: String, on: Bool) async throws {
         let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-        guard let url = URL(string: WidgetConfig.baseUrl + "/api/v1/lights/\(encoded)/toggle") else {
+        let verb = on ? "on" : "off"
+        guard let url = URL(string: WidgetConfig.baseUrl + "/api/v1/lights/\(encoded)/\(verb)") else {
             throw LightsToggleError.invalidURL
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
+        // perform() roda no ambiente restrito da extensão com orçamento
+        // apertado — mudança rápida de estado, não trabalho pesado de rede.
+        // Timeout curto: estourou = falha, volta ao estado anterior.
+        request.timeoutInterval = 5
         request.setValue(WidgetConfig.userId, forHTTPHeaderField: "X-User-Id")
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw LightsToggleError.network }
@@ -135,38 +143,35 @@ final class LightsWidgetError {
     var lastFailure: String?
 }
 
-// App Intent do toggle interativo — RODA DENTRO da extensão. Um `Toggle`
-// reflete o estado atual; o tap envia o desejado (inverso do atual). Como a
-// rota é /toggle (não idempotente on/off), só chamamos o servidor quando o
-// desejado difere do atual — evita toggle duplo por switch desatualizado.
-struct ToggleLightIntent: AppIntent {
-    static var title: LocalizedStringResource = "Alternar luz"
-    static var description = IntentDescription("Alterna uma luz pelo servidor.")
+// App Intent do toggle interativo — RODA DENTRO da extensão.
+// SetValueIntent (não AppIntent): o `Toggle(isOn:intent:)` do SwiftUI exige
+// essa conformância — o sistema injeta o estado NOVO em `value` antes de
+// chamar perform(). AppIntent puro só funciona com Button(intent:); com o
+// Toggle ele vira o ícone de proibido (é o que estava acontecendo).
+// Emitimos /on|/off conforme `value` (determinístico), não /toggle.
+struct ToggleLightIntent: SetValueIntent {
+    static let title: LocalizedStringResource = "Alternar luz"
+    static var description = IntentDescription("Liga ou desliga uma luz pelo servidor.")
 
     @Parameter(title: "Luz") var lightName: String
-    @Parameter(title: "Estado desejado") var desiredState: Bool
-    @Parameter(title: "Estado atual") var currentState: Bool
+    @Parameter(title: "Ligada") var value: Bool
 
     init() {}
-    init(lightName: String, desiredState: Bool, currentState: Bool) {
+    init(lightName: String) {
         self.lightName = lightName
-        self.desiredState = desiredState
-        self.currentState = currentState
     }
 
     func perform() async throws -> some IntentResult {
-        if desiredState != currentState {
-            do {
-                try await LightsToggleService.toggle(name: lightName)
-            } catch {
-                // 503 (MQTT fora do ar) e qualquer erro: reverte via reload
-                // (o GET devolve o estado real, não-mudado → snap-back) e
-                // sinaliza a falha na próxima timeline. Rethrow também marca
-                // a interação como falha para o WidgetKit.
-                LightsWidgetError.shared.lastFailure = Self.message(for: error)
-                WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
-                throw error
-            }
+        do {
+            try await LightsToggleService.set(name: lightName, on: value)
+        } catch {
+            // 503 (MQTT fora do ar) e qualquer erro (inclui timeout): reverte
+            // via reload (o GET devolve o estado real, não-mudado → snap-back)
+            // e sinaliza a falha na próxima timeline. Rethrow marca a
+            // interação como falha no WidgetKit.
+            LightsWidgetError.shared.lastFailure = Self.message(for: error)
+            WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
+            throw error
         }
         LightsWidgetError.shared.lastFailure = nil
         WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
@@ -292,10 +297,9 @@ struct LightsWidgetEntryView: View {
             // Toggle interativo da luz principal (a lista inteira não cabe no
             // systemSmall — o systemMedium vem depois com todos os toggles).
             if let light = response.items.first {
-                Toggle(isOn: light.isOn, intent: ToggleLightIntent(
-                    lightName: light.name,
-                    desiredState: !light.isOn,
-                    currentState: light.isOn)) {
+                // value é injetado pelo sistema (estado NOVO) — só passamos a
+                // luz. SetValueIntent = controle real, não placeholder.
+                Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name)) {
                     Text(light.name)
                         .font(.subheadline)
                         .foregroundStyle(.white)
