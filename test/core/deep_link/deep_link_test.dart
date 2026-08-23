@@ -151,5 +151,49 @@ void main() {
       c.onUri(Uri.parse('bmo://go/financas'));
       expect(called, ['/cofre', '/financas']);
     });
+
+    test('mesmo URI dentro da janela -> navega uma vez (dedup de entrega dupla)', () {
+      final called = <String>[];
+      var t = DateTime(2026, 1, 1);
+      final c = DeepLinkController(go: called.add, now: () => t);
+      c.setReady();
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      t = t.add(const Duration(milliseconds: 500));
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      expect(called, ['/missoes']);
+    });
+
+    test('mesmo URI fora da janela -> navega as duas (toque legítimo repetido)', () {
+      final called = <String>[];
+      var t = DateTime(2026, 1, 1);
+      final c = DeepLinkController(go: called.add, now: () => t);
+      c.setReady();
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      t = t.add(const Duration(seconds: 2));
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      expect(called, ['/missoes', '/missoes']);
+    });
+
+    test('URIs diferentes em sequência -> navega as duas', () {
+      final called = <String>[];
+      final c = DeepLinkController(go: called.add);
+      c.setReady();
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      c.onUri(Uri.parse('bmo://go/casa'));
+      expect(called, ['/missoes', '/casa']);
+    });
+
+    test('consumir link pendente não bloqueia toque legítimo no mesmo link logo depois', () {
+      final called = <String>[];
+      var t = DateTime(2026, 1, 1);
+      final c = DeepLinkController(go: called.add, now: () => t);
+      // Chega antes da identidade resolver -> segurado.
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      // Identidade resolve rápido, ainda dentro da janela -> consome o pendente.
+      c.setReady();
+      // Toque legítimo no MESMO link logo depois deve navegar de novo.
+      c.onUri(Uri.parse('bmo://go/missoes'));
+      expect(called, ['/missoes', '/missoes']);
+    });
   });
 }

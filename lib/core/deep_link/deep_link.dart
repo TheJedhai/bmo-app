@@ -56,24 +56,41 @@ String? resolveDeepLinkPath(Uri uri) {
 /// desembocam aqui: ambos abrem o app com uma URL `bmo://` e chegam pelo
 /// mesmo `uriLinkStream`.
 class DeepLinkController {
-  DeepLinkController({required this.go});
+  DeepLinkController({required this.go, DateTime Function()? now})
+      : _now = now ?? DateTime.now;
 
   /// Navegação de destino (normalmente `appRouter.go`).
   final void Function(String path) go;
 
+  /// Fonte de tempo (injetável para teste).
+  final DateTime Function() _now;
+
+  /// Janela de deduplicação. A entrega dupla do sistema — o mesmo link
+  /// disparado duas vezes no boot — é sub-segundo; um toque real do usuário
+  /// nunca é. 1s separa os dois: deduplica a dupla entrega sem bloquear um
+  /// toque legítimo pouco depois.
+  static const _dedupWindow = Duration(seconds: 1);
+
   String? _lastUri;
+  DateTime? _lastUriAt;
   String? _pending;
   bool _ready = false;
 
   /// Alimenta um URI do stream.
   ///
-  /// Deduplica pelo último URI tratado — o stream já entrega o link inicial
-  /// do cold start; sem isso ele dispara duas vezes. Se a identidade ainda
-  /// não resolveu, segura o path e só navega quando [setReady] for chamado.
+  /// Dedup por janela de tempo, não por igualdade eterna: a entrega dupla do
+  /// sistema chega em rajada (sub-segundo) e é descartada; o mesmo link tocado
+  /// de novo mais tarde navega. Se a identidade ainda não resolveu, segura o
+  /// path e só navega quando [setReady] for chamado.
   void onUri(Uri uri) {
     final key = uri.toString();
-    if (key == _lastUri) return;
+    final at = _now();
+    final isDuplicate = key == _lastUri &&
+        _lastUriAt != null &&
+        at.difference(_lastUriAt!) < _dedupWindow;
+    if (isDuplicate) return;
     _lastUri = key;
+    _lastUriAt = at;
 
     final target = resolveDeepLinkPath(uri);
     if (target == null) return; // não é link nosso — ignora.
@@ -89,11 +106,20 @@ class DeepLinkController {
   ///
   /// Resetar o app (troca de perfil) re-resolve a identidade; se chegou um
   /// link durante o reset, este é o momento de navegar.
+  ///
+  /// Consumir o pendente zera o dedup: o link segurado chegou antes de a
+  /// identidade resolver, e o instante de chegada não pode bloquear um toque
+  /// legítimo no mesmo link logo depois — esse toque é ação do usuário, não a
+  /// entrega dupla que o dedup existe para pegar.
   void setReady() {
     _ready = true;
     final pending = _pending;
     _pending = null;
-    if (pending != null) go(pending);
+    if (pending != null) {
+      _lastUri = null;
+      _lastUriAt = null;
+      go(pending);
+    }
   }
 
   /// Há um link segurado aguardando a identidade resolver?
