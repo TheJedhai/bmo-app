@@ -305,8 +305,6 @@ struct LightsWidgetEntryView: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                 }
-                .toggleStyle(.switch)
-                .tint(Color(red: 0.722, green: 0.878, blue: 0.761))
             } else {
                 Text("—")
                     .font(.subheadline)
