@@ -709,6 +709,16 @@ enum CalendarCell {
         case .event(_, _), .task(_, _): return 1
         }
     }
+
+    // Altura FIXA da célula (pt) — usada no empacotamento por altura (ver
+    // CalendarLayout) e como frame fixo na renderização. Determinístico.
+    var height: CGFloat {
+        switch self {
+        case .event(let e, _): return e.allDay ? CalendarLayout.eventAllDayHeight : CalendarLayout.eventWithTimeHeight
+        case .task: return CalendarLayout.taskPillHeight
+        case .dayLabel: return CalendarLayout.nextDayLabelHeight
+        }
+    }
 }
 
 enum CalendarSlotView {
@@ -720,7 +730,31 @@ enum CalendarSlotView {
 struct CalendarLayout {
     let weekday: String      // "SEG" — abreviação de 3 letras do dia, caixa alta, sem pontuação
     let dayNumber: Int
-    let slots: [CalendarSlotView]   // sempre 6 (slots 1..6)
+    // Empacotamento por ALTURA (não por slot fixo): cada coluna é a lista de
+    // células que coube. O bloco da data é sempre o primeiro item da coluna
+    // esquerda e não entra em nenhuma das listas — é renderizado à parte em
+    // CalendarWidgetEntryView.gridView.
+    let leftColumn: [CalendarSlotView]
+    let rightColumn: [CalendarSlotView]
+
+    // Altura útil de uma coluna. systemMedium (iOS 17) mede 338×158 pt com
+    // contentMarginsDisabled() — a dimensão da COLUNA é a vertical (158).
+    // Subtrai o padding vertical do card (26 em cima + 26 embaixo), porque o
+    // empacotamento só pode usar o espaço entre os dois insets.
+    static let systemMediumHeight: CGFloat = 158
+    static let columnSpacing: CGFloat = 4      // espacamento do VStack das colunas
+    static let usableColumnHeight: CGFloat = systemMediumHeight - 26 - 26  // 106
+
+    // Alturas FIXAS de cada célula (pt) — empacotamento determinístico, sem
+    // medir em runtime (medir colocaria o algoritmo à mercê do layout do
+    // SwiftUI). Os valores acompanham o conteúdo renderizado em cellView: chip
+    // com horário tem duas linhas, os demais têm uma.
+    static let dateBlockHeight: CGFloat = 56       // weekday + número em PressStart2P
+    static let taskPillHeight: CGFloat = 24        // pílula de missão (1 linha)
+    static let eventAllDayHeight: CGFloat = 24     // chip de evento o dia todo (1 linha)
+    static let eventWithTimeHeight: CGFloat = 38   // chip de evento com horário (2 linhas)
+    static let nextDayLabelHeight: CGFloat = 16    // rótulo "AMANHÃ"
+    static let counterHeight: CGFloat = 14         // "mais N"
 
     // date chega como "yyyy-MM-dd". PARSE sempre com locale FIXO
     // en_US_POSIX — DateFormatter com locale do aparelho quebra parse de ISO
@@ -748,7 +782,6 @@ struct CalendarLayout {
             dayNumber = Calendar.current.component(.day, from: d)
         }
 
-        let cap = 6
         // Dentro de cada tipo o servidor já ordena (eventos ordenados, missões
         // ordenadas) — não reordenar no cliente. A única decisão é o intercalar
         // entre os dois tipos: missões primeiro se houver alguma ATRASADA
@@ -757,37 +790,73 @@ struct CalendarLayout {
         let tomorrowCells = (day1 != nil && !(day1!.events.isEmpty && day1!.tasks.isEmpty))
             ? [CalendarCell.dayLabel] + orderedCells(day: day1, tomorrow: true)
             : []
-
-        var content: [CalendarCell] = []
-        let todayShown = min(todayCells.count, cap)
-        content.append(contentsOf: todayCells.prefix(todayShown))
-        let remaining = cap - todayShown
-        // Regra dura: rótulo de amanhã só se sobrar ao menos UM slot livre
-        // depois dele (rótulo sozinho é slot desperdiçado).
-        if tomorrowCells.count >= 2 && remaining >= 2 {
-            content.append(contentsOf: tomorrowCells.prefix(min(tomorrowCells.count, remaining)))
-        }
+        // Ordem lógica: itens de hoje, depois o rótulo de amanhã, depois os
+        // itens de amanhã. Muda apenas ONDE cada um cai (por altura).
+        let content = todayCells + tomorrowCells
 
         let presentItems = (day0?.events.count ?? 0) + (day0?.tasks.count ?? 0)
                         + (day1?.events.count ?? 0) + (day1?.tasks.count ?? 0)
         let omitted = (day0?.eventsOmitted ?? 0) + (day0?.tasksOmitted ?? 0)
                     + (day1?.eventsOmitted ?? 0) + (day1?.tasksOmitted ?? 0)
-        let shownItems = content.reduce(0) { $0 + $1.itemCount }
-        let wouldOverflow = (presentItems - shownItems) + omitted
 
-        var slots = [CalendarSlotView](repeating: .empty, count: cap)
-        if wouldOverflow > 0 {
-            var kept = Array(content.prefix(cap - 1))
-            // Transborgo: nunca deixar rótulo de amanhã solto na última posição.
-            while case .dayLabel? = kept.last { kept.removeLast() }
-            let keptItems = kept.reduce(0) { $0 + $1.itemCount }
-            for (i, c) in kept.enumerated() { slots[i] = .cell(c) }
-            slots[cap - 1] = .counter((presentItems - keptItems) + omitted)
-        } else {
-            for (i, c) in content.prefix(cap).enumerated() { slots[i] = .cell(c) }
+        // Empacotamento por altura: a coluna esquerda começa com o bloco da data
+        // (dateBlockHeight) e acumula células enquanto a soma das alturas mais o
+        // espacamento couber na altura útil. Quando a próxima não couber, vaza
+        // para a direita, que começa do zero (sem bloco da data). Cada coluna é
+        // uma VStack de frames fixos — determinístico, sem medir em runtime.
+        var left: [CalendarSlotView] = []
+        var right: [CalendarSlotView] = []
+        var leftH = dateBlockHeight
+        var rightH = 0
+        var usingLeft = true
+
+        for cell in content {
+            let h = cell.height
+            if usingLeft {
+                // Sempre há gap após o bloco da data (primeiro item) ou entre células.
+                let newH = leftH + columnSpacing + h
+                if newH <= usableColumnHeight {
+                    left.append(.cell(cell))
+                    leftH = newH
+                } else {
+                    usingLeft = false
+                    if h <= usableColumnHeight {
+                        right.append(.cell(cell))
+                        rightH = h
+                    } else {
+                        break   // não cabe nem em coluna vazia — cai no transbordo
+                    }
+                }
+            } else {
+                let gap = right.isEmpty ? 0 : columnSpacing   // 1º da direita não tem gap
+                let newH = rightH + gap + h
+                if newH <= usableColumnHeight {
+                    right.append(.cell(cell))
+                    rightH = newH
+                } else {
+                    break       // próximo não coube — o restante vira transbordo
+                }
+            }
         }
 
-        return CalendarLayout(weekday: weekday, dayNumber: dayNumber, slots: slots)
+        // Contador de transbordo: soma o que não coube + *_omitted dos dois dias.
+        let baseCounter = (presentItems - (itemCount(left) + itemCount(right))) + omitted
+        if baseCounter > 0 {
+            // Ocupa a ÚLTIMA posição preenchida da coluna direita: o último
+            // encaixado é trocado pelo contador e passa a contar como transbordo
+            // (por isso o valor é recalculado após a troca).
+            let _ = right.popLast()
+            let counter = (presentItems - (itemCount(left) + itemCount(right))) + omitted
+            right.append(.counter(counter))
+        }
+
+        // Regra dura: o rótulo de amanhã nunca é o último elemento renderizado e
+        // sempre tem ao menos UM item depois dele, na mesma coluna ou na seguinte.
+        // Se os itens de amanhã viraram transbordo, o rótulo não pode aparecer.
+        enforceNextDayLabel(&left, &right)
+
+        return CalendarLayout(weekday: weekday, dayNumber: dayNumber,
+                              leftColumn: left, rightColumn: right)
     }
 
     static func orderedCells(day: CalendarDay?, tomorrow: Bool) -> [CalendarCell] {
@@ -796,6 +865,48 @@ struct CalendarLayout {
         let tasks = day.tasks.map { CalendarCell.task($0, tomorrow: tomorrow) }
         let anyOverdue = day.tasks.contains { $0.isOverdue }
         return anyOverdue ? tasks + events : events + tasks
+    }
+
+    // Nº de células-evento/missão numa coluna (o rótulo não conta como item).
+    private static func itemCount(_ slots: [CalendarSlotView]) -> Int {
+        slots.reduce(0) { acc, s in
+            guard case .cell(let c) = s else { return acc }
+            return acc + c.itemCount
+        }
+    }
+
+    // Altura de uma coluna como renderizada (VStack de frames fixos), de acordo
+    // com o mesmo espacamento do empacotamento — usada na verificação DEBUG.
+    static func renderedColumnHeight(_ col: [CalendarSlotView]) -> CGFloat {
+        let sum = col.reduce(0) { $0 + slotHeight($1) }
+        return sum + columnSpacing * (col.isEmpty ? 0 : col.count - 1)
+    }
+
+    private static func slotHeight(_ slot: CalendarSlotView) -> CGFloat {
+        switch slot {
+        case .cell(let c): return c.height
+        case .counter: return counterHeight
+        case .empty: return 0
+        }
+    }
+
+    // Remove o rótulo de amanhã se ele ficar sem um item depois (ou se for o
+    // último elemento) — ordem plana: coluna esquerda, depois direita.
+    private static func enforceNextDayLabel(_ left: inout [CalendarSlotView], _ right: inout [CalendarSlotView]) {
+        let flat = left + right
+        guard let flatIdx = flat.firstIndex(where: { if case .cell(.dayLabel) = $0 { return true }; return false }) else { return }
+        let hasItemAfter = (flatIdx + 1..<flat.count).contains { i in
+            if case .cell(.event(_, _)) = flat[i] { return true }
+            if case .cell(.task(_, _)) = flat[i] { return true }
+            return false
+        }
+        if !hasItemAfter {
+            if flatIdx < left.count {
+                left.remove(at: flatIdx)
+            } else {
+                right.remove(at: flatIdx - left.count)
+            }
+        }
     }
 }
 
@@ -917,15 +1028,19 @@ struct CalendarTimelineProvider: TimelineProvider {
     private static func _verifyLayout() {
         let s = sample()
         let l = CalendarLayout.build(day0: s.days.first, day1: s.days.count > 1 ? s.days[1] : nil)
-        assert(l.slots.count == 6)
-        // Regra dura: rótulo de amanhã nunca é o último slot.
+        // Nenhuma coluna excede a altura útil (bloco da data + gap no topo da esquerda).
+        assert(CalendarLayout.dateBlockHeight + CalendarLayout.columnSpacing
+            + CalendarLayout.renderedColumnHeight(l.leftColumn) <= CalendarLayout.usableColumnHeight)
+        assert(CalendarLayout.renderedColumnHeight(l.rightColumn) <= CalendarLayout.usableColumnHeight)
+        // Regra dura: o rótulo de amanhã nunca é o último elemento renderizado.
+        let lastSlot = l.rightColumn.last ?? l.leftColumn.last
         let lastIsLabel: Bool = {
-            if case .cell(.dayLabel) = l.slots.last ?? .empty { return true }
+            if case .cell(.dayLabel)? = lastSlot { return true }
             return false
         }()
         assert(!lastIsLabel)
-        // Hoje tem missão atrasada → missões vêm antes de eventos.
-        if case .cell(.task(_, _)) = l.slots[0] {} else {
+        // Hoje tem missão atrasada → missões vêm antes de eventos (primeiro encaixado à esquerda).
+        if case .cell(.task(_, _)) = l.leftColumn.first ?? .empty {} else {
             assertionFailure("com missão atrasada, missões devem vir antes de eventos")
         }
     }
@@ -971,8 +1086,11 @@ struct CalendarWidgetEntryView: View {
                 gridView(response)
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        // Folga em relação às pernas dos cantos: o BracketCorners usa inset 14;
+        // o conteúdo precisa manter pelo menos 10pt de folga sobre ele — 28
+        // horizontal e 26 vertical — senão os chips encostam nas pernas do L.
+        .padding(.horizontal, 28)
+        .padding(.vertical, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(
             BracketCorners()
@@ -985,28 +1103,20 @@ struct CalendarWidgetEntryView: View {
         let layout = CalendarLayout.build(
             day0: response.days.first,
             day1: response.days.count > 1 ? response.days[1] : nil)
-        // 2 colunas × 4 linhas. O bloco da data ocupa as DUAS primeiras linhas
-        // da coluna esquerda como um único slot alto; sobram 2 posições no fim
-        // da coluna esquerda (slots 0,1) e as 4 da coluna direita (slots 2..5).
-        // Com 3 linhas o bloco da data forçava todas as linhas à mesma altura
-        // e os chips ficavam esticados, desperdiçando espaço vertical. Com 4
-        // linhas e o bloco ocupando duas, os chips voltam à altura natural e
-        // cabe um item a mais (cap 5 -> 6).
-        // Preenchimento por COLUNA: desce a esquerda (data, slot0, slot1),
-        // depois a direita (slot2, slot3, slot4, slot5). Cada coluna é sua
-        // própria VStack — alturas naturais, sem esticar chip.
-        //   col0: data | slot0 | slot1      col1: slot2 | slot3 | slot4 | slot5
+        // Empacotamento por ALTURA (ver CalendarLayout.build): cada item cai na
+        // coluna que tem altura disponível. A esquerda começa pelo bloco da
+        // data; a direita recebe o que couber depois.
         return HStack(alignment: .top, spacing: 6) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: CalendarLayout.columnSpacing) {
                 dateBlock(layout)
-                slotView(layout.slots[0])
-                slotView(layout.slots[1])
+                ForEach(Array(layout.leftColumn.enumerated()), id: \.offset) { _, slot in
+                    slotView(slot)
+                }
             }
-            VStack(alignment: .leading, spacing: 4) {
-                slotView(layout.slots[2])
-                slotView(layout.slots[3])
-                slotView(layout.slots[4])
-                slotView(layout.slots[5])
+            VStack(alignment: .leading, spacing: CalendarLayout.columnSpacing) {
+                ForEach(Array(layout.rightColumn.enumerated()), id: \.offset) { _, slot in
+                    slotView(slot)
+                }
             }
         }
     }
@@ -1022,7 +1132,7 @@ struct CalendarWidgetEntryView: View {
                 .foregroundStyle(BmoPalette.textPrimary)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, height: CalendarLayout.dateBlockHeight, alignment: .leading)
     }
 
     @ViewBuilder
@@ -1032,9 +1142,9 @@ struct CalendarWidgetEntryView: View {
             Text("mais \(n)")
                 .font(.system(size: 10))
                 .foregroundStyle(BmoPalette.textMuted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .frame(maxWidth: .infinity, height: CalendarLayout.counterHeight, alignment: .leading)
         case .empty:
-            Color.clear
+            Color.clear.frame(height: 0)
         case .cell(let c):
             cellView(c).opacity(c.tomorrow ? 0.45 : 1)
         }
@@ -1051,7 +1161,7 @@ struct CalendarWidgetEntryView: View {
             Text(tomorrowWord())
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(BmoPalette.textMuted)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .frame(maxWidth: .infinity, height: CalendarLayout.nextDayLabelHeight, alignment: .leading)
         }
     }
 
@@ -1077,8 +1187,12 @@ struct CalendarWidgetEntryView: View {
         }
         .padding(.vertical, 5)
         .padding(.trailing, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, height: eventHeight(e), alignment: .leading)
         .background(color.opacity(0.14))
+    }
+
+    private func eventHeight(_ e: CalendarEvent) -> CGFloat {
+        e.allDay ? CalendarLayout.eventAllDayHeight : CalendarLayout.eventWithTimeHeight
     }
 
     private func taskView(_ t: CalendarTask) -> some View {
@@ -1095,7 +1209,7 @@ struct CalendarWidgetEntryView: View {
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, height: CalendarLayout.taskPillHeight, alignment: .leading)
         .background(Capsule().fill(color.opacity(0.14)))
     }
 
