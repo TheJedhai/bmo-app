@@ -178,9 +178,11 @@ final class LightsWidgetError {
 
 // App Intent do toggle interativo — RODA DENTRO da extensão.
 // SetValueIntent (não AppIntent): o `Toggle(isOn:intent:)` do SwiftUI exige
-// essa conformância — o sistema injeta o estado NOVO em `value` antes de
-// chamar perform(). AppIntent puro só funciona com Button(intent:); com o
-// Toggle ele vira o ícone de proibido (é o que estava acontecendo).
+// essa conformância para a renderização do controle. A conformance é mantida
+// também por compatibilidade com um futuro ControlWidgetToggle (Control
+// Center) — não porque o sistema injeta `value`. AppIntent puro só funciona
+// com Button(intent:); com o Toggle ele vira o ícone de proibido (é o que
+// estava acontecendo).
 // Emitimos /on|/off conforme `value` (determinístico), não /toggle.
 struct ToggleLightIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Alternar luz"
@@ -196,8 +198,10 @@ struct ToggleLightIntent: SetValueIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        // Log cru do que o Toggle injetou. value é o estado NOVO (injetado pelo
-        // sistema); com default: false o SetValueIntent sempre preenche o campo.
+        // Log cru do alvo. value vem atribuído na construção do intent (pela
+        // view), porque widgets de home screen não resolvem parâmetros de app
+        // intents — Apple, Adding interactivity to widgets and Live Activities:
+        // widgets don't resolve parameters for app intents.
         widgetLog.info("toggle intent: luz <\(lightName)> value=\(value)")
         do {
             try await LightsToggleService.set(name: lightName, on: value)
@@ -348,8 +352,10 @@ struct LightsWidgetEntryView: View {
             // systemSmall — o systemMedium vem depois com todos os toggles).
             if let light = response.items.first {
                 // Widgets NÃO resolvem parâmetros de app intents: o sistema não
-                // injeta o estado novo num Toggle de home screen. Por isso o
-                // alvo (on:) é atribuído na construção, como o exemplo oficial
+                // injeta o estado novo num Toggle de home screen (Apple, Adding
+                // interactivity to widgets and Live Activities: widgets don't
+                // resolve parameters for app intents). Por isso o alvo (on:) é
+                // atribuído na construção, como o exemplo oficial
                 // Toggle(isOn:intent:). SetValueIntent = controle real.
                 // NÃO adicionar .toggleStyle(.switch) nem .tint(...) de volta:
                 // ambos quebram a RENDERIZAÇÃO do controle no widget (vira o
