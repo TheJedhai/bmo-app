@@ -811,7 +811,7 @@ struct CalendarTimelineProvider: TimelineProvider {
             // Os rótulos hoje/amanhã mudam de significado à meia-noite: agendar a
             // próxima atualização para o menor valor entre 30min daqui e o
             // primeiro instante após a próxima meia-noite local.
-            completion(Timeline(entries: [entry], policy: .after(nextRefreshDate())))
+            completion(Timeline(entries: [entry], policy: .after(Self.nextRefreshDate())))
         }
     }
 
