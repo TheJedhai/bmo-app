@@ -720,7 +720,7 @@ enum CalendarSlotView {
 struct CalendarLayout {
     let weekday: String      // "SEGUNDA-FEIRA" — nome do dia por extenso, caixa alta
     let dayNumber: Int
-    let slots: [CalendarSlotView]   // sempre 5 (slots 1..5)
+    let slots: [CalendarSlotView]   // sempre 6 (slots 1..6)
 
     // date chega como "yyyy-MM-dd". PARSE sempre com locale FIXO
     // en_US_POSIX — DateFormatter com locale do aparelho quebra parse de ISO
@@ -742,7 +742,7 @@ struct CalendarLayout {
             dayNumber = Calendar.current.component(.day, from: d)
         }
 
-        let cap = 5
+        let cap = 6
         // Dentro de cada tipo o servidor já ordena (eventos ordenados, missões
         // ordenadas) — não reordenar no cliente. A única decisão é o intercalar
         // entre os dois tipos: missões primeiro se houver alguma ATRASADA
@@ -911,7 +911,7 @@ struct CalendarTimelineProvider: TimelineProvider {
     private static func _verifyLayout() {
         let s = sample()
         let l = CalendarLayout.build(day0: s.days.first, day1: s.days.count > 1 ? s.days[1] : nil)
-        assert(l.slots.count == 5)
+        assert(l.slots.count == 6)
         // Regra dura: rótulo de amanhã nunca é o último slot.
         let lastIsLabel: Bool = {
             if case .cell(.dayLabel) = l.slots.last ?? .empty { return true }
@@ -979,20 +979,28 @@ struct CalendarWidgetEntryView: View {
         let layout = CalendarLayout.build(
             day0: response.days.first,
             day1: response.days.count > 1 ? response.days[1] : nil)
-        // Preenchimento por COLUNA, não por linha: o bloco da data ocupa o topo
-        // da coluna esquerda e os 5 slots descem a esquerda inteira — data,
-        // slot0, slot1 — antes de descer a direita — slot2, slot3, slot4.
-        //   col0: data | slot0 | slot1      col1: slot2 | slot3 | slot4
-        // O LazyVGrid preenche por linha, então a sequência abaixo é a
-        // row-major que reproduz essa coluna:  (-1 = bloco da data)
-        let rowMajor = [-1, 2, 0, 3, 1, 4]
-        return LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
-            ForEach(rowMajor, id: \.self) { idx in
-                if idx == -1 {
-                    dateBlock(layout)
-                } else {
-                    slotView(layout.slots[idx])
-                }
+        // 2 colunas × 4 linhas. O bloco da data ocupa as DUAS primeiras linhas
+        // da coluna esquerda como um único slot alto; sobram 2 posições no fim
+        // da coluna esquerda (slots 0,1) e as 4 da coluna direita (slots 2..5).
+        // Com 3 linhas o bloco da data forçava todas as linhas à mesma altura
+        // e os chips ficavam esticados, desperdiçando espaço vertical. Com 4
+        // linhas e o bloco ocupando duas, os chips voltam à altura natural e
+        // cabe um item a mais (cap 5 -> 6).
+        // Preenchimento por COLUNA: desce a esquerda (data, slot0, slot1),
+        // depois a direita (slot2, slot3, slot4, slot5). Cada coluna é sua
+        // própria VStack — alturas naturais, sem esticar chip.
+        //   col0: data | slot0 | slot1      col1: slot2 | slot3 | slot4 | slot5
+        return HStack(alignment: .top, spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
+                dateBlock(layout)
+                slotView(layout.slots[0])
+                slotView(layout.slots[1])
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                slotView(layout.slots[2])
+                slotView(layout.slots[3])
+                slotView(layout.slots[4])
+                slotView(layout.slots[5])
             }
         }
     }
