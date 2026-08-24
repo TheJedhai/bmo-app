@@ -113,6 +113,7 @@ enum LightsToggleError: Error {
     case mqttDown
     case http(Int)
     case emptyName
+    case missingValue
 }
 
 // Chama o servidor SEM ir pro app. Identidade via header X-User-Id estático.
@@ -187,7 +188,7 @@ struct ToggleLightIntent: SetValueIntent {
     static var description = IntentDescription("Liga ou desliga uma luz pelo servidor.")
 
     @Parameter(title: "Luz") var lightName: String
-    @Parameter(title: "Ligada") var value: Bool
+    @Parameter(title: "Ligada") var value: Bool?
 
     init() {}
     init(lightName: String) {
@@ -195,9 +196,15 @@ struct ToggleLightIntent: SetValueIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        widgetLog.info("toggle intent: luz <\(lightName)> value=\(value)")
+        // Log cru do que o Toggle injetou — o objetivo da etapa. value pode vir
+        // nil (não injetado); loga como chegou, sem fallback.
+        widgetLog.info("toggle intent: luz <\(lightName)> value=\(String(describing: value))")
+        guard let on = value else {
+            widgetLog.error("toggle intent: value não injetado (nil) para <\(lightName)>")
+            throw LightsToggleError.missingValue
+        }
         do {
-            try await LightsToggleService.set(name: lightName, on: value)
+            try await LightsToggleService.set(name: lightName, on: on)
         } catch {
             // 503 (MQTT fora do ar) e qualquer erro (inclui timeout): reverte
             // via reload (o GET devolve o estado real, não-mudado → snap-back)
@@ -217,6 +224,7 @@ struct ToggleLightIntent: SetValueIntent {
     static func message(for error: Error) -> String {
         if case LightsToggleError.mqttDown = error { return "MQTT fora do ar" }
         if case LightsToggleError.emptyName = error { return "Luz sem nome" }
+        if case LightsToggleError.missingValue = error { return "Valor não injetado" }
         return "Falha ao alternar"
     }
 }
