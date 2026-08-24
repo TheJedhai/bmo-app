@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		164E9BD6303CEA51001288BC /* PressStart2P-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 164E9BD5303CEA51001288BC /* PressStart2P-Regular.ttf */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		6C76694F5D2A3972F40A6E34 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA670B62E50EFBF21399184C /* Pods_RunnerTests.framework */; };
@@ -16,10 +17,9 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		A1E5C0DE0000000000000004 /* WidgetExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E5C0DE0000000000000001 /* WidgetExtension.swift */; };
+		A1E5C0DE0000000000000011 /* WidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1E5C0DE0000000000000002 /* WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A3BB0ED26D95FACDBCAA1081 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 96B7CF1B607E0CBC24144080 /* Pods_Runner.framework */; };
-
-A1E5C0DE0000000000000004 /* WidgetExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1E5C0DE0000000000000001 /* WidgetExtension.swift */; };
-A1E5C0DE0000000000000011 /* WidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A1E5C0DE0000000000000002 /* WidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -30,14 +30,13 @@ A1E5C0DE0000000000000011 /* WidgetExtension.appex in Embed App Extensions */ = {
 			remoteGlobalIDString = 97C146ED1CF9000F007C117D;
 			remoteInfo = Runner;
 		};
-
-A1E5C0DE000000000000000F /* PBXContainerItemProxy */ = {
-isa = PBXContainerItemProxy;
-containerPortal = 97C146E61CF9000F007C117D /* Project object */;
-proxyType = 1;
-remoteGlobalIDString = A1E5C0DE0000000000000006;
-remoteInfo = WidgetExtension;
-};
+		A1E5C0DE000000000000000F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 97C146E61CF9000F007C117D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1E5C0DE0000000000000006;
+			remoteInfo = WidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -51,24 +50,24 @@ remoteInfo = WidgetExtension;
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-A1E5C0DE0000000000000010 /* Embed App Extensions */ = {
-isa = PBXCopyFilesBuildPhase;
-buildActionMask = 2147483647;
-dstPath = "";
-dstSubfolderSpec = 13;
-files = (
-A1E5C0DE0000000000000011 /* WidgetExtension.appex in Embed App Extensions */,
-);
-name = "Embed App Extensions";
-runOnlyForDeploymentPostprocessing = 0;
-};
+		A1E5C0DE0000000000000010 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1E5C0DE0000000000000011 /* WidgetExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0999CC9191D74EBABB49DA27 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		164E9BD5303CEA51001288BC /* PressStart2P-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PressStart2P-Regular.ttf"; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
@@ -87,13 +86,12 @@ runOnlyForDeploymentPostprocessing = 0;
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A1E5C0DE0000000000000001 /* WidgetExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetExtension.swift; sourceTree = "<group>"; };
+		A1E5C0DE0000000000000002 /* WidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1E5C0DE0000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		D2C8EFC7534CCF1605245067 /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		DA670B62E50EFBF21399184C /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		FACCA2C1D4B906E0BCC9EC8F /* Pods-RunnerTests.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.profile.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.profile.xcconfig"; sourceTree = "<group>"; };
-
-A1E5C0DE0000000000000001 /* WidgetExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetExtension.swift; sourceTree = "<group>"; };
-A1E5C0DE0000000000000002 /* WidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-A1E5C0DE0000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -113,14 +111,13 @@ A1E5C0DE0000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFi
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-A1E5C0DE0000000000000008 /* Frameworks */ = {
-isa = PBXFrameworksBuildPhase;
-buildActionMask = 2147483647;
-files = (
-);
-runOnlyForDeploymentPostprocessing = 0;
-};
+		A1E5C0DE0000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -204,16 +201,16 @@ runOnlyForDeploymentPostprocessing = 0;
 			path = Runner;
 			sourceTree = "<group>";
 		};
-
-A1E5C0DE0000000000000005 /* WidgetExtension */ = {
-isa = PBXGroup;
-children = (
-A1E5C0DE0000000000000001 /* WidgetExtension.swift */,
-A1E5C0DE0000000000000003 /* Info.plist */,
-);
-path = WidgetExtension;
-sourceTree = "<group>";
-};
+		A1E5C0DE0000000000000005 /* WidgetExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A1E5C0DE0000000000000001 /* WidgetExtension.swift */,
+				A1E5C0DE0000000000000003 /* Info.plist */,
+				164E9BD5303CEA51001288BC /* PressStart2P-Regular.ttf */,
+			);
+			path = WidgetExtension;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -260,24 +257,23 @@ sourceTree = "<group>";
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
 			productType = "com.apple.product-type.application";
 		};
-
-A1E5C0DE0000000000000006 /* WidgetExtension */ = {
-isa = PBXNativeTarget;
-buildConfigurationList = A1E5C0DE000000000000000A /* Build configuration list for PBXNativeTarget "WidgetExtension" */;
-buildPhases = (
-A1E5C0DE0000000000000007 /* Sources */,
-A1E5C0DE0000000000000008 /* Frameworks */,
-A1E5C0DE0000000000000009 /* Resources */,
-);
-buildRules = (
-);
-dependencies = (
-);
-name = WidgetExtension;
-productName = WidgetExtension;
-productReference = A1E5C0DE0000000000000002 /* WidgetExtension.appex */;
-productType = "com.apple.product-type.app-extension";
-};
+		A1E5C0DE0000000000000006 /* WidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1E5C0DE000000000000000A /* Build configuration list for PBXNativeTarget "WidgetExtension" */;
+			buildPhases = (
+				A1E5C0DE0000000000000007 /* Sources */,
+				A1E5C0DE0000000000000008 /* Frameworks */,
+				A1E5C0DE0000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = WidgetExtension;
+			productName = WidgetExtension;
+			productReference = A1E5C0DE0000000000000002 /* WidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -292,12 +288,12 @@ productType = "com.apple.product-type.app-extension";
 						CreatedOnToolsVersion = 14.0;
 						TestTargetID = 97C146ED1CF9000F007C117D;
 					};
-					A1E5C0DE0000000000000006 = {
-					CreatedOnToolsVersion = 15.0;
-					};
 					97C146ED1CF9000F007C117D = {
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
+					};
+					A1E5C0DE0000000000000006 = {
+						CreatedOnToolsVersion = 15.0;
 					};
 				};
 			};
@@ -340,14 +336,14 @@ productType = "com.apple.product-type.app-extension";
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-A1E5C0DE0000000000000009 /* Resources */ = {
-isa = PBXResourcesBuildPhase;
-buildActionMask = 2147483647;
-files = (
-);
-runOnlyForDeploymentPostprocessing = 0;
-};
+		A1E5C0DE0000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				164E9BD6303CEA51001288BC /* PressStart2P-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -464,15 +460,14 @@ runOnlyForDeploymentPostprocessing = 0;
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-A1E5C0DE0000000000000007 /* Sources */ = {
-isa = PBXSourcesBuildPhase;
-buildActionMask = 2147483647;
-files = (
-A1E5C0DE0000000000000004 /* WidgetExtension.swift in Sources */,
-);
-runOnlyForDeploymentPostprocessing = 0;
-};
+		A1E5C0DE0000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1E5C0DE0000000000000004 /* WidgetExtension.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -481,12 +476,11 @@ runOnlyForDeploymentPostprocessing = 0;
 			target = 97C146ED1CF9000F007C117D /* Runner */;
 			targetProxy = 331C8085294A63A400263BE5 /* PBXContainerItemProxy */;
 		};
-
-A1E5C0DE000000000000000E /* PBXTargetDependency */ = {
-isa = PBXTargetDependency;
-target = A1E5C0DE0000000000000006 /* WidgetExtension */;
-targetProxy = A1E5C0DE000000000000000F /* PBXContainerItemProxy */;
-};
+		A1E5C0DE000000000000000E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1E5C0DE0000000000000006 /* WidgetExtension */;
+			targetProxy = A1E5C0DE000000000000000F /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
@@ -789,68 +783,67 @@ targetProxy = A1E5C0DE000000000000000F /* PBXContainerItemProxy */;
 			};
 			name = Release;
 		};
-
-A1E5C0DE000000000000000B /* Debug */ = {
-isa = XCBuildConfiguration;
-buildSettings = {
-CODE_SIGN_STYLE = Automatic;
-CURRENT_PROJECT_VERSION = 1;
-DEVELOPMENT_TEAM = M48B26K229;
-GENERATE_INFOPLIST_FILE = NO;
-INFOPLIST_FILE = WidgetExtension/Info.plist;
-IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-MARKETING_VERSION = 1.0;
-PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
-PRODUCT_NAME = "$(TARGET_NAME)";
-SKIP_INSTALL = YES;
-SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-SWIFT_EMIT_LOC_STRINGS = YES;
-SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-SWIFT_VERSION = 5.0;
-TARGETED_DEVICE_FAMILY = "1,2";
-};
-name = Debug;
-};
-A1E5C0DE000000000000000C /* Release */ = {
-isa = XCBuildConfiguration;
-buildSettings = {
-CODE_SIGN_STYLE = Automatic;
-CURRENT_PROJECT_VERSION = 1;
-DEVELOPMENT_TEAM = M48B26K229;
-GENERATE_INFOPLIST_FILE = NO;
-INFOPLIST_FILE = WidgetExtension/Info.plist;
-IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-MARKETING_VERSION = 1.0;
-PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
-PRODUCT_NAME = "$(TARGET_NAME)";
-SKIP_INSTALL = YES;
-SWIFT_EMIT_LOC_STRINGS = YES;
-SWIFT_OPTIMIZATION_LEVEL = "-O";
-SWIFT_VERSION = 5.0;
-TARGETED_DEVICE_FAMILY = "1,2";
-};
-name = Release;
-};
-A1E5C0DE000000000000000D /* Profile */ = {
-isa = XCBuildConfiguration;
-buildSettings = {
-CODE_SIGN_STYLE = Automatic;
-CURRENT_PROJECT_VERSION = 1;
-DEVELOPMENT_TEAM = M48B26K229;
-GENERATE_INFOPLIST_FILE = NO;
-INFOPLIST_FILE = WidgetExtension/Info.plist;
-IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-MARKETING_VERSION = 1.0;
-PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
-PRODUCT_NAME = "$(TARGET_NAME)";
-SKIP_INSTALL = YES;
-SWIFT_EMIT_LOC_STRINGS = YES;
-SWIFT_OPTIMIZATION_LEVEL = "-O";
-SWIFT_VERSION = 5.0;
-TARGETED_DEVICE_FAMILY = "1,2";
-};
-name = Profile;
-};
+		A1E5C0DE000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M48B26K229;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A1E5C0DE000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M48B26K229;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A1E5C0DE000000000000000D /* Profile */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = M48B26K229;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jedhai.bmoApp.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Profile;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -884,17 +877,16 @@ name = Profile;
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-
-A1E5C0DE000000000000000A /* Build configuration list for PBXNativeTarget "WidgetExtension" */ = {
-isa = XCConfigurationList;
-buildConfigurations = (
-A1E5C0DE000000000000000B /* Debug */,
-A1E5C0DE000000000000000C /* Release */,
-A1E5C0DE000000000000000D /* Profile */,
-);
-defaultConfigurationIsVisible = 0;
-defaultConfigurationName = Release;
-};
+		A1E5C0DE000000000000000A /* Build configuration list for PBXNativeTarget "WidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1E5C0DE000000000000000B /* Debug */,
+				A1E5C0DE000000000000000C /* Release */,
+				A1E5C0DE000000000000000D /* Profile */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 	};
 	rootObject = 97C146E61CF9000F007C117D /* Project object */;
