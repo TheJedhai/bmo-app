@@ -458,7 +458,7 @@ struct LightsWidgetEntryView: View {
             BracketCorners()
                 .stroke(BmoPalette.accentRed, lineWidth: 1.5)
                 // Piso prático: máscara do systemSmall tem raio ~22pt; canto a menos de ~6pt da borda cai fora e é cortado inteiro.
-                .padding(8)
+                .padding(14)
         )
     }
 
