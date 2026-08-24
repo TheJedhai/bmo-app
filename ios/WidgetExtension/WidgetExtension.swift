@@ -176,6 +176,41 @@ final class LightsWidgetError {
     var lastFailure: String?
 }
 
+// Overlay otimista do toggle: o eco do Zigbee2MQTT chega alguns ms depois do
+// POST, então o GET que o reloadTimelines dispara pode devolver o estado ainda
+// antigo e realimentar o intent do toque seguinte (toque que não muda nada).
+// Guardamos o alvo recém-enviado e o aplicamos por cima da resposta enquanto
+// ele for recente (<5s). Mesma limitação de processo da ponte acima: vale
+// quando intent e provider rodam no processo da extensão. Se rodar no processo
+// do app, não propaga — upgrade com App Group + UserDefaults quando der.
+final class LightsWidgetOverlay {
+    static let shared = LightsWidgetOverlay()
+    private init() {}
+
+    struct Target {
+        let name: String
+        let on: Bool
+        let sentAt: Date
+    }
+
+    var target: Target?
+
+    // Retorna os items com o alvo aplicado (se ele existir, for recente e casar
+    // com algum item). Descarta alvo com mais de 5s. nil = não aplicou.
+    func apply(to items: [LightItem]) -> [LightItem]? {
+        guard let t = target else { return nil }
+        if Date().timeIntervalSince(t.sentAt) >= 5 {
+            target = nil
+            return nil
+        }
+        guard let i = items.firstIndex(where: { $0.name == t.name }) else { return nil }
+        widgetLog.info("overlay: <\(t.name)> servidor=\(items[i].isOn) overlay=\(t.on)")
+        var out = items
+        out[i] = LightItem(name: t.name, isOn: t.on)
+        return out
+    }
+}
+
 // App Intent do toggle interativo — RODA DENTRO da extensão.
 // SetValueIntent (não AppIntent): o `Toggle(isOn:intent:)` do SwiftUI exige
 // essa conformância para a renderização do controle. A conformance é mantida
@@ -209,14 +244,23 @@ struct ToggleLightIntent: SetValueIntent {
             // 503 (MQTT fora do ar) e qualquer erro (inclui timeout): reverte
             // via reload (o GET devolve o estado real, não-mudado → snap-back)
             // e sinaliza a falha na próxima timeline. Rethrow marca a
-            // interação como falha no WidgetKit.
+            // interação como falha no WidgetKit. Limpa o overlay: snap-back
+            // para o estado real é o comportamento correto quando o comando
+            // falhou.
             let msg = Self.message(for: error)
             widgetLog.error("toggle intent: falha <\(lightName)> \(msg)")
             LightsWidgetError.shared.lastFailure = msg
+            LightsWidgetOverlay.shared.target = nil
             WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
             throw error
         }
         LightsWidgetError.shared.lastFailure = nil
+        // Grava o alvo otimista e espera o eco do Z2M: o GET do reload logo
+        // após o POST tende a devolver o estado antigo (o eco chega depois).
+        // Essa pausa resolve a maioria dos casos; o overlay é rede de
+        // segurança, não fonte primária.
+        LightsWidgetOverlay.shared.target = LightsWidgetOverlay.Target(name: lightName, on: value, sentAt: Date())
+        try? await Task.sleep(for: .milliseconds(800))
         WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
         return .result()
     }
@@ -249,7 +293,11 @@ struct LightsTimelineProvider: TimelineProvider {
             LightsWidgetError.shared.lastFailure = nil
             let entry: LightsEntry
             if let response = response {
-                entry = LightsEntry(date: .now, state: .loaded(response: response, failure: failure))
+                var r = response
+                if let overlaid = LightsWidgetOverlay.shared.apply(to: r.items) {
+                    r = LightsResponse(generatedAt: r.generatedAt, summary: r.summary, items: overlaid)
+                }
+                entry = LightsEntry(date: .now, state: .loaded(response: r, failure: failure))
             } else {
                 entry = LightsEntry(date: .now, state: .error(errorMessage ?? "Erro desconhecido"))
             }
