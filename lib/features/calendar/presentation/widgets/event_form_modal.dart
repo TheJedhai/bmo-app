@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
 import '../../../../core/utils/provider_utils.dart';
+import '../../../../core/utils/recurrence_weekday.dart';
 import '../../data/calendar_client.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar.dart';
@@ -79,7 +80,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   RecurrenceType _recurrence = RecurrenceType.none;
   int _recurrenceInterval = 1;
-  final Set<int> _recurrenceDays = {}; // Weekdays for weekly
+  final Set<int> _recurrenceDays = {}; // Semanais, dia do seletor (dom=1..sáb=7)
   bool _lastDayOfMonth = false; // -1 in recurrence_days for monthly
   DateTime? _recurrenceEnd;
   int? _reminderMinutes;
@@ -114,7 +115,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
       _recurrenceInterval = e.recurrenceInterval;
       _recurrenceDays
         ..clear()
-        ..addAll(e.recurrenceDays.where((d) => d > 0));
+        ..addAll(e.recurrenceDays.where((d) => d > 0).map(isoToAppDay));
       _lastDayOfMonth = e.recurrenceDays.contains(-1);
       _recurrenceEnd = e.recurrenceEnd;
       _reminderMinutes = e.reminderMinutesBefore;
@@ -814,7 +815,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     if (_lastDayOfMonth) {
       recurrenceDays.add(-1);
     }
-    recurrenceDays.addAll(_recurrenceDays.toList()..sort());
+    recurrenceDays.addAll(_recurrenceDays.map(appDayToIso).toList()..sort());
 
     final repo = ref.read(calendarRepositoryProvider);
 
