@@ -553,6 +553,21 @@ struct LightsWidget: Widget {
 
 let CalendarWidgetKind = "CalendarWidget"
 
+// Locale de EXIBIÇÃO (nome do dia da semana, palavra "amanhã"). A extensão é
+// um bundle separado SEM localização declarada, então Locale.current resolve
+// para o idioma de desenvolvimento, não o do aparelho. Construímos o locale
+// a partir do primeiro item de Locale.preferredLanguages, com pt_BR quando a
+// lista vier vazia.
+//
+// NÃO usar este locale no formatter que faz PARSE do campo date — parse de
+// data ISO jamais pode depender do idioma do aparelho (fica no en_US_POSIX
+// fixo, ver CalendarLayout.build). Os dois formatadores são parecidos e é
+// fácil trocar um pelo outro: a distinção é intencional.
+private var widgetDisplayLocale: Locale {
+    guard let lang = Locale.preferredLanguages.first else { return Locale(identifier: "pt_BR") }
+    return Locale(identifier: lang)
+}
+
 // -- Modelos (shape de /api/v1/widget/calendar) --
 
 struct CalendarWidgetResponse: Decodable {
@@ -707,9 +722,11 @@ struct CalendarLayout {
     let dayNumber: Int
     let slots: [CalendarSlotView]   // sempre 5 (slots 1..5)
 
-    // date chega como "yyyy-MM-dd". Parseia com locale FIXO en_US_POSIX —
-    // DateFormatter com locale do aparelho quebra parse de ISO (armadilha
-    // clássica). O locale do aparelho entra só na exibição (nome do dia/número).
+    // date chega como "yyyy-MM-dd". PARSE sempre com locale FIXO
+    // en_US_POSIX — DateFormatter com locale do aparelho quebra parse de ISO
+    // (armadilha clássica). Este é o formatter que faz PARSE; o de EXIBIÇÃO
+    // (nome do dia) fica logo abaixo e usa widgetDisplayLocale. Não trocar um
+    // pelo outro.
     static func build(day0: CalendarDay?, day1: CalendarDay?) -> CalendarLayout {
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")
@@ -719,7 +736,7 @@ struct CalendarLayout {
         var dayNumber = 0
         if let day0 = day0, let d = parser.date(from: day0.date) {
             let wf = DateFormatter()
-            wf.locale = Locale.current
+            wf.locale = widgetDisplayLocale
             wf.dateFormat = "EEEE"
             weekday = wf.string(from: d).uppercased()
             dayNumber = Calendar.current.component(.day, from: d)
@@ -962,10 +979,20 @@ struct CalendarWidgetEntryView: View {
         let layout = CalendarLayout.build(
             day0: response.days.first,
             day1: response.days.count > 1 ? response.days[1] : nil)
+        // Preenchimento por COLUNA, não por linha: o bloco da data ocupa o topo
+        // da coluna esquerda e os 5 slots descem a esquerda inteira — data,
+        // slot0, slot1 — antes de descer a direita — slot2, slot3, slot4.
+        //   col0: data | slot0 | slot1      col1: slot2 | slot3 | slot4
+        // O LazyVGrid preenche por linha, então a sequência abaixo é a
+        // row-major que reproduz essa coluna:  (-1 = bloco da data)
+        let rowMajor = [-1, 2, 0, 3, 1, 4]
         return LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
-            dateBlock(layout)
-            ForEach(Array(layout.slots.enumerated()), id: \.offset) { _, slot in
-                slotView(slot)
+            ForEach(rowMajor, id: \.self) { idx in
+                if idx == -1 {
+                    dateBlock(layout)
+                } else {
+                    slotView(layout.slots[idx])
+                }
             }
         }
     }
@@ -1069,7 +1096,7 @@ struct CalendarWidgetEntryView: View {
 
     private func tomorrowWord() -> String {
         let r = RelativeDateTimeFormatter()
-        r.locale = Locale.current
+        r.locale = widgetDisplayLocale
         r.dateTimeStyle = .named   // "amanhã"/"tomorrow"/"demain"
         let todayStart = Calendar.current.startOfDay(for: .now)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: todayStart)!
