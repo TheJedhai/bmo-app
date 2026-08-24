@@ -879,7 +879,9 @@ struct CalendarLayout {
     // com o mesmo espacamento do empacotamento — usada na verificação DEBUG.
     static func renderedColumnHeight(_ col: [CalendarSlotView]) -> CGFloat {
         let sum = col.reduce(0) { $0 + slotHeight($1) }
-        return sum + columnSpacing * (col.isEmpty ? 0 : col.count - 1)
+        // Nº de gaps entre células (contagem), convertido na hora p/ o * —
+        // só este operando é inteiro por natureza (conta posições).
+        return sum + columnSpacing * CGFloat(col.isEmpty ? 0 : col.count - 1)
     }
 
     private static func slotHeight(_ slot: CalendarSlotView) -> CGFloat {
