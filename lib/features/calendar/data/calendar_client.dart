@@ -127,7 +127,6 @@ class CalendarClient {
     String? startTime,
     String? endTime,
     String? startDate,
-    String? endDate,
     String? recurrenceType,
     int recurrenceInterval = 1,
     List<int> recurrenceDays = const [],
@@ -144,7 +143,6 @@ class CalendarClient {
     if (startTime != null) body['start_time'] = startTime;
     if (endTime != null) body['end_time'] = endTime;
     if (startDate != null) body['start_date'] = startDate;
-    if (endDate != null) body['end_date'] = endDate;
     if (recurrenceType != null && recurrenceType != 'none') {
       body['recurrence_type'] = recurrenceType;
       body['recurrence_interval'] = recurrenceInterval;
@@ -180,7 +178,6 @@ class CalendarClient {
     String? endTime,
     bool clearEndTime = false,
     String? startDate,
-    String? endDate,
     String? recurrenceType,
     bool clearRecurrence = false,
     int? recurrenceInterval,
@@ -209,7 +206,6 @@ class CalendarClient {
     }
 
     if (startDate != null) body['start_date'] = startDate;
-    if (endDate != null) body['end_date'] = endDate;
 
     if (clearRecurrence) {
       body['recurrence_type'] = null;

@@ -484,11 +484,6 @@ class _MonthViewState extends ConsumerState<MonthView> {
         startTime: appEvent.allDay ? null : newStartTime,
         endTime: appEvent.allDay ? null : newEndTime,
         startDate: startDate,
-        endDate: startDate != null
-            ? '${newEnd.year}-'
-                '${newEnd.month.toString().padLeft(2, '0')}-'
-                '${newEnd.day.toString().padLeft(2, '0')}'
-            : null,
         scope: scope,
       );
     }

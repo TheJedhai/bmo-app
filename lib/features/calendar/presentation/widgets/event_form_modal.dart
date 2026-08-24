@@ -75,7 +75,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
   Calendar? _selectedCalendar;
   bool _allDay = false;
   DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now();
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   RecurrenceType _recurrence = RecurrenceType.none;
@@ -96,7 +95,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
       _notesCtrl.text = e.notes ?? '';
       _allDay = e.allDay;
       _startDate = e.occurrenceDate;
-      _endDate = e.endDate ?? e.occurrenceDate;
       if (e.startTime != null) {
         final parts = e.startTime!.split(':');
         _startTime = TimeOfDay(
@@ -121,7 +119,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
       _reminderMinutes = e.reminderMinutesBefore;
     } else {
       _startDate = widget.initialDate ?? DateTime.now();
-      _endDate = _startDate;
       // Pre-fill times from drag gesture (week/day view create-by-drag).
       if (widget.initialStartTime != null) {
         final parts = widget.initialStartTime!.split(':');
@@ -267,25 +264,11 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
 
           const SizedBox(height: 8),
 
-          // Dates
-          Row(
-            children: [
-              Expanded(
-                child: _buildDateField(
-                  label: 'Início',
-                  date: _startDate,
-                  onDateChanged: (d) => setState(() => _startDate = d),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDateField(
-                  label: 'Fim',
-                  date: _endDate,
-                  onDateChanged: (d) => setState(() => _endDate = d),
-                ),
-              ),
-            ],
+          // Dates — evento dura no máximo 1 dia; só há data de início.
+          _buildDateField(
+            label: 'Início',
+            date: _startDate,
+            onDateChanged: (d) => setState(() => _startDate = d),
           ),
           const SizedBox(height: 12),
 
@@ -844,7 +827,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           clearStartTime: _allDay,
           clearEndTime: _allDay,
           startDate: _formatDateISO(_startDate),
-          endDate: _formatDateISO(_endDate),
           recurrenceType: _recurrence == RecurrenceType.none
               ? null
               : _recurrence.name,
@@ -869,7 +851,6 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           startTime: _allDay ? null : _formatTimeStr(_startTime),
           endTime: _allDay ? null : _formatTimeStr(_endTime),
           startDate: _formatDateISO(_startDate),
-          endDate: _formatDateISO(_endDate),
           recurrenceType:
               _recurrence == RecurrenceType.none ? null : _recurrence.name,
           recurrenceInterval: _recurrenceInterval,

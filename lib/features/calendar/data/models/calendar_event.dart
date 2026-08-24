@@ -22,9 +22,10 @@ final class CalendarEvent {
   final bool allDay;
   final DateTime occurrenceDate;
   final String? startTime; // HH:MM
-  final String? endTime; // HH:MM
+  /// HH:MM. Regra de produto: evento dura no máximo 1 dia. Se `endTime` for
+  /// menor que `startTime`, o evento termina no dia seguinte.
+  final String? endTime;
   final DateTime? startDate;
-  final DateTime? endDate;
   final RecurrenceType recurrenceType;
   final int recurrenceInterval;
   final List<int> recurrenceDays;
@@ -46,7 +47,6 @@ final class CalendarEvent {
     this.startTime,
     this.endTime,
     this.startDate,
-    this.endDate,
     this.recurrenceType = RecurrenceType.none,
     this.recurrenceInterval = 1,
     this.recurrenceDays = const [],
@@ -75,9 +75,6 @@ final class CalendarEvent {
       endTime: json['end_time'] as String?,
       startDate: json['start_date'] is String
           ? DateTime.tryParse(json['start_date'] as String)
-          : null,
-      endDate: json['end_date'] is String
-          ? DateTime.tryParse(json['end_date'] as String)
           : null,
       recurrenceType: RecurrenceTypeJson.fromJson(
         json['recurrence_type'] as String?,
