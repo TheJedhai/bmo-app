@@ -1,6 +1,11 @@
 import WidgetKit
 import SwiftUI
 import AppIntents
+import os
+
+// Logger da extensão — subsystem fixo p/ filtrar no simulador:
+//   xcrun simctl spawn booted log stream --predicate 'subsystem == "com.jedhai.bmoApp.widget"'
+private let widgetLog = Logger(subsystem: "com.jedhai.bmoApp.widget", category: "lights")
 
 // Configuração estática — identidade por configuração (mesmo padrão do MCP:
 // o cliente não escolhe, vem embutido).
@@ -54,11 +59,15 @@ struct LightItem: Decodable {
     let name: String
     let isOn: Bool
 
-    enum CodingKeys: String, CodingKey { case name, state }
+    // Servidor manda a chave "light", não "name" — era isso que deixava o nome
+    // vazio (fallback ?? "") e quebrava o POST (/api/v1/lights//on).
+    enum CodingKeys: String, CodingKey { case name = "light", state }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         name = (try? c.decode(String.self, forKey: .name)) ?? ""
+        // Payload real manda "state": "OFF" (String simples): o ramo bool não
+        // decodifica, cai no de String -> isOn = "OFF".uppercased() == "ON".
         if let b = try? c.decodeIfPresent(Bool.self, forKey: .state) {
             isOn = b
         } else if let s = try? c.decodeIfPresent(String.self, forKey: .state) {
@@ -103,6 +112,7 @@ enum LightsToggleError: Error {
     case network
     case mqttDown
     case http(Int)
+    case emptyName
 }
 
 // Chama o servidor SEM ir pro app. Identidade via header X-User-Id estático.
@@ -111,11 +121,20 @@ enum LightsToggleError: Error {
 // às cegas quando a view do widget está desatualizada.
 enum LightsToggleService {
     static func set(name: String, on: Bool) async throws {
+        // Guard: nome vazio viraria URL malformada (/api/v1/lights//on) — o bug
+        // de agora. Não chama rede com nome vazio.
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            widgetLog.error("toggle: nome da luz vazio, abortando antes da rede")
+            throw LightsToggleError.emptyName
+        }
         let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
         let verb = on ? "on" : "off"
-        guard let url = URL(string: WidgetConfig.baseUrl + "/api/v1/lights/\(encoded)/\(verb)") else {
+        let path = "/api/v1/lights/\(encoded)/\(verb)"
+        guard let url = URL(string: WidgetConfig.baseUrl + path) else {
+            widgetLog.error("toggle: URL inválida \(WidgetConfig.baseUrl)\(path)")
             throw LightsToggleError.invalidURL
         }
+        widgetLog.info("toggle: \(verb) <\(name)> -> \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         // perform() roda no ambiente restrito da extensão com orçamento
@@ -123,10 +142,24 @@ enum LightsToggleService {
         // Timeout curto: estourou = falha, volta ao estado anterior.
         request.timeoutInterval = 5
         request.setValue(WidgetConfig.userId, forHTTPHeaderField: "X-User-Id")
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw LightsToggleError.network }
+        let (_, response): (Data, URLResponse)
+        do {
+            (_, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            widgetLog.error("toggle: falha de rede \(url.absoluteString): \(error.localizedDescription)")
+            throw LightsToggleError.network
+        }
+        guard let http = response as? HTTPURLResponse else {
+            widgetLog.error("toggle: sem resposta HTTP \(url.absoluteString)")
+            throw LightsToggleError.network
+        }
+        widgetLog.info("toggle: HTTP \(http.statusCode) \(url.absoluteString)")
         guard (200...299).contains(http.statusCode) else {
-            if http.statusCode == 503 { throw LightsToggleError.mqttDown }
+            if http.statusCode == 503 {
+                widgetLog.error("toggle: MQTT fora do ar \(url.absoluteString)")
+                throw LightsToggleError.mqttDown
+            }
+            widgetLog.error("toggle: HTTP \(http.statusCode) \(url.absoluteString)")
             throw LightsToggleError.http(http.statusCode)
         }
     }
@@ -162,6 +195,7 @@ struct ToggleLightIntent: SetValueIntent {
     }
 
     func perform() async throws -> some IntentResult {
+        widgetLog.info("toggle intent: luz <\(lightName)> value=\(value)")
         do {
             try await LightsToggleService.set(name: lightName, on: value)
         } catch {
@@ -169,7 +203,9 @@ struct ToggleLightIntent: SetValueIntent {
             // via reload (o GET devolve o estado real, não-mudado → snap-back)
             // e sinaliza a falha na próxima timeline. Rethrow marca a
             // interação como falha no WidgetKit.
-            LightsWidgetError.shared.lastFailure = Self.message(for: error)
+            let msg = Self.message(for: error)
+            widgetLog.error("toggle intent: falha <\(lightName)> \(msg)")
+            LightsWidgetError.shared.lastFailure = msg
             WidgetCenter.shared.reloadTimelines(ofKind: LightWidgetKind)
             throw error
         }
@@ -180,6 +216,7 @@ struct ToggleLightIntent: SetValueIntent {
 
     static func message(for error: Error) -> String {
         if case LightsToggleError.mqttDown = error { return "MQTT fora do ar" }
+        if case LightsToggleError.emptyName = error { return "Luz sem nome" }
         return "Falha ao alternar"
     }
 }
@@ -215,20 +252,25 @@ struct LightsTimelineProvider: TimelineProvider {
 
     private func fetchLights(completion: @escaping (LightsResponse?, String?) -> Void) {
         guard let url = URL(string: WidgetConfig.baseUrl + WidgetConfig.lightsPath) else {
+            widgetLog.error("fetch: URL inválida \(WidgetConfig.lightsPath)")
             completion(nil, "URL inválida")
             return
         }
+        widgetLog.info("fetch: GET \(url.absoluteString)")
         var request = URLRequest(url: url)
         request.setValue(WidgetConfig.userId, forHTTPHeaderField: "X-User-Id")
         URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
+                widgetLog.error("fetch: erro de rede \(url.absoluteString): \(error.localizedDescription)")
                 completion(nil, error.localizedDescription)
                 return
             }
             guard let http = response as? HTTPURLResponse else {
+                widgetLog.error("fetch: sem resposta HTTP \(url.absoluteString)")
                 completion(nil, "Sem resposta HTTP")
                 return
             }
+            widgetLog.info("fetch: HTTP \(http.statusCode) \(url.absoluteString)")
             guard (200...299).contains(http.statusCode) else {
                 completion(nil, "HTTP \(http.statusCode)")
                 return
@@ -238,8 +280,13 @@ struct LightsTimelineProvider: TimelineProvider {
                 return
             }
             do {
-                completion(try JSONDecoder().decode(LightsResponse.self, from: data), nil)
+                let decoded = try JSONDecoder().decode(LightsResponse.self, from: data)
+                for item in decoded.items {
+                    widgetLog.info("fetch: luz <\(item.name)> state=\(item.isOn)")
+                }
+                completion(decoded, nil)
             } catch {
+                widgetLog.error("fetch: falha ao decodificar: \(error.localizedDescription)")
                 completion(nil, "Falha ao decodificar: \(error.localizedDescription)")
             }
         }.resume()
@@ -299,6 +346,9 @@ struct LightsWidgetEntryView: View {
             if let light = response.items.first {
                 // value é injetado pelo sistema (estado NOVO) — só passamos a
                 // luz. SetValueIntent = controle real, não placeholder.
+                // NÃO adicionar .toggleStyle(.switch) nem .tint(...) de volta:
+                // ambos quebram a RENDERIZAÇÃO do controle no widget (vira o
+                // ícone de proibido do WidgetKit — bug já confirmado).
                 Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name)) {
                     Text(light.name)
                         .font(.subheadline)
