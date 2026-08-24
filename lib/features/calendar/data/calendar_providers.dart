@@ -102,30 +102,48 @@ final calendarsByIdProvider = Provider<Map<int, Calendar>>((ref) {
 
 typedef MonthRange = ({int year, int month});
 
+/// Quantos dias além do mês cada busca cobre.
+///
+/// A chave da family é o mês, mas a unidade renderizada é a semana (ou o
+/// grid do mês com dias adjacentes do mês anterior/seguinte visíveis). Nas
+/// viradas de mês esses dois conjuntos não coincidem: uma semana de
+/// 30/08 a 05/09 é atribuída a setembro, mas exibe (e precisa buscar)
+/// eventos de 31/08. Cobertura de 7 dias de cada lado cobre o pior caso
+/// da semana que cruza a virada e dos dias adjacentes do grid. Manter a
+/// chave mensal (em vez de trocar para DateTimeRange) preserva o cache por
+/// página — trocar causaria refetch a cada swipe.
+const int _searchPaddingDays = 7;
+
+/// Janela de busca de eventos/tasks para um [MonthRange]: o mês alargado em
+/// [_searchPaddingDays] para cada lado. Ponto único usado por EventsNotifier
+/// e CalendarTasksNotifier — não repetir a aritmética em cada notifier.
+(DateTime, DateTime) _searchWindow(MonthRange arg) {
+  final first = DateTime(arg.year, arg.month, 1);
+  final last = DateTime(arg.year, arg.month + 1, 0);
+  return (
+    first.subtract(const Duration(days: _searchPaddingDays)),
+    last.add(const Duration(days: _searchPaddingDays)),
+  );
+}
+
 class EventsNotifier extends FamilyAsyncNotifier<List<CalendarEvent>, MonthRange> {
   @override
   Future<List<CalendarEvent>> build(MonthRange arg) async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
     final repo = ref.watch(calendarRepositoryProvider);
-    final (start, end) = _monthBounds(arg.year, arg.month);
+    final (start, end) = _searchWindow(arg);
     return repo.listEvents(start: start, end: end);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     final repo = ref.read(calendarRepositoryProvider);
-    final (start, end) = _monthBounds(arg.year, arg.month);
+    final (start, end) = _searchWindow(arg);
     state = await AsyncValue.guard(() async {
       final events = await repo.listEvents(start: start, end: end);
       return events;
     });
-  }
-
-  (DateTime, DateTime) _monthBounds(int year, int month) {
-    final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 0);
-    return (start, end);
   }
 }
 
@@ -145,24 +163,22 @@ class CalendarTasksNotifier
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
     final repo = ref.watch(missionsRepositoryProvider);
-    final firstDay = DateTime(arg.year, arg.month, 1);
-    final lastDay = DateTime(arg.year, arg.month + 1, 0);
+    final (dueAfter, dueBefore) = _searchWindow(arg);
     return repo.listTasks(
       status: 'pending',
-      dueAfter: firstDay,
-      dueBefore: lastDay,
+      dueAfter: dueAfter,
+      dueBefore: dueBefore,
     );
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     final repo = ref.read(missionsRepositoryProvider);
-    final firstDay = DateTime(arg.year, arg.month, 1);
-    final lastDay = DateTime(arg.year, arg.month + 1, 0);
+    final (dueAfter, dueBefore) = _searchWindow(arg);
     state = await AsyncValue.guard(() => repo.listTasks(
           status: 'pending',
-          dueAfter: firstDay,
-          dueBefore: lastDay,
+          dueAfter: dueAfter,
+          dueBefore: dueBefore,
         ));
   }
 }
