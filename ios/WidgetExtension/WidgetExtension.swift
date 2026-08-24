@@ -451,13 +451,15 @@ struct LightsWidgetEntryView: View {
                 footer(failure, response)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(
             BracketCorners()
                 .stroke(BmoPalette.accentRed, lineWidth: 1.5)
-                .padding(2)
+                // Piso prático: a máscara do systemSmall tem raio ~22pt; canto
+                // a menos de ~6pt da borda cai fora e é cortado inteiro.
+                .padding(8)
         )
     }
 
@@ -532,6 +534,8 @@ struct LightsWidget: Widget {
         .configurationDisplayName("Luzes")
         .description("Qtd de luzes acesas agora.")
         .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
+
     }
 }
 
