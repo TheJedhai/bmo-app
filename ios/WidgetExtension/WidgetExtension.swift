@@ -3,6 +3,71 @@ import SwiftUI
 import AppIntents
 import os
 
+// Espelho de lib/core/theme/bmo_theme.dart — mudanças lá precisam ser refletidas
+// aqui (mesma paleta, aplicada no widget).
+enum BmoPalette {
+    static let screenBg = Color(red: 30 / 255, green: 31 / 255, blue: 35 / 255)        // #1E1F23
+    static let screenBgElevated = Color(red: 38 / 255, green: 39 / 255, blue: 44 / 255) // #26272C
+    static let textPrimary = Color(red: 232 / 255, green: 232 / 255, blue: 232 / 255)  // #E8E8E8
+    static let textSecondary = Color(red: 154 / 255, green: 154 / 255, blue: 154 / 255) // #9A9A9A
+    static let textMuted = Color(red: 106 / 255, green: 106 / 255, blue: 106 / 255)    // #6A6A6A
+    static let accentRed = Color(red: 232 / 255, green: 147 / 255, blue: 138 / 255)    // #E8938A
+    static let accentYellow = Color(red: 232 / 255, green: 216 / 255, blue: 160 / 255) // #E8D8A0
+}
+
+// Cantos em L — a assinatura visual do DashCard. Quatro cantos, cada perna
+// 14 pt, traço 1.5 pt, sem preenchimento (aplicado como stroke em accentRed,
+// com inset de 2 pt).
+struct BracketCorners: Shape {
+    var leg: CGFloat = 14
+
+    func path(in rect: CGRect) -> Path {
+        let l = min(leg, min(rect.width, rect.height) / 2)
+        var p = Path()
+        // topo-esquerda
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY + l))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.minX + l, y: rect.minY))
+        // topo-direita
+        p.move(to: CGPoint(x: rect.maxX - l, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + l))
+        // base-direita
+        p.move(to: CGPoint(x: rect.maxX, y: rect.maxY - l))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - l, y: rect.maxY))
+        // base-esquerda
+        p.move(to: CGPoint(x: rect.minX + l, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - l))
+        return p
+    }
+}
+
+// ToggleStyle custom — não usar o .switch do sistema nem .tint: quebram a
+// renderização do controle no widget (bug já confirmado).
+struct BmoToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 8) {
+            configuration.label
+            Spacer(minLength: 0)
+            ZStack {
+                Capsule()
+                    .fill(configuration.isOn ? BmoPalette.accentRed : BmoPalette.screenBgElevated)
+                if !configuration.isOn {
+                    Capsule().stroke(BmoPalette.textMuted, lineWidth: 1.5)
+                }
+                Circle()
+                    .fill(configuration.isOn ? BmoPalette.screenBg : BmoPalette.textSecondary)
+                    .frame(width: 16, height: 16)
+                    .offset(x: configuration.isOn ? 9 : -9)
+            }
+            .frame(width: 40, height: 22)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
 // Logger da extensão — subsystem fixo p/ filtrar no simulador:
 //   xcrun simctl spawn booted log stream --predicate 'subsystem == "com.jedhai.bmoApp.widget"'
 private let widgetLog = Logger(subsystem: "com.jedhai.bmoApp.widget", category: "lights")
@@ -354,98 +419,108 @@ struct LightsWidgetEntryView: View {
     var body: some View {
         card
             .containerBackground(for: .widget) {
-                Color(red: 0.118, green: 0.122, blue: 0.137) // screenBg #1E1F23
+                BmoPalette.screenBg
             }
     }
 
     @ViewBuilder
     private var card: some View {
-        switch entry.state {
-        case .loading:
-            VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Cabeçalho CASA — igual em todos os estados (assinatura do card).
+            Text("CASA")
+                .font(Font.custom("PressStart2P-Regular", size: 9))
+                .foregroundStyle(BmoPalette.accentRed)
+            switch entry.state {
+            case .loading:
+                Spacer(minLength: 0)
                 ProgressView()
-                    .tint(Color(red: 0.722, green: 0.878, blue: 0.761)) // accentGreen
-                Text("Carregando…")
-                    .font(.footnote)
-                    .foregroundStyle(.white)
-            }
-        case .error(let message):
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Erro")
-                    .font(.headline)
-                    .foregroundStyle(Color(red: 0.91, green: 0.85, blue: 0.63)) // accentYellow
+                    .tint(BmoPalette.accentYellow)
+                    .frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
+            case .error(let message):
+                Spacer(minLength: 0)
                 Text(message)
-                    .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.8))
-                    .lineLimit(2)
-            }
-        case .loaded(let response, let failure):
-            loadedView(response, failure)
-        }
-    }
-
-    @ViewBuilder
-    private func loadedView(_ response: LightsResponse, _ failure: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Cabeçalho: label + horário (o horário existe porque o dado pode
-            // estar velho — recarga de 15 min, orçamento do WidgetKit).
-            HStack {
-                Text("Luzes")
-                    .font(.caption)
-                    .foregroundStyle(Color(red: 0.722, green: 0.878, blue: 0.761))
-                Spacer()
-                timeLabel(asOf: parseWidgetDate(response.generatedAt), raw: response.generatedAt)
-            }
-            // Toggle interativo da luz principal (a lista inteira não cabe no
-            // systemSmall — o systemMedium vem depois com todos os toggles).
-            if let light = response.items.first {
-                // Widgets NÃO resolvem parâmetros de app intents: o sistema não
-                // injeta o estado novo num Toggle de home screen (Apple, Adding
-                // interactivity to widgets and Live Activities: widgets don't
-                // resolve parameters for app intents). Por isso o alvo (on:) é
-                // atribuído na construção, como o exemplo oficial
-                // Toggle(isOn:intent:). SetValueIntent = controle real.
-                // NÃO adicionar .toggleStyle(.switch) nem .tint(...) de volta:
-                // ambos quebram a RENDERIZAÇÃO do controle no widget (vira o
-                // ícone de proibido do WidgetKit — bug já confirmado).
-                Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name, on: !light.isOn)) {
-                    Text(light.name)
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                }
-            } else {
-                Text("—")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            // Estado, ou a falha do último toggle (transient, some no próximo
-            // reload bem-sucedido).
-            if let failure {
-                Text(failure)
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
-            } else {
-                Text("\(response.summary.onCount) de \(response.summary.total) acesas")
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(.system(size: 11))
+                    .foregroundStyle(BmoPalette.textSecondary)
+                    .lineLimit(3)
+                Spacer(minLength: 0)
+            case .loaded(let response, let failure):
+                countRow(response.summary)
+                Spacer(minLength: 0)
+                lightRow(response)
+                footer(failure, response)
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(
+            BracketCorners()
+                .stroke(BmoPalette.accentRed, lineWidth: 1.5)
+                .padding(2)
+        )
+    }
+
+    private func countRow(_ summary: LightsResponse.Summary) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: 13))
+                .foregroundStyle(summary.onCount > 0 ? BmoPalette.accentYellow : BmoPalette.accentRed)
+            Text(countText(summary))
+                .font(.system(size: 12))
+                .foregroundStyle(BmoPalette.textSecondary)
+                .lineLimit(1)
+        }
+    }
+
+    private func countText(_ summary: LightsResponse.Summary) -> String {
+        "\(summary.onCount) de \(summary.total) " + (summary.total == 1 ? "acesa" : "acesas")
     }
 
     @ViewBuilder
-    private func timeLabel(asOf: Date?, raw: String) -> some View {
-        if let asOf {
-            Text(asOf, style: .time)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
+    private func lightRow(_ response: LightsResponse) -> some View {
+        if let light = response.items.first {
+            // Widgets NÃO resolvem parâmetros de app intents: o sistema não
+            // injeta o estado novo num Toggle de home screen (Apple, Adding
+            // interactivity to widgets and Live Activities: widgets don't
+            // resolve parameters for app intents). Por isso o alvo (on:) é
+            // atribuído na construção, como o exemplo oficial
+            // Toggle(isOn:intent:). SetValueIntent = controle real.
+            Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name, on: !light.isOn)) {
+                Text(light.name)
+                    .font(.system(size: 13))
+                    .foregroundStyle(BmoPalette.textPrimary)
+                    .lineLimit(1)
+            }
+            .toggleStyle(BmoToggleStyle())
         } else {
-            Text(raw)
-                .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
+            Text("—")
+                .font(.system(size: 13))
+                .foregroundStyle(BmoPalette.textSecondary)
         }
+    }
+
+    @ViewBuilder
+    private func footer(_ failure: String?, _ response: LightsResponse) -> some View {
+        Rectangle()
+            .fill(BmoPalette.screenBgElevated)
+            .frame(height: 1)
+        if let failure {
+            Text(failure)
+                .font(.system(size: 10))
+                .foregroundStyle(BmoPalette.accentYellow)
+                .lineLimit(1)
+        } else {
+            Text(timeText(asOf: parseWidgetDate(response.generatedAt), raw: response.generatedAt))
+                .font(.system(size: 10))
+                .foregroundStyle(BmoPalette.textMuted)
+                .lineLimit(1)
+        }
+    }
+
+    private func timeText(asOf: Date?, raw: String) -> String {
+        guard let asOf else { return raw }
+        return asOf.formatted(date: .omitted, time: .shortened)
     }
 }
 
