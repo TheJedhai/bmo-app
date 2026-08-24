@@ -553,20 +553,20 @@ struct LightsWidget: Widget {
 
 let CalendarWidgetKind = "CalendarWidget"
 
-// Locale de EXIBIÇÃO (nome do dia da semana, palavra "amanhã"). A extensão é
-// um bundle separado SEM localização declarada, então Locale.current resolve
-// para o idioma de desenvolvimento, não o do aparelho. Construímos o locale
-// a partir do primeiro item de Locale.preferredLanguages, com pt_BR quando a
-// lista vier vazia.
+// Locale de EXIBIÇÃO fixo em pt_BR. A extensão é um bundle separado SEM
+// localização declarada, então Locale.preferredLanguages é filtrado pelas
+// localizações declaradas no bundle e resolve para en (o idioma de
+// desenvolvimento), a despeito do idioma do aparelho — era isso que deixava o
+// dia da semana em inglês.
+// O app força Locale('pt','BR') no MaterialApp (lib/app.dart), ignorando o
+// idioma do aparelho, então o widget segue o app, não o dispositivo. Um dia,
+// se o app passar a ser multi-idioma, os dois mudam juntos.
 //
 // NÃO usar este locale no formatter que faz PARSE do campo date — parse de
 // data ISO jamais pode depender do idioma do aparelho (fica no en_US_POSIX
 // fixo, ver CalendarLayout.build). Os dois formatadores são parecidos e é
 // fácil trocar um pelo outro: a distinção é intencional.
-private var widgetDisplayLocale: Locale {
-    guard let lang = Locale.preferredLanguages.first else { return Locale(identifier: "pt_BR") }
-    return Locale(identifier: lang)
-}
+private let widgetDisplayLocale = Locale(identifier: "pt_BR")
 
 // -- Modelos (shape de /api/v1/widget/calendar) --
 
@@ -718,7 +718,7 @@ enum CalendarSlotView {
 }
 
 struct CalendarLayout {
-    let weekday: String      // "SEGUNDA-FEIRA" — nome do dia por extenso, caixa alta
+    let weekday: String      // "SEG" — abreviação de 3 letras do dia, caixa alta, sem pontuação
     let dayNumber: Int
     let slots: [CalendarSlotView]   // sempre 6 (slots 1..6)
 
@@ -737,8 +737,14 @@ struct CalendarLayout {
         if let day0 = day0, let d = parser.date(from: day0.date) {
             let wf = DateFormatter()
             wf.locale = widgetDisplayLocale
-            wf.dateFormat = "EEEE"
-            weekday = wf.string(from: d).uppercased()
+            // "EEE" dá a abreviação ("sáb." em pt_BR — com ponto e minúsculo).
+            // Normalizar: fold de acentos + remover não-letras + caixa alta → "SAB".
+            // Derivado da data formatada (não de lista fixa) para acompanhar o locale.
+            wf.dateFormat = "EEE"
+            weekday = wf.string(from: d)
+                .folding(options: .diacriticInsensitive, locale: widgetDisplayLocale)
+                .filter { $0.isLetter }
+                .uppercased()
             dayNumber = Calendar.current.component(.day, from: d)
         }
 
@@ -1006,9 +1012,9 @@ struct CalendarWidgetEntryView: View {
     }
 
     private func dateBlock(_ layout: CalendarLayout) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(layout.weekday)
-                .font(.system(size: 11, weight: .medium))
+                .font(Font.custom("PressStart2P-Regular", size: 9))
                 .foregroundStyle(BmoPalette.accentBlue)
                 .lineLimit(1)
             Text(String(layout.dayNumber))
