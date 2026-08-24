@@ -417,7 +417,12 @@ struct LightsWidgetEntryView: View {
     var entry: LightsEntry
 
     var body: some View {
+        // widgetURL como preference do SwiftUI: precisa estar na view raiz do
+        // conteúdo do widget — não dentro do switch de entry.state, nem em
+        // lightRow, nem depois do containerBackground, senão a preference não
+        // chega à raiz e o widget abre o app sem URL.
         card
+            .widgetURL(URL(string: "bmo://go/casa"))
             .containerBackground(for: .widget) {
                 BmoPalette.screenBg
             }
