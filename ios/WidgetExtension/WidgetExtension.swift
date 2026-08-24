@@ -190,8 +190,9 @@ struct ToggleLightIntent: SetValueIntent {
     @Parameter(title: "Ligada", default: false) var value: Bool
 
     init() {}
-    init(lightName: String) {
+    init(lightName: String, on: Bool) {
         self.lightName = lightName
+        self.value = on
     }
 
     func perform() async throws -> some IntentResult {
@@ -346,12 +347,14 @@ struct LightsWidgetEntryView: View {
             // Toggle interativo da luz principal (a lista inteira não cabe no
             // systemSmall — o systemMedium vem depois com todos os toggles).
             if let light = response.items.first {
-                // value é injetado pelo sistema (estado NOVO) — só passamos a
-                // luz. SetValueIntent = controle real, não placeholder.
+                // Widgets NÃO resolvem parâmetros de app intents: o sistema não
+                // injeta o estado novo num Toggle de home screen. Por isso o
+                // alvo (on:) é atribuído na construção, como o exemplo oficial
+                // Toggle(isOn:intent:). SetValueIntent = controle real.
                 // NÃO adicionar .toggleStyle(.switch) nem .tint(...) de volta:
                 // ambos quebram a RENDERIZAÇÃO do controle no widget (vira o
                 // ícone de proibido do WidgetKit — bug já confirmado).
-                Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name)) {
+                Toggle(isOn: light.isOn, intent: ToggleLightIntent(lightName: light.name, on: !light.isOn)) {
                     Text(light.name)
                         .font(.subheadline)
                         .foregroundStyle(.white)
