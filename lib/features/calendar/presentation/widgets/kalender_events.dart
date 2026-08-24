@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kalender/kalender.dart';
 
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../../core/utils/event_time_range.dart';
 import '../../../missions/data/missions_providers.dart';
 import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
@@ -128,22 +129,11 @@ KalenderCalendarEvent _toKalenderEvent(app.CalendarEvent e) {
   DateTime end;
 
   if (!e.allDay && e.startTime != null && e.endTime != null) {
-    final startParts = e.startTime!.split(':');
-    final endParts = e.endTime!.split(':');
-    start = DateTime(
-      startDate.year,
-      startDate.month,
-      startDate.day,
-      int.tryParse(startParts[0]) ?? 0,
-      int.tryParse(startParts[1]) ?? 0,
-    );
-    end = DateTime(
-      startDate.year,
-      startDate.month,
-      startDate.day,
-      int.tryParse(endParts[0]) ?? 0,
-      int.tryParse(endParts[1]) ?? 0,
-    );
+    // Regra de produto: se end_time for anterior a start_time, o evento
+    // termina no dia seguinte. Ver timeRangeOnDay (ponto único da convenção).
+    final range = timeRangeOnDay(startDate, e.startTime!, e.endTime!);
+    start = range.start;
+    end = range.end;
   } else {
     start = DateTime(startDate.year, startDate.month, startDate.day);
     end = DateTime(startDate.year, startDate.month, startDate.day + 1);
