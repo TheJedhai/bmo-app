@@ -694,19 +694,33 @@ enum CalendarCell {
     case event(CalendarEvent, tomorrow: Bool)
     case task(CalendarTask, tomorrow: Bool)
     case dayLabel
+    // Linha "sem nada" do dia seguinte vazio — só aparece junto do dayLabel
+    // (par atômico: ou os dois, ou nenhum dos dois).
+    case emptyDay
 
     var tomorrow: Bool {
         switch self {
         case .event(_, let t): return t
         case .task(_, let t): return t
-        case .dayLabel: return true
+        case .dayLabel, .emptyDay: return true
         }
     }
 
     var itemCount: Int {
         switch self {
-        case .dayLabel: return 0
+        case .dayLabel, .emptyDay: return 0
         case .event(_, _), .task(_, _): return 1
+        }
+    }
+
+    // Opacidade na renderização. Células de amanhã (e o rótulo) esmaecem 0.45;
+    // a linha de vazio esmaece um pouco mais (0.30), para hierarquia.
+    var displayOpacity: Double {
+        switch self {
+        case .emptyDay: return 0.30
+        case .dayLabel: return 0.45
+        case .event(_, let t): return t ? 0.45 : 1.0
+        case .task(_, let t): return t ? 0.45 : 1.0
         }
     }
 }
@@ -758,11 +772,17 @@ struct CalendarLayout {
         // entre os dois tipos: missões primeiro se houver alguma ATRASADA
         // (is_overdue), senão eventos primeiro.
         let todayCells = orderedCells(day: day0, tomorrow: false)
-        let tomorrowCells = (day1 != nil && !(day1!.events.isEmpty && day1!.tasks.isEmpty))
+        let tomorrowIsEmpty = (day1 != nil) && day1!.events.isEmpty && day1!.tasks.isEmpty
+        let tomorrowHasContent = (day1 != nil) && !tomorrowIsEmpty
+        // Dia seguinte: conteúdo → rótulo + itens; vazio → par atômico rótulo +
+        // linha "nada"; sem day1 → nada. O par só entra se couber inteiro (a
+        // atomicidade é garantida por prefix(6) + enforceNextDayLabel abaixo).
+        let tomorrowCells: [CalendarCell] = tomorrowHasContent
             ? [CalendarCell.dayLabel] + orderedCells(day: day1, tomorrow: true)
+            : tomorrowIsEmpty ? [CalendarCell.dayLabel, CalendarCell.emptyDay]
             : []
         // Ordem lógica: itens de hoje, depois o rótulo de amanhã, depois os
-        // itens de amanhã.
+        // itens de amanhã (ou a linha "nada", se o dia seguinte estiver vazio).
         let full = todayCells + tomorrowCells
 
         let presentItems = (day0?.events.count ?? 0) + (day0?.tasks.count ?? 0)
@@ -792,11 +812,18 @@ struct CalendarLayout {
         return anyOverdue ? tasks + events : events + tasks
     }
 
-    // Regra dura: o rótulo de amanhã nunca é o último elemento de conteúdo — se o
-    // corte (6 células) deixou o rótulo pendurado no fim, remove-o.
+    // Regra dura: o rótulo de amanhã nunca é o último conteúdo. Para o dia
+    // seguinte vazio, a linha "emptyDay" logo após o rótulo satisfaz a regra —
+    // o par é atômico (nunca aparece quebrado). Se o corte (6 células) deixou o
+    // rótulo sem nada depois, ele é removido — e a linha "nada" nunca fica órfã.
     private static func enforceNextDayLabel(_ cells: inout [CalendarCell]) {
         guard let idx = cells.firstIndex(where: { if case .dayLabel = $0 { return true }; return false }) else { return }
-        let hasItemAfter = (idx + 1..<cells.count).contains { cells[$0].itemCount > 0 }
+        let hasItemAfter = (idx + 1..<cells.count).contains { i in
+            switch cells[i] {
+            case .dayLabel: return false
+            case .event(_, _), .task(_, _), .emptyDay: return true
+            }
+        }
         if !hasItemAfter {
             cells.remove(at: idx)
         }
@@ -937,6 +964,45 @@ struct CalendarTimelineProvider: TimelineProvider {
         let renderedContent = l.cells.reduce(0) { $0 + $1.itemCount }
         assert(l.overflowCount == (presentItems - renderedContent) + omitted,
                "calendar: contador não corresponde ao que não coube + omitido")
+
+        // Rótulo de amanhã não pode conter dígitos: número indica que o
+        // RelativeDateTimeFormatter escolheu horas/minutos em vez de dia.
+        assert(!CalendarWidgetEntryView.tomorrowLabel().contains(where: { $0.isNumber }),
+               "calendar: rótulo de amanhã contém dígitos (formatador escolheu horas/minutos)")
+
+        // Dia seguinte vazio + espaço → par rótulo + "nada" aparece junto (atômico).
+        let todayA = CalendarDay(
+            date: "2026-08-24", isToday: true,
+            events: [CalendarEvent(title: "A", allDay: false, startTime: "10:00", endTime: "11:00", kind: "meeting", color: "#8FB8E8")],
+            eventsOmitted: 0,
+            tasks: [CalendarTask(title: "T", dueTime: nil, priority: 1, isOverdue: false)],
+            tasksOmitted: 0)
+        let emptyA = CalendarDay(date: "2026-08-25", isToday: false, events: [], eventsOmitted: 0, tasks: [], tasksOmitted: 0)
+        let la = CalendarLayout.build(day0: todayA, day1: emptyA)
+        guard let li = la.cells.firstIndex(where: { if case .dayLabel = $0 { return true }; return false }) else {
+            assertionFailure("calendar: dia seguinte vazio com espaço deveria mostrar o par rótulo+nada")
+            return
+        }
+        assert(li + 1 < la.cells.count, "calendar: rótulo sem a linha 'nada' depois")
+        if case .emptyDay = la.cells[li + 1] {} else {
+            assertionFailure("calendar: rótulo do dia vazio deve ser seguido da linha 'nada'")
+        }
+        assert(la.overflowCount == 0, "calendar: par do dia vazio não deve incrementar contador")
+
+        // Dia seguinte vazio + sem espaço → nenhum dos dois aparece, contador intacto.
+        let eventsB = (0..<6).map {
+            CalendarEvent(title: "E\($0)", allDay: false, startTime: nil, endTime: nil, kind: "meeting", color: "#8FB8E8")
+        }
+        let todayB = CalendarDay(date: "2026-08-24", isToday: true, events: eventsB, eventsOmitted: 0, tasks: [], tasksOmitted: 0)
+        let emptyB = CalendarDay(date: "2026-08-25", isToday: false, events: [], eventsOmitted: 0, tasks: [], tasksOmitted: 0)
+        let lb = CalendarLayout.build(day0: todayB, day1: emptyB)
+        let hasPairB = lb.cells.contains { c in
+            if case .dayLabel = c { return true }
+            if case .emptyDay = c { return true }
+            return false
+        }
+        assert(!hasPairB, "calendar: sem espaço, o par rótulo+nada não deve aparecer")
+        assert(lb.overflowCount == 0, "calendar: par descartado não deve incrementar contador")
     }
     #endif
 }
@@ -957,6 +1023,36 @@ struct CalendarWidgetEntryView: View {
 
     @ViewBuilder
     private var card: some View {
+        // A moldura ancora na ÁREA DO WIDGET, não no conteúdo. Antes o
+        // BracketCorners era .overlay do card; o tamanho do card é definido pelo
+        // conteúdo (frame máx. só PROPÕE o máximo — conteúdo alto cresce a view e
+        // os cantos acompanham). Moldura e conteúdo são agora irmãos num ZStack
+        // que ocupa a área toda; a posição dos cantos não depende de quanta coisa
+        // foi renderizada.
+        //
+        // GeometryReader (não frame máx. no ZStack sozinho): o contrato dele é
+        // encher a área proposta; um frame(maxHeight:.infinity) só define um ideal
+        // flexível e, com proposta indefinida, a view cai de volta à altura do
+        // conteúdo — a causa raiz dos cantos deslocarem. O GeometryReader garante
+        // proposta definida, e aí os frame máx. dos filhos preenchem.
+        GeometryReader { _ in
+            ZStack {
+                // Moldura: inset da BORDA do widget (o ZStack enche a área).
+                BracketCorners()
+                    .stroke(BmoPalette.accentBlue, lineWidth: 1.5)
+                    // Mesmo inset do widget de luzes (lá é .padding(14) no
+                    // overlay) — manter os dois iguais para a distância até a
+                    // borda bater. Lado a lado: luzes 14 · calendário 14.
+                    .padding(14)
+
+                content
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
         Group {
             switch entry.state {
             case .loading:
@@ -986,11 +1082,6 @@ struct CalendarWidgetEntryView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .overlay(
-            BracketCorners()
-                .stroke(BmoPalette.accentBlue, lineWidth: 1.5)
-                .padding(14)
-        )
     }
 
     private func gridView(_ response: CalendarWidgetResponse) -> some View {
@@ -1006,7 +1097,7 @@ struct CalendarWidgetEntryView: View {
             VStack(alignment: .leading, spacing: CalendarLayout.columnSpacing) {
                 dateBlock(layout)
                 ForEach(Array(left.enumerated()), id: \.offset) { _, cell in
-                    cellView(cell).opacity(cell.tomorrow ? 0.45 : 1)
+                    cellView(cell).opacity(cell.displayOpacity)
                 }
                 Spacer(minLength: 0)
             }
@@ -1015,7 +1106,7 @@ struct CalendarWidgetEntryView: View {
             // Coluna direita: até quatro células + contador de transbordo (se houver).
             VStack(alignment: .leading, spacing: CalendarLayout.columnSpacing) {
                 ForEach(Array(right.enumerated()), id: \.offset) { _, cell in
-                    cellView(cell).opacity(cell.tomorrow ? 0.45 : 1)
+                    cellView(cell).opacity(cell.displayOpacity)
                 }
                 if layout.overflowCount > 0 {
                     counterText(layout.overflowCount)
@@ -1058,6 +1149,11 @@ struct CalendarWidgetEntryView: View {
             taskView(t)
         case .dayLabel:
             Text(tomorrowWord())
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(BmoPalette.textMuted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        case .emptyDay:
+            Text(emptyDayText())
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(BmoPalette.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1118,12 +1214,28 @@ struct CalendarWidgetEntryView: View {
     }
 
     private func tomorrowWord() -> String {
+        Self.tomorrowLabel()
+    }
+
+    // Gera o rótulo "AMANHÃ". A referência é o INÍCIO DO DIA de hoje, não o
+    // instante atual: o RelativeDateTimeFormatter escolhe a unidade pela
+    // distância real entre os dois instantes — às 21h a distância até a
+    // meia-noite de amanhã é de 3h e ele usaria horas ("EM 3 HORAS"). Como a
+    // referência é o começo do dia de hoje, a distância é sempre exatamente um
+    // dia, produzindo "amanhã" em qualquer horário.
+    static func tomorrowLabel() -> String {
         let r = RelativeDateTimeFormatter()
         r.locale = widgetDisplayLocale
         r.dateTimeStyle = .named   // "amanhã"/"tomorrow"/"demain"
         let todayStart = Calendar.current.startOfDay(for: .now)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: todayStart)!
-        return r.localizedString(for: tomorrow, relativeTo: .now).uppercased()
+        return r.localizedString(for: tomorrow, relativeTo: todayStart).uppercased()
+    }
+
+    // Linha do dia seguinte vazio — mesma tipografia do rótulo, informando que
+    // não há nada programado.
+    private func emptyDayText() -> String {
+        "Nada programado"
     }
 
     // #RRGGBB → Color. Fallback accentBlue se cor inválida.
