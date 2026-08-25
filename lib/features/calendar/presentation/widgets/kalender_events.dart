@@ -65,12 +65,21 @@ class KalenderCalendarEvent extends CalendarEvent {
 
   bool get allDay => switch (source) {
     EventItem(:final event) => event.allDay,
-    TaskItem(:final task) => task.dueTime == null,
+    // Atrasadas viram dia inteiro mesmo com horário — o horário de vencimento
+    // original perdeu o sentido no dia de hoje (decisão de produto).
+    TaskItem(:final task) => task.isOverdue || task.dueTime == null,
   };
 
   String? get startTime => switch (source) {
     EventItem(:final event) => event.startTime,
-    TaskItem(:final task) => task.dueTime,
+    TaskItem(:final task) => task.isOverdue ? null : task.dueTime,
+  };
+
+  /// Tarefa atrasada (pendente vencida antes de hoje). Usado para posicionar
+  /// no dia de hoje e para destacar a pílula em vermelho.
+  bool get isOverdueTask => switch (source) {
+    TaskItem(:final task) => task.isOverdue,
+    _ => false,
   };
 
   String? get endTime => switch (source) {
@@ -146,20 +155,25 @@ KalenderCalendarEvent _toKalenderEvent(app.CalendarEvent e) {
 }
 
 KalenderCalendarEvent _toKalenderTaskEvent(Task t) {
-  final dueDate = t.dueDate!;
+  // Atrasadas rolam para HOJE, na faixa de dia inteiro, e nunca aparecem na
+  // data original. Regra espelha o widget iOS (endpoint /api/v1/widget/calendar)
+  // e o card de Missões da dashboard. O horário de vencimento original é
+  // descartado no dia de hoje — decreto que o horário perdeu o sentido.
+  final overdue = t.isOverdue;
+  final baseDate = overdue ? DateTime.now() : t.dueDate!;
   DateTime start;
   DateTime end;
 
-  if (t.dueTime != null) {
+  if (!overdue && t.dueTime != null) {
     final parts = t.dueTime!.split(':');
     final hour = int.tryParse(parts[0]) ?? 0;
     final minute = int.tryParse(parts[1]) ?? 0;
-    start = DateTime(dueDate.year, dueDate.month, dueDate.day, hour, minute);
+    start = DateTime(baseDate.year, baseDate.month, baseDate.day, hour, minute);
     // Nominal 30 min duration for layout only — never persisted.
     end = start.add(const Duration(minutes: 30));
   } else {
-    start = DateTime(dueDate.year, dueDate.month, dueDate.day);
-    end = DateTime(dueDate.year, dueDate.month, dueDate.day + 1);
+    start = DateTime(baseDate.year, baseDate.month, baseDate.day);
+    end = DateTime(baseDate.year, baseDate.month, baseDate.day + 1);
   }
 
   return KalenderCalendarEvent(
@@ -308,7 +322,7 @@ Widget _buildTaskMonthTile(
     );
   }
 
-  final color = BmoColors.taskChipColor;
+  final color = _taskColor(ke);
 
   if (ke.allDay) {
     return Container(
@@ -597,7 +611,7 @@ Widget _buildTaskMultiDayTile(
     );
   }
 
-  final color = BmoColors.taskChipColor;
+  final color = _taskColor(ke);
   final durationMinutes = ke.end.difference(ke.start).inMinutes;
   final isShort = durationMinutes <= 30;
 
@@ -788,7 +802,7 @@ Widget _buildEventAllDayTile(
 }
 
 Widget _buildTaskAllDayTile(KalenderCalendarEvent ke, Task t, {bool isSelected = false}) {
-  final color = BmoColors.taskChipColor;
+  final color = _taskColor(ke);
 
   if (isSelected) {
     return ClipRect(
@@ -896,6 +910,12 @@ Widget _buildRecurrenceIcon(app.CalendarEvent e, Color color) {
     ),
   );
 }
+
+/// Cor da pílula de tarefa no calendário. Atrasadas (vencidas antes de hoje)
+/// usam o vermelho de destaque do tema — mesmo caso do widget iOS — para se
+/// separar visualmente das demais; as demais usam o âmbar [BmoColors.taskChipColor].
+Color _taskColor(KalenderCalendarEvent ke) =>
+    ke.isOverdueTask ? BmoColors.accentRed : BmoColors.taskChipColor;
 
 Color _hexToColor(String hex) {
   final cleaned = hex.replaceFirst('#', '');
@@ -1081,7 +1101,7 @@ Widget _buildSelectedEventContent(KalenderCalendarEvent ke, Color color, bool is
 /// Tinted background with glow shadow, 3px left accent bar, no border.
 /// Title in textPrimary, time in white 0.75 for legibility.
 Widget _buildSelectedTaskContent(KalenderCalendarEvent ke, Task t, bool isShort) {
-  final color = BmoColors.taskChipColor;
+  final color = _taskColor(ke);
   return Container(
     margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
     decoration: BoxDecoration(
@@ -1163,7 +1183,7 @@ Widget kalenderTileWhenDragging(CalendarEvent event) {
         calendarId: e.calendarId,
         builder: (calColor) => _buildDraggingContent(ke, calColor, isShort),
       ),
-    TaskItem() => _buildDraggingContent(ke, BmoColors.taskChipColor, isShort),
+    TaskItem() => _buildDraggingContent(ke, _taskColor(ke), isShort),
   };
 }
 
@@ -1237,7 +1257,7 @@ Widget kalenderFeedbackTile(CalendarEvent event, Size dropTargetWidgetSize) {
           builder: (calColor) =>
               _buildFeedbackContent(ke, calColor, isShort, dropTargetWidgetSize),
         ),
-      TaskItem() => _buildFeedbackContent(ke, BmoColors.taskChipColor, isShort, dropTargetWidgetSize),
+      TaskItem() => _buildFeedbackContent(ke, _taskColor(ke), isShort, dropTargetWidgetSize),
     },
   );
 }

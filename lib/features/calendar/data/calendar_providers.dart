@@ -4,6 +4,7 @@ import '../../../core/config/env.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
 import '../../../features/missions/data/missions_providers.dart';
+import '../../../features/missions/data/missions_repository.dart';
 import '../../../features/missions/data/models/task.dart';
 import 'calendar_client.dart';
 import 'calendar_repository.dart';
@@ -163,24 +164,53 @@ class CalendarTasksNotifier
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
     final repo = ref.watch(missionsRepositoryProvider);
-    final (dueAfter, dueBefore) = _searchWindow(arg);
-    return repo.listTasks(
-      status: 'pending',
-      dueAfter: dueAfter,
-      dueBefore: dueBefore,
-    );
+    return _loadCalendarTasks(arg, repo);
   }
 
   Future<void> refresh() async {
     state = const AsyncLoading();
     final repo = ref.read(missionsRepositoryProvider);
-    final (dueAfter, dueBefore) = _searchWindow(arg);
-    state = await AsyncValue.guard(() => repo.listTasks(
-          status: 'pending',
-          dueAfter: dueAfter,
-          dueBefore: dueBefore,
-        ));
+    state = await AsyncValue.guard(() => _loadCalendarTasks(arg, repo));
   }
+
+  /// Pendentes da janela do mês; e, quando hoje cai no mês de [arg],
+  /// acrescenta as pendentes vencidas ANTES de hoje (sem limite inferior),
+  /// para aparecerem no dia de hoje. Combinadas sem duplicar por id.
+  Future<List<Task>> _loadCalendarTasks(MonthRange arg, MissionsRepository repo) async {
+    final (dueAfter, dueBefore) = _searchWindow(arg);
+    final monthTasks = await repo.listTasks(
+      status: 'pending',
+      dueAfter: dueAfter,
+      dueBefore: dueBefore,
+    );
+    final now = DateTime.now();
+    if (!todayInTaskMonth(arg, now)) return monthTasks;
+    final today = DateTime(now.year, now.month, now.day);
+    final overdue = await repo.listTasks(
+      status: 'pending',
+      dueAfter: null,
+      dueBefore: today,
+    );
+    return mergeOverdueTasks(monthTasks, overdue);
+  }
+}
+
+/// Se [today] cai no MÊS de [arg] — não na janela alargada. É o gate da
+/// regra de atrasadas: elas só fazem sentido no mês que contém hoje; ao
+/// navegar para um mês que NÃO contém hoje, atrasadas não devem aparecer em
+/// lugar nenhum. Não usar aqui a janela [_searchWindow]: a folga de ±7 dias
+/// faria um mês vizinho (que não contém hoje) buscar e exibir atrasadas.
+bool todayInTaskMonth(MonthRange arg, DateTime today) =>
+    today.year == arg.year && today.month == arg.month;
+
+/// Junta as pendentes da janela do mês com as atrasadas (vencidas antes de
+/// hoje), sem duplicar por id. Preserva a ordem: as do mês primeiro.
+List<Task> mergeOverdueTasks(List<Task> monthTasks, List<Task> overdueTasks) {
+  final seen = {for (final t in monthTasks) t.id};
+  return [
+    ...monthTasks,
+    for (final t in overdueTasks) if (!seen.contains(t.id)) t,
+  ];
 }
 
 final calendarTasksProvider = AsyncNotifierProvider.family<

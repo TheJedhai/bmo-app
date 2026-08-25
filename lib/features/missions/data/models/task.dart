@@ -68,6 +68,18 @@ final class Task {
     this.subtasks,
   });
 
+  /// Tarefa atrasada: pendente com vencimento em dia ANTERIOR a hoje.
+  /// Atrasadas são exibidas no calendário DENTRO de hoje (ver
+  /// `kalender_events.dart`), não no dia em que venceram — mesma regra do
+  /// widget iOS e do card de Missões da dashboard.
+  bool get isOverdue {
+    if (status != TaskStatus.pending || dueDate == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate!.year, dueDate!.month, dueDate!.day);
+    return due.isBefore(today);
+  }
+
   TimeOfDay? get dueTimeOfDay {
     if (dueTime == null) return null;
     final parts = dueTime!.split(':');

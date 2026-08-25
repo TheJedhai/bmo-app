@@ -209,10 +209,16 @@ class _MonthViewState extends ConsumerState<MonthView> {
     final visibility = ref.read(calendarVisibilityProvider);
     final showMissions = ref.read(missionsCalendarVisibilityProvider);
     final visibleEvents = filterVisibleEvents(events, visibility);
+    // Regra de atrasadas: só fazem sentido no mês que contém hoje (o gate no
+    // CalendarTasksNotifier evita a busca extra, mas a busca da janela do mês
+    // pode ainda trazer uma atrasada no rabo de um mês vizinho). Fora do mês
+    // de hoje, descarta atrasadas para não aparecerem em lugar nenhum.
+    final showOverdue = todayInTaskMonth(monthRange, DateTime.now());
     final items = <CalendarItem>[
       for (final e in visibleEvents) EventItem(e),
       if (showMissions)
-        for (final t in tasks) TaskItem(t),
+        for (final t in tasks)
+          if (showOverdue || !t.isOverdue) TaskItem(t),
     ];
     _syncEvents(items);
   }
