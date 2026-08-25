@@ -424,10 +424,22 @@ struct LightsWidgetEntryView: View {
         // conteúdo do widget — não dentro do switch de entry.state, nem em
         // lightRow, nem depois do containerBackground, senão a preference não
         // chega à raiz e o widget abre o app sem URL.
+        //
+        // A moldura vive no containerBackground, não no conteúdo: é o único ponto
+        // cujo tamanho o WidgetKit garante ser a área inteira do widget, sempre,
+        // independente do que for renderizado. No conteúdo, a posição dos cantos
+        // seria dimensionada junto (o conteúdo tem tamanho constante hoje — por
+        // isso não apresenta o sintoma, mas ganharia se tivesse mais linhas).
         card
             .widgetURL(URL(string: "bmo://go/casa"))
             .containerBackground(for: .widget) {
-                BmoPalette.screenBg
+                ZStack {
+                    BmoPalette.screenBg
+                    BracketCorners()
+                        .stroke(BmoPalette.accentRed, lineWidth: 1.5)
+                        // Piso prático: máscara do systemSmall tem raio ~22pt; canto a menos de ~6pt da borda cai fora e é cortado inteiro.
+                        .padding(14)
+                }
             }
     }
 
@@ -462,12 +474,6 @@ struct LightsWidgetEntryView: View {
         .padding(.horizontal, 28)
         .padding(.vertical, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .overlay(
-            BracketCorners()
-                .stroke(BmoPalette.accentRed, lineWidth: 1.5)
-                // Piso prático: máscara do systemSmall tem raio ~22pt; canto a menos de ~6pt da borda cai fora e é cortado inteiro.
-                .padding(14)
-        )
     }
 
     private func countRow(_ summary: LightsResponse.Summary) -> some View {
@@ -1014,45 +1020,28 @@ struct CalendarWidgetEntryView: View {
         // widgetURL na view raiz do conteúdo — se cair depois do
         // containerBackground ou dentro do switch, a preference não chega à
         // raiz e o widget abre o app sem URL.
+        //
+        // A moldura vive no containerBackground (não no conteúdo): é o único
+        // ponto cujo tamanho o WidgetKit garante ser a área inteira do widget,
+        // sempre, independente do que for renderizado. Com a moldura junto do
+        // conteúdo, a posição dos cantos passa a depender da quantidade de
+        // células renderizadas — a causa raiz das tentativas anteriores. Mesmo
+        // inset do widget de luzes (.padding(14)), para a distância até a borda
+        // bater — manter os dois iguais.
         card
             .widgetURL(URL(string: "bmo://go/calendario"))
             .containerBackground(for: .widget) {
-                BmoPalette.screenBg
+                ZStack {
+                    BmoPalette.screenBg
+                    BracketCorners()
+                        .stroke(BmoPalette.accentBlue, lineWidth: 1.5)
+                        .padding(14)
+                }
             }
     }
 
     @ViewBuilder
     private var card: some View {
-        // A moldura ancora na ÁREA DO WIDGET, não no conteúdo. Antes o
-        // BracketCorners era .overlay do card; o tamanho do card é definido pelo
-        // conteúdo (frame máx. só PROPÕE o máximo — conteúdo alto cresce a view e
-        // os cantos acompanham). Moldura e conteúdo são agora irmãos num ZStack
-        // que ocupa a área toda; a posição dos cantos não depende de quanta coisa
-        // foi renderizada.
-        //
-        // GeometryReader (não frame máx. no ZStack sozinho): o contrato dele é
-        // encher a área proposta; um frame(maxHeight:.infinity) só define um ideal
-        // flexível e, com proposta indefinida, a view cai de volta à altura do
-        // conteúdo — a causa raiz dos cantos deslocarem. O GeometryReader garante
-        // proposta definida, e aí os frame máx. dos filhos preenchem.
-        GeometryReader { _ in
-            ZStack {
-                // Moldura: inset da BORDA do widget (o ZStack enche a área).
-                BracketCorners()
-                    .stroke(BmoPalette.accentBlue, lineWidth: 1.5)
-                    // Mesmo inset do widget de luzes (lá é .padding(14) no
-                    // overlay) — manter os dois iguais para a distância até a
-                    // borda bater. Lado a lado: luzes 14 · calendário 14.
-                    .padding(14)
-
-                content
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
         Group {
             switch entry.state {
             case .loading:
@@ -1076,6 +1065,8 @@ struct CalendarWidgetEntryView: View {
                 gridView(response)
             }
         }
+        // A moldura não fica aqui: ela vive no containerBackground (ver body),
+        // para a posição dos cantos não depender da quantidade de células.
         // Folga em relação às pernas dos cantos: o BracketCorners usa inset 14;
         // o conteúdo precisa manter pelo menos 10pt de folga sobre ele — 28
         // horizontal e 26 vertical — senão os chips encostam nas pernas do L.
