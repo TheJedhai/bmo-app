@@ -669,28 +669,143 @@ struct CalendarEvent: Decodable {
 }
 
 struct CalendarTask: Decodable {
+    let id: Int
     let title: String
     let dueTime: String?
     let priority: Int
     let isOverdue: Bool
 
     enum CodingKeys: String, CodingKey {
-        case title, dueTime = "due_time", priority, isOverdue = "is_overdue"
+        // O servidor manda "task_id", não "id" — a divergência que fez o
+        // intent completar um id inexistente (0) e cair na mensagem genérica.
+        case id = "task_id", title, dueTime = "due_time", priority, isOverdue = "is_overdue"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Obrigatório, sem default: se a chave sumir/mudar, o decode falha em
+        // vez de produzir um identificador inválido que vira POST /tasks/0.
+        id = try c.decode(Int.self, forKey: .id)
         title = (try? c.decode(String.self, forKey: .title)) ?? ""
         dueTime = (try? c.decodeIfPresent(String.self, forKey: .dueTime)) ?? nil
         priority = (try? c.decode(Int.self, forKey: .priority)) ?? 0
         isOverdue = (try? c.decode(Bool.self, forKey: .isOverdue)) ?? false
     }
 
-    init(title: String, dueTime: String?, priority: Int, isOverdue: Bool) {
+    init(id: Int, title: String, dueTime: String?, priority: Int, isOverdue: Bool) {
+        self.id = id
         self.title = title
         self.dueTime = dueTime
         self.priority = priority
         self.isOverdue = isOverdue
+    }
+}
+
+// Concluir missão direto do widget. POST /api/v1/tasks/{id}/complete, sem
+// corpo — NÃO é PATCH: a rota de atualização rejeita status igual a done e
+// devolve 400 mandando usar o complete. Mesma base URL, header de identidade
+// estático e timeout do toggle de luzes.
+enum CalendarCompleteError: Error {
+    case invalidURL
+    case network
+    case parentBlocked
+    case http(Int)
+}
+
+enum CalendarCompleteService {
+    static func complete(id: Int) async throws {
+        let path = "/api/v1/tasks/\(id)/complete"
+        guard let url = URL(string: WidgetConfig.baseUrl + path) else {
+            widgetLog.error("complete: URL inválida \(WidgetConfig.baseUrl)\(path)")
+            throw CalendarCompleteError.invalidURL
+        }
+        widgetLog.info("complete: POST <\(id)> \(url.absoluteString)")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        // Mesma justificativa do toggle: perform() com orçamento apertado.
+        request.timeoutInterval = 5
+        request.setValue(WidgetConfig.userId, forHTTPHeaderField: "X-User-Id")
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            widgetLog.error("complete: rede \(url.absoluteString): \(error.localizedDescription)")
+            throw CalendarCompleteError.network
+        }
+        guard let http = response as? HTTPURLResponse else {
+            widgetLog.error("complete: sem HTTP \(url.absoluteString)")
+            throw CalendarCompleteError.network
+        }
+        widgetLog.info("complete: HTTP \(http.statusCode) \(url.absoluteString)")
+        guard (200...299).contains(http.statusCode) else {
+            // 400 com error == "parent_blocked_by_pending_subtasks": tarefa raiz
+            // com subtarefas pendentes — precisa aparecer pro usuário, não
+            // falhar em silêncio. Erro de rede e demais códigos ficam no genérico.
+            if http.statusCode == 400 {
+                let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                if (body?["error"] as? String) == "parent_blocked_by_pending_subtasks" {
+                    widgetLog.error("complete: subtarefas pendentes <\(id)>")
+                    throw CalendarCompleteError.parentBlocked
+                }
+            }
+            widgetLog.error("complete: HTTP \(http.statusCode) \(url.absoluteString)")
+            throw CalendarCompleteError.http(http.statusCode)
+        }
+    }
+}
+
+// ponytail: ponte em memória entre o intent e o provider — mesma limitação do
+// LightsWidgetError: propaga quando intent e provider rodam no processo da
+// extensão; se rodar no processo do app, não propaga. Upgrade com App Group +
+// UserDefaults quando a conta do dev permitir.
+final class CalendarWidgetError {
+    static let shared = CalendarWidgetError()
+    private init() {}
+    var lastFailure: String?
+}
+
+// App Intent do botão de concluir — RODA DENTRO da extensão. AppIntent (não
+// SetValueIntent): Button(intent:) exige AppIntent; só o Toggle que pede
+// SetValueIntent. O valor de taskId é atribuído NA CONSTRUÇÃO do intent pela
+// view — widgets de home screen não resolvem parâmetros de app intents (o bug
+// que travou o toggle de luzes; ver ToggleLightIntent). Não repetir.
+struct CalendarCompleteIntent: AppIntent {
+    static let title: LocalizedStringResource = "Concluir missão"
+    static var description = IntentDescription("Conclui uma missão pelo servidor.")
+
+    @Parameter(title: "Tarefa") var taskId: Int
+
+    init() {}
+    init(taskId: Int) {
+        self.taskId = taskId
+    }
+
+    func perform() async throws -> some IntentResult {
+        widgetLog.info("complete intent: tarefa <\(taskId)>")
+        do {
+            try await CalendarCompleteService.complete(id: taskId)
+        } catch {
+            let msg = Self.message(for: error)
+            widgetLog.error("complete intent: falha <\(taskId)> \(msg)")
+            CalendarWidgetError.shared.lastFailure = msg
+            WidgetCenter.shared.reloadTimelines(ofKind: CalendarWidgetKind)
+            throw error
+        }
+        CalendarWidgetError.shared.lastFailure = nil
+        // Conclusão é SÍNCRONA no servidor (a tarefa some do GET seguinte),
+        // diferente do estado assíncrono das luzes (eco Z2M atrasado) — por
+        // isso aqui NÃO há overlay otimista: recarregar a timeline basta.
+        WidgetCenter.shared.reloadTimelines(ofKind: CalendarWidgetKind)
+        return .result()
+    }
+
+    static func message(for error: Error) -> String {
+        if case CalendarCompleteError.parentBlocked = error { return "Conclua as subtarefas primeiro" }
+        // Erro de rede e demais códigos HTTP distintos: incluir o código curto
+        // ("Falha (404)", "Falha (500)") pra 404 e 500 serem distinguíveis na
+        // tela sem log — foi o que escondeu o bug de chave como genérico.
+        if case CalendarCompleteError.http(let code) = error { return "Falha (\(code))" }
+        return "Falha ao concluir"
     }
 }
 
@@ -843,7 +958,10 @@ struct CalendarEntry: TimelineEntry {
 
 enum CalendarState {
     case loading
-    case loaded(CalendarWidgetResponse)
+    // failure: mensagem de ponte (CalendarWidgetError) reaproveitada do padrão
+    // do widget de luzes — mostra uma falha de conclusão no card, sem depender
+    // do corpo da resposta (que continua ok).
+    case loaded(CalendarWidgetResponse, failure: String?)
     case error(String)
 }
 
@@ -857,14 +975,19 @@ struct CalendarTimelineProvider: TimelineProvider {
         #if DEBUG
         Self._verifyLayout()
         #endif
-        completion(CalendarEntry(date: .now, state: .loaded(Self.sample())))
+        completion(CalendarEntry(date: .now, state: .loaded(Self.sample(), failure: nil)))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<CalendarEntry>) -> Void) {
         fetchCalendar { response, error in
             let entry: CalendarEntry
             if let response = response {
-                entry = CalendarEntry(date: .now, state: .loaded(response))
+                // Ponte de erro em memória (mesmo padrão do widget de luzes):
+                // a falha de uma conclusão recente viaja do intent pro provider
+                // no mesmo processo da extensão.
+                let failure = CalendarWidgetError.shared.lastFailure
+                CalendarWidgetError.shared.lastFailure = nil
+                entry = CalendarEntry(date: .now, state: .loaded(response, failure: failure))
             } else {
                 entry = CalendarEntry(date: .now, state: .error(error ?? "Erro desconhecido"))
             }
@@ -936,8 +1059,8 @@ struct CalendarTimelineProvider: TimelineProvider {
                 CalendarEvent(title: "Evento o dia todo", allDay: true, startTime: nil, endTime: nil, kind: "holiday", color: "#E8D8A0")],
             eventsOmitted: 1,
             tasks: [
-                CalendarTask(title: "Enviar relatório", dueTime: "09:00", priority: 1, isOverdue: true),
-                CalendarTask(title: "Comprar presente", dueTime: nil, priority: 2, isOverdue: false)],
+                CalendarTask(id: 1, title: "Enviar relatório", dueTime: "09:00", priority: 1, isOverdue: true),
+                CalendarTask(id: 2, title: "Comprar presente", dueTime: nil, priority: 2, isOverdue: false)],
             tasksOmitted: 0)
         let tomorrow = CalendarDay(
             date: f.string(from: tomorrowDate), isToday: false,
@@ -945,7 +1068,7 @@ struct CalendarTimelineProvider: TimelineProvider {
                 CalendarEvent(title: "Dentista", allDay: false, startTime: "08:00", endTime: "08:30", kind: "appointment", color: "#67E8CD")],
             eventsOmitted: 0,
             tasks: [
-                CalendarTask(title: "Pagar conta", dueTime: nil, priority: 3, isOverdue: false)],
+                CalendarTask(id: 3, title: "Pagar conta", dueTime: nil, priority: 3, isOverdue: false)],
             tasksOmitted: 1)
         return CalendarWidgetResponse(generatedAt: ISO8601DateFormatter().string(from: now), days: [today, tomorrow])
     }
@@ -981,7 +1104,7 @@ struct CalendarTimelineProvider: TimelineProvider {
             date: "2026-08-24", isToday: true,
             events: [CalendarEvent(title: "A", allDay: false, startTime: "10:00", endTime: "11:00", kind: "meeting", color: "#8FB8E8")],
             eventsOmitted: 0,
-            tasks: [CalendarTask(title: "T", dueTime: nil, priority: 1, isOverdue: false)],
+            tasks: [CalendarTask(id: 1, title: "T", dueTime: nil, priority: 1, isOverdue: false)],
             tasksOmitted: 0)
         let emptyA = CalendarDay(date: "2026-08-25", isToday: false, events: [], eventsOmitted: 0, tasks: [], tasksOmitted: 0)
         let la = CalendarLayout.build(day0: todayA, day1: emptyA)
@@ -1061,8 +1184,8 @@ struct CalendarWidgetEntryView: View {
                         .lineLimit(3)
                     Spacer(minLength: 0)
                 }
-            case .loaded(let response):
-                gridView(response)
+            case .loaded(let response, let failure):
+                gridView(response, failure: failure)
             }
         }
         // A moldura não fica aqui: ela vive no containerBackground (ver body),
@@ -1075,7 +1198,7 @@ struct CalendarWidgetEntryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private func gridView(_ response: CalendarWidgetResponse) -> some View {
+    private func gridView(_ response: CalendarWidgetResponse, failure: String?) -> some View {
         let layout = CalendarLayout.build(
             day0: response.days.first,
             day1: response.days.count > 1 ? response.days[1] : nil)
@@ -1084,13 +1207,21 @@ struct CalendarWidgetEntryView: View {
         return HStack(alignment: .top, spacing: 6) {
             // Coluna esquerda: bloco da data + as duas primeiras células. Alinhada
             // ao topo com Spacer no fim — as células ficam na altura natural e o
-            // espaço que sobra vai para baixo, sem esticar os chips.
+            // espaço que sobra vai para baixo, sem esticar os chips. A falha de
+            // conclusão entra no rodapé da coluna (menor custo visual: não move
+            // as células, só ocupa o espaço que o Spacer sobraria).
             VStack(alignment: .leading, spacing: CalendarLayout.columnSpacing) {
                 dateBlock(layout)
                 ForEach(Array(left.enumerated()), id: \.offset) { _, cell in
                     cellView(cell).opacity(cell.displayOpacity)
                 }
                 Spacer(minLength: 0)
+                if let failure {
+                    Text(failure)
+                        .font(.system(size: 10))
+                        .foregroundStyle(BmoPalette.accentYellow)
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
@@ -1180,9 +1311,18 @@ struct CalendarWidgetEntryView: View {
     private func taskView(_ t: CalendarTask) -> some View {
         let color = t.isOverdue ? BmoPalette.accentRed : BmoPalette.taskChip
         return HStack(spacing: 5) {
-            Circle()
-                .stroke(color, lineWidth: 1.5)
-                .frame(width: 11, height: 11)
+            // Concluir é ação de mão única, sem estado a alternar: Button, não
+            // Toggle. O botão é APENAS o círculo vazado à esquerda — o resto da
+            // pílula continua coberto pelo widgetURL (abre o app). Se o botão
+            // cobrisse a pílula inteira, qualquer toque concluiria por engano.
+            Button(intent: CalendarCompleteIntent(taskId: t.id)) {
+                Circle()
+                    .stroke(color, lineWidth: 1.5)
+                    .frame(width: 11, height: 11)
+            }
+            // Estilo simples: sem fundo nem realce próprio do sistema, preserva
+            // a aparência atual do círculo.
+            .buttonStyle(.plain)
             Text(t.title)
                 .font(.system(size: 12))
                 .foregroundStyle(BmoPalette.textPrimary)
