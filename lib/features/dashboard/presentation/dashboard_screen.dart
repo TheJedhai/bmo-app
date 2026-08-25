@@ -139,7 +139,10 @@ class _DashboardMobileLayout extends ConsumerWidget {
                         child: spec.builder(context, spec.accent),
                       );
 
-                      final height = spec.mobileHeight ?? spec.height;
+                      // mobileHeight null = altura intrínseca (não herda o
+                      // [DashWidgetSpec.height] do desktop). Altura fixa no
+                      // mobile só quando o spec a define explicitamente.
+                      final height = spec.mobileHeight;
                       if (height != null) {
                         return SizedBox(height: height, child: card);
                       }
