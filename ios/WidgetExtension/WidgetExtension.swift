@@ -1035,7 +1035,7 @@ struct CalendarWidgetEntryView: View {
                     BmoPalette.screenBg
                     BracketCorners()
                         .stroke(BmoPalette.accentBlue, lineWidth: 1.5)
-                        .padding(14)
+                        .padding(16)
                 }
             }
     }
