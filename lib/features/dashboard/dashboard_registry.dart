@@ -72,6 +72,14 @@ class DashWidgetSpec {
 ///
 /// A ordem da lista é a ordem de renderização — para reordenar cards,
 /// mover a entrada de posição.
+///
+/// No grid mobile de 2 colunas o preenchimento depende da ordem: um span-2
+/// que chega depois de um span-1 preenchendo só uma coluna desce além do
+/// vão e abre um buraco ao lado do span-1. Por isso os span-1 ficam em
+/// pares consecutivos (casa+chat, galeria+coding, cofre+financas) e os
+/// span-2 no topo. Ao reordenar, mantenha essa paridade — e note que
+/// [featureKey] pode esconder cards em runtime (coding, financas),
+/// reencadeando os pares que restam.
 final List<DashWidgetSpec> dashboardWidgets = [
   const DashWidgetSpec(
     id: 'relogio',
@@ -90,6 +98,18 @@ final List<DashWidgetSpec> dashboardWidgets = [
     navIcon: Icons.task_alt,
     route: '/missoes',
     builder: _missionsCardBuilder,
+  ),
+  const DashWidgetSpec(
+    id: 'calendario',
+    title: 'Calendário',
+    accent: BmoColors.accentYellow,
+    mobileSpan: 2,
+    pulseDelay: Duration(milliseconds: 500),
+    onTap: _goToCalendar,
+    showInNavBar: true,
+    navIcon: Icons.calendar_month,
+    route: '/calendario',
+    builder: _calendarCardBuilder,
   ),
   const DashWidgetSpec(
     id: 'noticias',
@@ -115,15 +135,6 @@ final List<DashWidgetSpec> dashboardWidgets = [
     builder: _lightsCardBuilder,
   ),
   const DashWidgetSpec(
-    id: 'galeria',
-    title: 'Galeria',
-    accent: BmoColors.accentRed,
-    height: 220,
-    pulseDelay: Duration(milliseconds: 2000),
-    onTap: showGalleryModal,
-    builder: _galleryCardBuilder,
-  ),
-  const DashWidgetSpec(
     id: 'chat',
     title: 'Chat',
     accent: BmoColors.accentGreen,
@@ -133,6 +144,15 @@ final List<DashWidgetSpec> dashboardWidgets = [
     navIcon: Icons.chat_bubble_outline,
     route: '/chat',
     builder: _chatCardBuilder,
+  ),
+  const DashWidgetSpec(
+    id: 'galeria',
+    title: 'Galeria',
+    accent: BmoColors.accentRed,
+    height: 220,
+    pulseDelay: Duration(milliseconds: 2000),
+    onTap: showGalleryModal,
+    builder: _galleryCardBuilder,
   ),
   const DashWidgetSpec(
     id: 'coding',
@@ -156,18 +176,6 @@ final List<DashWidgetSpec> dashboardWidgets = [
     navIcon: Icons.lock_outline,
     route: '/cofre',
     builder: _vaultCardBuilder,
-  ),
-  const DashWidgetSpec(
-    id: 'calendario',
-    title: 'Calendário',
-    accent: BmoColors.accentYellow,
-    mobileSpan: 2,
-    pulseDelay: Duration(milliseconds: 500),
-    onTap: _goToCalendar,
-    showInNavBar: true,
-    navIcon: Icons.calendar_month,
-    route: '/calendario',
-    builder: _calendarCardBuilder,
   ),
   const DashWidgetSpec(
     id: 'financas',
