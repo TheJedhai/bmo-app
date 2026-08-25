@@ -81,7 +81,9 @@ class DashboardScreen extends ConsumerWidget {
 ///    hora reserva [_kTopBarControlReserve] à direita, a faixa dos
 ///    controles do BmoTopBar (que ficam por cima da dashboard no shell).
 /// 2. StaggeredGrid de 2 colunas com os cards restantes, cada um ocupando
-///    spec.mobileSpan colunas (Chat e Galeria = 2, largura cheia).
+///    spec.mobileSpan colunas (missoes/noticias/calendario = 2, o resto 1).
+///    A densidade vem por tile (BmoDensity): regular em span-2 (±365px),
+///    compact em span-1.
 class _DashboardMobileLayout extends ConsumerWidget {
   const _DashboardMobileLayout({required this.visibleWidgets});
 
@@ -95,9 +97,7 @@ class _DashboardMobileLayout extends ConsumerWidget {
         .firstOrNull;
     final cardSpecs = visibleWidgets.where((s) => s.id != 'relogio').toList();
 
-    return BmoDensity(
-      mode: BmoDensityMode.compact,
-      child: SingleChildScrollView(
+    return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -130,30 +130,36 @@ class _DashboardMobileLayout extends ConsumerWidget {
                 for (final spec in cardSpecs)
                   StaggeredGridTile.fit(
                     crossAxisCellCount: spec.mobileSpan,
-                    child: Builder(builder: (context) {
-                      final card = DashCard(
-                        title: spec.title,
-                        accent: spec.accent,
-                        pulseDelay: spec.pulseDelay,
-                        onTap: spec.onTap,
-                        child: spec.builder(context, spec.accent),
-                      );
+                    child: BmoDensity(
+                      // Densidade deriva da largura do tile: span-2 (±365px)
+                      // fica regular (igual desktop), span-1 compacto.
+                      mode: spec.mobileSpan >= 2
+                          ? BmoDensityMode.regular
+                          : BmoDensityMode.compact,
+                      child: Builder(builder: (context) {
+                        final card = DashCard(
+                          title: spec.title,
+                          accent: spec.accent,
+                          pulseDelay: spec.pulseDelay,
+                          onTap: spec.onTap,
+                          child: spec.builder(context, spec.accent),
+                        );
 
-                      // mobileHeight null = altura intrínseca (não herda o
-                      // [DashWidgetSpec.height] do desktop). Altura fixa no
-                      // mobile só quando o spec a define explicitamente.
-                      final height = spec.mobileHeight;
-                      if (height != null) {
-                        return SizedBox(height: height, child: card);
-                      }
-                      return card;
-                    }),
+                        // mobileHeight null = altura intrínseca (não herda o
+                        // [DashWidgetSpec.height] do desktop). Altura fixa no
+                        // mobile só quando o spec a define explicitamente.
+                        final height = spec.mobileHeight;
+                        if (height != null) {
+                          return SizedBox(height: height, child: card);
+                        }
+                        return card;
+                      }),
+                    ),
                   ),
               ],
             ),
           ),
         ],
-      ),
       ),
     );
   }

@@ -72,11 +72,15 @@ sem necessidade real:
   breakpoint (não virar a constante).
 - **Densidade**: `BmoDensity` (regular/compact) expõe `BmoDensityMode` via
   `InheritedWidget`. Cards leem densidade do contexto
-  (`BmoDensity.of(context)`), não recebem `isMobile` por construtor.
+  (`BmoDensity.of(context)`), não recebem `isMobile` por construtor. Na
+  dashboard mobile a densidade deriva da LARGURA do tile, não da plataforma:
+  `mobileSpan >= 2` (≈365px) vira regular, span-1 vira compact. Não escolher
+  densidade pela largura de tela (`kMobileBreakpoint`).
 - **Dashboard**: `DashWidgetSpec` tem `mobileSpan` (colunas no grid mobile de
-  2) e `mobileHeight` (altura fixa opcional no mobile). A ordem da lista
-  `dashboardWidgets` é a ordem de renderização; o registry é a fonte única
-  dos cards.
+  2) e `mobileHeight` (altura fixa opcional; null = altura intrínseca, não
+  herda o `height` do desktop). A ordem da lista `dashboardWidgets` é a ordem
+  de renderização e afeta o PREENCHIMENTO do grid mobile — span-1 deve ir em
+  pares pra não abrir vão; o registry é a fonte única dos cards.
 - Padding da borda do frame: mobile 14+ (safe area) vs desktop 28.
 
 ## Comandos
