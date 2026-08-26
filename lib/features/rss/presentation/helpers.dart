@@ -1,3 +1,38 @@
+import '../data/rss_providers.dart';
+import 'selected_view_provider.dart';
+
+/// Map a [RssView] to the [ArticlesFilter] that the view's article list
+/// watches. Single source shared by [ArticleList] and the deep-link modal
+/// open, so mark-read lands on the SAME provider instance the list renders.
+ArticlesFilter viewToFilter(RssView view) {
+  return switch (view) {
+    AllArticles() => (
+        feedId: null,
+        isRead: null,
+        isStarred: null,
+        titleContains: null,
+      ),
+    UnreadArticles() => (
+        feedId: null,
+        isRead: false,
+        isStarred: null,
+        titleContains: null,
+      ),
+    StarredArticles() => (
+        feedId: null,
+        isRead: null,
+        isStarred: true,
+        titleContains: null,
+      ),
+    FeedView(:final feedId) => (
+        feedId: feedId,
+        isRead: null,
+        isStarred: null,
+        titleContains: null,
+      ),
+  };
+}
+
 /// Strip HTML tags and decode common HTML entities.
 /// Used to clean RSS summary/content for plain-text display.
 String stripHtml(String html) {

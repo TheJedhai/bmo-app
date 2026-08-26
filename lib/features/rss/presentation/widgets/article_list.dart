@@ -20,7 +20,7 @@ class ArticleList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final view = ref.watch(currentRssViewProvider);
-    final filter = _viewToFilter(view);
+    final filter = viewToFilter(view);
 
     final articlesAsync = ref.watch(articlesProvider(filter));
     final articlesNotifier = ref.read(articlesProvider(filter).notifier);
@@ -71,7 +71,7 @@ class ArticleList extends ConsumerWidget {
 
   void _openDetail(BuildContext context, WidgetRef ref, Article article) {
     final view = ref.read(currentRssViewProvider);
-    final filter = _viewToFilter(view);
+    final filter = viewToFilter(view);
 
     showDialog(
       context: context,
@@ -81,42 +81,6 @@ class ArticleList extends ConsumerWidget {
         filter: filter,
       ),
     );
-  }
-
-  // ---- filter mapping ----
-
-  static ({
-    int? feedId,
-    bool? isRead,
-    bool? isStarred,
-    String? titleContains,
-  }) _viewToFilter(RssView view) {
-    return switch (view) {
-      AllArticles() => (
-          feedId: null,
-          isRead: null,
-          isStarred: null,
-          titleContains: null,
-        ),
-      UnreadArticles() => (
-          feedId: null,
-          isRead: false,
-          isStarred: null,
-          titleContains: null,
-        ),
-      StarredArticles() => (
-          feedId: null,
-          isRead: null,
-          isStarred: true,
-          titleContains: null,
-        ),
-      FeedView(:final feedId) => (
-          feedId: feedId,
-          isRead: null,
-          isStarred: null,
-          titleContains: null,
-        ),
-    };
   }
 }
 
@@ -692,7 +656,7 @@ class _ArticleListHeader extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final filter = ArticleList._viewToFilter(view);
+    final filter = viewToFilter(view);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),

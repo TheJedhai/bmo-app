@@ -177,8 +177,13 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/noticias',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const RssScreen(), state),
+          pageBuilder: (context, state) {
+            // Deep link vindo do card: /noticias?article=<id> abre o modal
+            // do artigo. Sem id (link puro ou id inválido) = lista normal.
+            final articleId =
+                int.tryParse(state.uri.queryParameters['article'] ?? '');
+            return _buildFeaturePage(RssScreen(articleId: articleId), state);
+          },
         ),
         GoRoute(
           path: '/cofre',

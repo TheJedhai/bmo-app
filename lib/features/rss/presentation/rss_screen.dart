@@ -7,14 +7,19 @@ import '../../../core/widgets/bmo_back_button.dart';
 import '../data/models/feed.dart';
 import '../data/rss_providers.dart';
 import 'selected_view_provider.dart';
+import 'widgets/article_detail_modal.dart';
 import 'widgets/article_list.dart';
 import 'widgets/feed_form_modal.dart';
+import 'helpers.dart';
 import '../../../core/widgets/bmo_frame.dart';
 
 const _kSidebarWidth = 260.0;
 
 class RssScreen extends ConsumerStatefulWidget {
-  const RssScreen({super.key});
+  const RssScreen({super.key, this.articleId});
+
+  /// Artigo a abrir via deep link do card (/noticias?article=ID).
+  final int? articleId;
 
   @override
   ConsumerState<RssScreen> createState() => _RssScreenState();
@@ -22,6 +27,48 @@ class RssScreen extends ConsumerStatefulWidget {
 
 class _RssScreenState extends ConsumerState<RssScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _detailOpened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.articleId != null && !_detailOpened) {
+      _detailOpened = true;
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _openArticleFromLink());
+    }
+  }
+
+  /// Abre o modal do artigo apontado pelo deep link do card, uma única vez.
+  ///
+  /// Usa o filtro da VIEW ATUAL (não um sintetizado pro deep link) pra que o
+  /// mark-read caia na MESMA instância de [articlesProvider] que a lista
+  /// renderiza. O backend despeja um evento SSE `article.updated` que invalida
+  /// [unreadCountProvider] — o contador do card cai sozinho.
+  Future<void> _openArticleFromLink() async {
+    final id = widget.articleId;
+    if (id == null) return;
+    final filter = viewToFilter(ref.read(currentRssViewProvider));
+
+    try {
+      final article = await ref.read(rssRepositoryProvider).getArticle(id);
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierColor: Colors.black54,
+        builder: (_) => ArticleDetailModal(article: article, filter: filter),
+      );
+    } catch (_) {
+      // Artigo inacessível/não existe — segue pra lista sem modal.
+    }
+    _clearArticleParam();
+  }
+
+  /// Remove o `?article=` da URL pra voltar da modal não reabri-la em loop.
+  void _clearArticleParam() {
+    if (widget.articleId == null) return;
+    if (mounted) context.replace('/noticias');
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/navigation/app_router.dart';
 
@@ -143,17 +142,8 @@ class _ArticleRow extends StatelessWidget {
   final Article article;
   final String feedName;
 
-  Future<void> _openArticle(BuildContext context) async {
-    final url = article.url;
-    if (url != null && url.isNotEmpty) {
-      final uri = Uri.tryParse(url);
-      if (uri != null) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
-      }
-    }
-    // Fallback: abre a lista de notícias
-    appRouter.push('/noticias');
+  void _openArticle() {
+    appRouter.push('/noticias?article=${article.id}');
   }
 
   @override
@@ -163,7 +153,7 @@ class _ArticleRow extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _openArticle(context),
+          onTap: _openArticle,
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
             height: 48,
