@@ -10,22 +10,30 @@ enum BmoDensityMode {
   regular(
     contentPadding: 16,
     highlightFontSize: 34,
+    bodyFontSize: 15,
+    labelFontSize: 13,
     cornerStrokeLength: 18,
   ),
   compact(
     contentPadding: 12,
     highlightFontSize: 24,
+    bodyFontSize: 12,
+    labelFontSize: 11,
     cornerStrokeLength: 14,
   );
 
   const BmoDensityMode({
     required this.contentPadding,
     required this.highlightFontSize,
+    required this.bodyFontSize,
+    required this.labelFontSize,
     required this.cornerStrokeLength,
   });
 
   final double contentPadding;
   final double highlightFontSize;
+  final double bodyFontSize;
+  final double labelFontSize;
   final double cornerStrokeLength;
 
   bool get isCompact => this == BmoDensityMode.compact;

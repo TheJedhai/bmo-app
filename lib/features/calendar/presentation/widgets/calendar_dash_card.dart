@@ -7,6 +7,7 @@ import '../../../../core/theme/bmo_theme.dart';
 import '../../../dashboard/widgets/bmo_density.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart';
+import 'event_time_format.dart';
 
 /// Dashboard card: próximos 5 eventos.
 class CalendarDashCard extends ConsumerWidget {
@@ -58,6 +59,7 @@ class _EventRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final density = BmoDensity.of(context);
     final now = DateTime.now();
     final isToday = event.occurrenceDate.year == now.year &&
         event.occurrenceDate.month == now.month &&
@@ -74,13 +76,18 @@ class _EventRow extends ConsumerWidget {
       dateLabel = DateFormat("d MMM", 'pt_BR').format(event.occurrenceDate);
     }
 
-    final timeLabel = event.allDay
-        ? ''
-        : (event.startTime ?? '');
+    final time = event.startTime;
+    final timeLabel = event.allDay || time == null ? '' : formatEventTime(time);
 
     final calendarsById = ref.watch(calendarsByIdProvider);
     final calendar = calendarsById[event.calendarId];
     final color = _hexToColor(calendar?.color ?? '#8BC9A3');
+
+    // Data é o nível mais silencioso — um degrau abaixo do rótulo (hora).
+    final dateFontSize = density.labelFontSize - 1;
+    // A barra de cor acompanha a densidade pra não ficar desproporcional
+    // com a fonte maior do regular.
+    final barHeight = density.isCompact ? 28.0 : 34.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -89,23 +96,23 @@ class _EventRow extends ConsumerWidget {
           // Color bar
           Container(
             width: 3,
-            height: 28,
+            height: barHeight,
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(width: 8),
-          // Date
-          SizedBox(
-            width: 48,
+          // Date — IntrinsicWidth: "Amanhã"/"27 ago." cabem sem ellipsis
+          // em qualquer densidade, sem largura mágica.
+          IntrinsicWidth(
             child: Text(
               dateLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 9,
+                fontSize: dateFontSize,
                 fontWeight: FontWeight.w600,
                 color: isToday ? BmoColors.accentGreen : BmoColors.textMuted,
               ),
@@ -119,9 +126,9 @@ class _EventRow extends ConsumerWidget {
                 if (timeLabel.isNotEmpty) ...[
                   Text(
                     timeLabel,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 10,
+                      fontSize: density.labelFontSize,
                       fontWeight: FontWeight.w500,
                       color: BmoColors.textSecondary,
                     ),
@@ -135,7 +142,7 @@ class _EventRow extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      fontSize: 11,
+                      fontSize: density.bodyFontSize,
                       color: event.title != null
                           ? BmoColors.textPrimary
                           : BmoColors.textMuted,

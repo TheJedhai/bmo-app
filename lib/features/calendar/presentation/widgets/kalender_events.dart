@@ -9,6 +9,7 @@ import '../../../missions/data/models/task.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar_event.dart' as app;
 import 'calendar_item.dart';
+import 'event_time_format.dart';
 
 /// Wraps a [CalendarItem] so it can be rendered by kalender.
 class KalenderCalendarEvent extends CalendarEvent {
@@ -182,16 +183,6 @@ KalenderCalendarEvent _toKalenderTaskEvent(Task t) {
   );
 }
 
-/// Strips seconds from a "HH:mm:ss" time string, returning "HH:mm".
-/// Passes through strings that are already "HH:mm".
-String _formatTime(String time) {
-  final parts = time.split(':');
-  if (parts.length >= 2) {
-    return '${parts[0]}:${parts[1]}';
-  }
-  return time;
-}
-
 /// Builds an event tile for the month view.
 ///
 /// Wrapped in [Consumer] so calendar color/name changes reflect immediately
@@ -290,7 +281,7 @@ Widget _buildEventMonthTile(
                   ),
                   if (ke.startTime != null)
                     Text(
-                      _formatTime(ke.startTime!),
+                      formatEventTime(ke.startTime!),
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 9,
@@ -394,7 +385,7 @@ Widget _buildTaskMonthTile(
                   ),
                   if (ke.startTime != null)
                     Text(
-                      _formatTime(ke.startTime!),
+                      formatEventTime(ke.startTime!),
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 9,
@@ -579,8 +570,8 @@ Widget _buildEventMultiDayTile(
                         if (ke.startTime != null)
                           Text(
                             ke.endTime != null
-                                ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                                : _formatTime(ke.startTime!),
+                                ? '${formatEventTime(ke.startTime!)}–${formatEventTime(ke.endTime!)}'
+                                : formatEventTime(ke.startTime!),
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 9,
@@ -687,7 +678,7 @@ Widget _buildTaskMultiDayTile(
                         ),
                         if (ke.startTime != null)
                           Text(
-                            _formatTime(ke.startTime!),
+                            formatEventTime(ke.startTime!),
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 9,
@@ -1009,8 +1000,8 @@ Widget _buildDropTargetContent(KalenderCalendarEvent ke, Color color, bool isSho
               if (ke.startTime != null)
                 Text(
                   ke.endTime != null
-                      ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                      : _formatTime(ke.startTime!),
+                      ? '${formatEventTime(ke.startTime!)}–${formatEventTime(ke.endTime!)}'
+                      : formatEventTime(ke.startTime!),
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 9,
@@ -1078,8 +1069,8 @@ Widget _buildSelectedEventContent(KalenderCalendarEvent ke, Color color, bool is
                         if (ke.startTime != null)
                           Text(
                             ke.endTime != null
-                                ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                                : _formatTime(ke.startTime!),
+                                ? '${formatEventTime(ke.startTime!)}–${formatEventTime(ke.endTime!)}'
+                                : formatEventTime(ke.startTime!),
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 9,
@@ -1152,7 +1143,7 @@ Widget _buildSelectedTaskContent(KalenderCalendarEvent ke, Task t, bool isShort)
                         ),
                         if (ke.startTime != null)
                           Text(
-                            _formatTime(ke.startTime!),
+                            formatEventTime(ke.startTime!),
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 9,
@@ -1228,8 +1219,8 @@ Widget _buildDraggingContent(KalenderCalendarEvent ke, Color color, bool isShort
                 if (ke.startTime != null)
                   Text(
                     ke.endTime != null
-                        ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                        : _formatTime(ke.startTime!),
+                        ? '${formatEventTime(ke.startTime!)}–${formatEventTime(ke.endTime!)}'
+                        : formatEventTime(ke.startTime!),
                     style: const TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 9,
@@ -1304,8 +1295,8 @@ Widget _buildFeedbackContent(
               if (ke.startTime != null)
                 Text(
                   ke.endTime != null
-                      ? '${_formatTime(ke.startTime!)}–${_formatTime(ke.endTime!)}'
-                      : _formatTime(ke.startTime!),
+                      ? '${formatEventTime(ke.startTime!)}–${formatEventTime(ke.endTime!)}'
+                      : formatEventTime(ke.startTime!),
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 9,
