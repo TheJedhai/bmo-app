@@ -5,15 +5,15 @@ import '../../../core/navigation/app_router.dart';
 
 import 'bmo_density.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../../chat/data/conversation.dart';
-import '../../chat/providers/chat_providers.dart';
+import '../../agent_chat/data/agent_session.dart';
+import '../../agent_chat/providers/agent_chat_providers.dart';
 
-/// Card de atalho para a aba Chat.
+/// Card de atalho para a aba Chat (v2).
 ///
-/// Mostra as 3 conversas mais recentes (título truncado, em Inter).
-/// Se não houver conversas, exibe "Nenhuma conversa ainda" em textMuted
+/// Mostra as sessões mais recentes (título truncado, em Inter).
+/// Se não houver sessões, exibe "Nenhuma conversa ainda" em textMuted
 /// — mas o card continua clicável.
-/// Toque via DashCard onTap → context.push('/chat').
+/// Toque numa sessão → seleciona e abre `/chat`.
 class ChatCard extends ConsumerWidget {
   const ChatCard({super.key, required this.accent});
 
@@ -21,28 +21,17 @@ class ChatCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final conversationsAsync = ref.watch(conversationsProvider);
+    final sessionsAsync = ref.watch(agentSessionsProvider);
 
-    return conversationsAsync.when(
+    return sessionsAsync.when(
       loading: () => const _LoadingState(),
       error: (_, _) => const _ErrorState(),
-      data: (conversations) => _ChatContent(
-        conversations: conversations,
+      data: (sessions) => _ChatContent(
+        sessions: sessions,
         accent: accent,
-        onNewChat: () async {
-          try {
-            final conv =
-                await ref.read(conversationsProvider.notifier).createNew();
-            ref.read(selectedConversationIdProvider.notifier).state =
-                conv.uuid;
-            appRouter.push('/chat');
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('falha ao criar: $e')),
-              );
-            }
-          }
+        onNewChat: () {
+          ref.read(selectedAgentSessionProvider.notifier).state = null;
+          appRouter.push('/chat');
         },
       ),
     );
@@ -51,12 +40,12 @@ class ChatCard extends ConsumerWidget {
 
 class _ChatContent extends StatelessWidget {
   const _ChatContent({
-    required this.conversations,
+    required this.sessions,
     required this.accent,
     required this.onNewChat,
   });
 
-  final List<Conversation> conversations;
+  final List<AgentSession> sessions;
   final Color accent;
   final VoidCallback onNewChat;
 
@@ -86,7 +75,7 @@ class _ChatContent extends StatelessWidget {
             onPressed: onNewChat,
           ),
         ),
-        if (conversations.isEmpty)
+        if (sessions.isEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 12),
             child: Center(
@@ -104,8 +93,8 @@ class _ChatContent extends StatelessWidget {
           const SizedBox(height: 12),
           Icon(Icons.chat_bubble_outline, size: 28, color: accent),
           const SizedBox(height: 12),
-          ...conversations.take(BmoDensity.of(context).isCompact ? 2 : 3).map(
-                (conv) => _ConversationRow(conversation: conv),
+          ...sessions.take(BmoDensity.of(context).isCompact ? 2 : 3).map(
+                (session) => _SessionRow(session: session),
               ),
         ],
       ],
@@ -113,10 +102,10 @@ class _ChatContent extends StatelessWidget {
   }
 }
 
-class _ConversationRow extends ConsumerWidget {
-  const _ConversationRow({required this.conversation});
+class _SessionRow extends ConsumerWidget {
+  const _SessionRow({required this.session});
 
-  final Conversation conversation;
+  final AgentSession session;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -126,8 +115,7 @@ class _ConversationRow extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            ref.read(selectedConversationIdProvider.notifier).state =
-                conversation.uuid;
+            ref.read(selectedAgentSessionProvider.notifier).state = session.id;
             appRouter.push('/chat');
           },
           borderRadius: BorderRadius.circular(8),
@@ -138,7 +126,7 @@ class _ConversationRow extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    conversation.name,
+                    session.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
