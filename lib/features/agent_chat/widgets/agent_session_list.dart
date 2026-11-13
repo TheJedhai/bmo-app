@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
-import '../data/agent_chat_client.dart';
 import '../data/agent_session.dart';
 import '../providers/agent_chat_providers.dart';
 
@@ -26,16 +25,12 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     super.dispose();
   }
 
-  Future<void> _create() async {
-    try {
-      await ref.read(agentSessionsProvider.notifier).create();
-      ref.read(selectedAgentSessionProvider.notifier).state = null;
-      widget.onItemTap?.call();
-    } on AgentChatException catch (e) {
-      _snack('falha ao criar: ${e.message}');
-    } catch (e) {
-      _snack('falha ao criar: $e');
-    }
+  /// Conversa nova: sem sessão ainda. O servidor cria a sessão no primeiro
+  /// envio (que vai com `session_id: null`) e a lista é atualizada no
+  /// `turn.start`.
+  void _create() {
+    ref.read(selectedAgentSessionProvider.notifier).state = null;
+    widget.onItemTap?.call();
   }
 
   Future<void> _rename(AgentSession session) async {

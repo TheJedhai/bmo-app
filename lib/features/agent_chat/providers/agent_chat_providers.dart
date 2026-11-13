@@ -55,13 +55,6 @@ class AgentSessions extends _$AgentSessions {
     return sessions;
   }
 
-  Future<AgentSession> create() async {
-    final client = ref.read(agentChatClientProvider);
-    final session = await client.createSession();
-    ref.invalidateSelf();
-    return session;
-  }
-
   Future<void> rename(String sessionId, String title) async {
     final client = ref.read(agentChatClientProvider);
     final renamed = await client.renameSession(sessionId, title);
