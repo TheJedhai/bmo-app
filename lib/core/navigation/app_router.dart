@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../features/chat/chat_screen.dart';
+import '../../features/agent_chat/widgets/agent_chat_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/home_devices/presentation/home_devices_screen.dart';
 import '../../features/missions/presentation/missions_screen.dart';
@@ -138,7 +138,7 @@ class _AppShell extends ConsumerWidget {
 /// ```
 /// ShellRoute (BmoFrame)
 ///   /           DashboardScreen
-///   /chat       ChatScreen
+///   /chat       AgentChatScreen (chat v2)
 ///   /missoes    MissionsScreen
 ///   /casa       HomeDevicesScreen
 ///   /noticias   RssScreen
@@ -163,7 +163,7 @@ final appRouter = GoRouter(
         GoRoute(
           path: '/chat',
           pageBuilder: (context, state) =>
-              _buildFeaturePage(const ChatScreen(), state),
+              _buildFeaturePage(const AgentChatScreen(), state),
         ),
         GoRoute(
           path: '/missoes',
