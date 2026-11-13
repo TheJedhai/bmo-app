@@ -35,6 +35,12 @@ class FakeAgentChatClient extends AgentChatClient {
   final List<Map<String, AgentApprovalInput>?> sentApprovals = [];
   final List<String> cancelled = [];
 
+  /// Erro lançado pelo `GET /messages` (ex.: 404 de sessão de outro perfil).
+  Object? fetchError;
+
+  /// Quantas vezes a lista de sessões foi pedida.
+  int listCalls = 0;
+
   @override
   Stream<AgentEvent> sendTurn({
     String? sessionId,
@@ -52,6 +58,8 @@ class FakeAgentChatClient extends AgentChatClient {
   @override
   Future<List<AgentMessage>> fetchMessages(String sessionId) async {
     fetchedSessions.add(sessionId);
+    final error = fetchError;
+    if (error != null) throw error;
     if (historyQueue.isEmpty) return const [];
     return historyQueue.removeAt(0);
   }
@@ -62,7 +70,10 @@ class FakeAgentChatClient extends AgentChatClient {
   }
 
   @override
-  Future<List<AgentSession>> listSessions() async => const [];
+  Future<List<AgentSession>> listSessions() async {
+    listCalls++;
+    return const [];
+  }
 
   @override
   Future<AgentSession> createSession({String? title}) async =>
@@ -323,7 +334,7 @@ void main() {
     expect(read().messages.last.plainText, 'completa');
   });
 
-  test('trocar de perfil zera o estado', () async {
+  test('trocar de perfil zera o estado e larga a sessão selecionada', () async {
     client.onTurn = (sessionId, message, approvals) async* {
       yield const TurnStarted(input: 'message', sessionId: 'sess-1');
       yield const TextDelta('oi');
@@ -332,12 +343,85 @@ void main() {
     notifier().send('oi');
     await pumpEventQueue();
     expect(read().messages, isNotEmpty);
+    expect(container.read(selectedAgentSessionProvider), 'sess-1');
 
-    container.read(currentUserIdProvider.notifier).state = null;
+    // Jedhai (1) → Convidado (2).
+    container.read(currentUserIdProvider.notifier).state = 2;
     await pumpEventQueue();
 
     expect(read().messages, isEmpty);
     expect(read().sessionId, isNull);
+    expect(container.read(selectedAgentSessionProvider), isNull);
+    // Nada de buscar a sessão do perfil anterior.
+    expect(client.fetchedSessions, isEmpty);
+
+    // Voltar para o perfil antigo não restaura a seleção.
+    container.read(currentUserIdProvider.notifier).state = 1;
+    await pumpEventQueue();
+
+    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(client.fetchedSessions, isEmpty);
+  });
+
+  test('sessão selecionada não vaza ao trocar de perfil', () async {
+    client.historyQueue = [
+      [_user('antiga'), _assistant('resposta antiga')],
+    ];
+    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    await pumpEventQueue();
+    expect(client.fetchedSessions, ['sess-1']);
+    expect(read().messages, hasLength(2));
+
+    container.read(currentUserIdProvider.notifier).state = 2;
+    await pumpEventQueue();
+
+    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(read().messages, isEmpty);
+    expect(client.fetchedSessions, ['sess-1']);
+  });
+
+  test('404 no GET do histórico limpa a seleção, recarrega e avisa',
+      () async {
+    container.listen(agentSessionsProvider, (_, _) {});
+    await pumpEventQueue();
+    final before = client.listCalls;
+
+    client.fetchError =
+        const AgentChatException(404, 'not_found', 'Session sess-1 not found');
+    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    await pumpEventQueue();
+
+    final state = read();
+    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(state.error, 'essa conversa não existe mais');
+    expect(state.messages, isEmpty);
+    expect(state.loadingHistory, isFalse);
+    expect(client.listCalls, before + 1);
+  });
+
+  test('404 no envio limpa a seleção e devolve o texto ao campo', () async {
+    container.listen(agentSessionsProvider, (_, _) {});
+    client.historyQueue = [
+      [_user('antiga'), _assistant('resposta antiga')],
+    ];
+    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    await pumpEventQueue();
+    final before = client.listCalls;
+
+    client.onTurn = (sessionId, message, approvals) async* {
+      throw const AgentChatException(404, 'not_found', 'Session sess-1 not found');
+    };
+    notifier().send('que horas são?');
+    await pumpEventQueue();
+
+    final state = read();
+    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(state.sessionId, isNull);
+    expect(state.error, 'essa conversa não existe mais');
+    expect(state.restoreDraft, 'que horas são?');
+    expect(state.messages, isEmpty);
+    expect(state.status, AgentConversationStatus.idle);
+    expect(client.listCalls, before + 1);
   });
 
   test('Nova zera o estado e voltar pela lista carrega sem duplicar', () async {
@@ -352,7 +436,7 @@ void main() {
     // A migração não pode ter recarregado o histórico.
     expect(client.fetchedSessions, isEmpty);
 
-    container.read(selectedAgentSessionProvider.notifier).state = null;
+    container.read(selectedAgentSessionProvider.notifier).select(null);
     await pumpEventQueue();
     expect(read().messages, isEmpty);
     expect(read().sessionId, isNull);
@@ -360,7 +444,7 @@ void main() {
     client.historyQueue = [
       [_user('primeira'), _assistant('resposta')],
     ];
-    container.read(selectedAgentSessionProvider.notifier).state = 'sess-1';
+    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
     await pumpEventQueue();
 
     final state = read();
@@ -372,14 +456,14 @@ void main() {
 
   test('erro HTTP antes do turno vira mensagem visível', () async {
     client.onTurn = (sessionId, message, approvals) async* {
-      throw const AgentChatException(404, 'not_found', 'Session x not found');
+      throw const AgentChatException(500, 'internal', 'boom');
     };
 
     notifier().send('oi');
     await pumpEventQueue();
 
     final state = read();
-    expect(state.error, 'sessão não encontrada');
+    expect(state.error, contains('boom'));
     expect(state.status, AgentConversationStatus.idle);
   });
 

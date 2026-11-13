@@ -29,7 +29,7 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
   /// envio (que vai com `session_id: null`) e a lista é atualizada no
   /// `turn.start`.
   void _create() {
-    ref.read(selectedAgentSessionProvider.notifier).state = null;
+    ref.read(selectedAgentSessionProvider.notifier).select(null);
     widget.onItemTap?.call();
   }
 
@@ -76,7 +76,7 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     try {
       await ref.read(agentSessionsProvider.notifier).delete(session.id);
       if (ref.read(selectedAgentSessionProvider) == session.id) {
-        ref.read(selectedAgentSessionProvider.notifier).state = null;
+        ref.read(selectedAgentSessionProvider.notifier).select(null);
       }
     } catch (e) {
       _snack('falha ao apagar: $e');
@@ -186,8 +186,9 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                       session: session,
                       selected: session.id == selected,
                       onTap: () {
-                        ref.read(selectedAgentSessionProvider.notifier).state =
-                            session.id;
+                        ref
+                            .read(selectedAgentSessionProvider.notifier)
+                            .select(session.id);
                         widget.onItemTap?.call();
                       },
                       onRename: () => _rename(session),

@@ -136,6 +136,7 @@ class _AgentChatBody extends ConsumerWidget {
                 !awaitingApproval &&
                 !state.loadingHistory,
             hintText: hint,
+            draft: state.restoreDraft,
             onSend: notifier.send,
             onCancel: notifier.cancel,
           ),

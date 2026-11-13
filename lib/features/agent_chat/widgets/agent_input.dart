@@ -12,6 +12,9 @@ class AgentInput extends StatefulWidget {
   final void Function(String text) onSend;
   final VoidCallback onCancel;
 
+  /// Texto devolvido pelo notifier (envio que falhou); preenche o campo.
+  final String? draft;
+
   const AgentInput({
     super.key,
     required this.isStreaming,
@@ -19,6 +22,7 @@ class AgentInput extends StatefulWidget {
     required this.onCancel,
     this.enabled = true,
     this.hintText = 'fala com o BMO...',
+    this.draft,
   });
 
   @override
@@ -28,6 +32,17 @@ class AgentInput extends StatefulWidget {
 class _AgentInputState extends State<AgentInput> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
+
+  @override
+  void didUpdateWidget(AgentInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final draft = widget.draft;
+    if (draft != null && draft != oldWidget.draft) {
+      _controller.text = draft;
+      _controller.selection =
+          TextSelection.collapsed(offset: _controller.text.length);
+    }
+  }
 
   @override
   void dispose() {

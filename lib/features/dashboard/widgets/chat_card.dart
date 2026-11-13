@@ -30,7 +30,7 @@ class ChatCard extends ConsumerWidget {
         sessions: sessions,
         accent: accent,
         onNewChat: () {
-          ref.read(selectedAgentSessionProvider.notifier).state = null;
+          ref.read(selectedAgentSessionProvider.notifier).select(null);
           appRouter.push('/chat');
         },
       ),
@@ -115,7 +115,7 @@ class _SessionRow extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            ref.read(selectedAgentSessionProvider.notifier).state = session.id;
+            ref.read(selectedAgentSessionProvider.notifier).select(session.id);
             appRouter.push('/chat');
           },
           borderRadius: BorderRadius.circular(8),

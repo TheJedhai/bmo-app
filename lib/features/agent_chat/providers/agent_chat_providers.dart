@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
@@ -32,7 +31,23 @@ Duration agentChatPollInterval(AgentChatPollIntervalRef ref) =>
 
 /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
 /// `session_id: null`).
-final selectedAgentSessionProvider = StateProvider<String?>((ref) => null);
+///
+/// Depende da identidade de propósito: quando o usuário atual muda, o build
+/// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+/// para outro.
+///
+/// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+/// dashboard, deep link), então não pode morrer por falta de listener.
+@Riverpod(keepAlive: true)
+class SelectedAgentSession extends _$SelectedAgentSession {
+  @override
+  String? build() {
+    ref.watch(currentUserIdProvider);
+    return null;
+  }
+
+  void select(String? sessionId) => state = sessionId;
+}
 
 // ============================================================
 // Lista de sessões
@@ -94,6 +109,9 @@ class AgentConversationState {
   final bool loadingHistory;
   final bool refreshFailed;
 
+  /// Texto que precisa voltar para o campo de digitação (envio que falhou).
+  final String? restoreDraft;
+
   const AgentConversationState({
     this.sessionId,
     this.messages = const [],
@@ -101,6 +119,7 @@ class AgentConversationState {
     this.error,
     this.loadingHistory = false,
     this.refreshFailed = false,
+    this.restoreDraft,
   });
 
   bool get isBusy => status == AgentConversationStatus.streaming;
@@ -115,6 +134,7 @@ class AgentConversationState {
     String? error,
     bool? loadingHistory,
     bool? refreshFailed,
+    String? restoreDraft,
   }) =>
       AgentConversationState(
         sessionId: sessionId ?? this.sessionId,
@@ -123,6 +143,7 @@ class AgentConversationState {
         error: error,
         loadingHistory: loadingHistory ?? this.loadingHistory,
         refreshFailed: refreshFailed ?? this.refreshFailed,
+        restoreDraft: restoreDraft,
       );
 }
 
@@ -137,6 +158,10 @@ class AgentConversation extends _$AgentConversation {
   bool _turnEnded = true;
   bool _disposed = false;
   String? _decidingCallId;
+
+  /// Texto do envio em andamento — devolvido ao campo se a sessão sumiu.
+  String? _pendingMessage;
+
   late AgentChatClient _client;
   late Duration _pollInterval;
 
@@ -199,6 +224,7 @@ class AgentConversation extends _$AgentConversation {
       createdAt: DateTime.now(),
       parts: [AgentTextPart(trimmed)],
     );
+    _pendingMessage = trimmed;
     _startTurn([..._snapshot.messages, userMessage]);
     _listen(
       (client) => client.sendTurn(sessionId: _sessionId, message: trimmed),
@@ -342,6 +368,15 @@ class AgentConversation extends _$AgentConversation {
   void _onStreamError(Object error, StackTrace stackTrace) {
     final rollback = _decidingCallId;
     _decidingCallId = null;
+
+    if (error is AgentChatException && error.errorCode == 'not_found') {
+      final draft = _pendingMessage;
+      _pendingMessage = null;
+      _handleMissingSession(draft: draft);
+      return;
+    }
+    _pendingMessage = null;
+
     final messages = _dropEmptyAssistant(
       rollback == null
           ? _snapshot.messages
@@ -383,6 +418,7 @@ class AgentConversation extends _$AgentConversation {
   }
 
   void _finishTurn(String status) {
+    _pendingMessage = null;
     final messages = _dropEmptyAssistant(_snapshot.messages);
     final next = switch (status) {
       'awaiting_approval' => AgentConversationStatus.awaitingApproval,
@@ -395,8 +431,28 @@ class AgentConversation extends _$AgentConversation {
     if (sessionId == null || sessionId == _sessionId) return;
     _sessionId = sessionId;
     _snapshot = _snapshot.copyWith(sessionId: sessionId);
-    ref.read(selectedAgentSessionProvider.notifier).state = sessionId;
+    ref.read(selectedAgentSessionProvider.notifier).select(sessionId);
     ref.invalidate(agentSessionsProvider);
+  }
+
+  /// A sessão selecionada não existe mais para o usuário atual (troca de
+  /// perfil, sessão apagada no servidor): volta para conversa nova e avisa.
+  /// [draft] devolve ao campo o texto de um envio que falhou.
+  void _handleMissingSession({String? draft}) {
+    _stopStream();
+    _turnStarted = false;
+    _turnEnded = true;
+    _pendingMessage = null;
+    ref.invalidate(agentSessionsProvider);
+    // Zera pelo `listen` da seleção (messages/erro do estado anterior caem).
+    ref.read(selectedAgentSessionProvider.notifier).select(null);
+    _emit(_snapshot.copyWith(
+      messages: const [],
+      status: AgentConversationStatus.idle,
+      loadingHistory: false,
+      error: 'essa conversa não existe mais',
+      restoreDraft: draft,
+    ));
   }
 
   // ── polling ──────────────────────────────────────────────────────────────
@@ -457,6 +513,10 @@ class AgentConversation extends _$AgentConversation {
       _emit(_snapshot.copyWith(messages: messages, loadingHistory: false));
     } on AgentChatException catch (e) {
       if (_disposed || _sessionId != sessionId) return;
+      if (e.errorCode == 'not_found') {
+        _handleMissingSession();
+        return;
+      }
       _emit(_snapshot.copyWith(
         loadingHistory: false,
         error: _friendlyError(e),
