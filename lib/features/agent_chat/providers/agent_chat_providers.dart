@@ -499,10 +499,10 @@ class AgentConversation extends _$AgentConversation {
 
   void _updateAssistant(List<AgentPart> Function(List<AgentPart>) transform) {
     final assistantId = _assistantId;
-    if (assistantId == null) return;
+    if (assistantId == null || _turnEnded) return;
     final messages = [
       for (final message in _snapshot.messages)
-        if (message.id == assistantId)
+        if (message.isAssistant && message.id == assistantId)
           message.copyWith(parts: transform(message.parts))
         else
           message,
@@ -517,13 +517,16 @@ class AgentConversation extends _$AgentConversation {
   ) =>
       [
         for (final message in messages)
-          message.copyWith(parts: [
-            for (final part in message.parts)
-              if (part is AgentApprovalPart && part.callId == callId)
-                part.copyWith(decision: decision)
-              else
-                part,
-          ]),
+          if (message.isAssistant)
+            message.copyWith(parts: [
+              for (final part in message.parts)
+                if (part is AgentApprovalPart && part.callId == callId)
+                  part.copyWith(decision: decision)
+                else
+                  part,
+            ])
+          else
+            message,
       ];
 
   List<AgentMessage> _dropEmptyAssistant(List<AgentMessage> messages) => [
@@ -575,7 +578,12 @@ class AgentConversation extends _$AgentConversation {
     _pollTimer = null;
   }
 
-  String _nextId() => 'local-${DateTime.now().microsecondsSinceEpoch}';
+  int _idSeq = 0;
+
+  /// Ids locais precisam ser únicos: no web `DateTime.now()` só tem
+  /// resolução de milissegundo, então o timestamp sozinho repete.
+  String _nextId() =>
+      'local-${_idSeq++}-${DateTime.now().microsecondsSinceEpoch}';
 
   String _friendlyError(Object error) {
     if (error is AgentChatException) {

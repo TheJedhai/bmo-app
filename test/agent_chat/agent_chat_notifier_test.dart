@@ -400,4 +400,98 @@ void main() {
     await pumpEventQueue();
     expect(read().status, AgentConversationStatus.idle);
   });
+
+  // ── o stream só mexe na mensagem do assistente do turno ──────────────────
+
+  List<AgentPart> partsOf(AgentConversationState state, AgentRole role) =>
+      state.messages.singleWhere((m) => m.role == role).parts;
+
+  void expectUserOnly(String text) {
+    final parts = partsOf(read(), AgentRole.user);
+    expect(parts, hasLength(1));
+    expect((parts.single as AgentTextPart).text, text);
+  }
+
+  test('tool, depois texto: usuário fica intacto no meio do stream', () async {
+    final controller = StreamController<AgentEvent>();
+    addTearDown(controller.close);
+    client.onTurn = (sessionId, message, approvals) => controller.stream;
+
+    notifier().send('que horas são?');
+    await pumpEventQueue();
+
+    controller.add(const TurnStarted(input: 'message', sessionId: 'sess-1'));
+    controller.add(const ToolStarted(
+        callId: 'c1', name: 'clock', label: 'Ver horas'));
+    controller.add(const ToolEnded(
+        callId: 'c1', ok: true, label: 'Ver horas'));
+    controller.add(const TextDelta('São 19h'));
+    await _until(
+      () => partsOf(read(), AgentRole.assistant).isNotEmpty &&
+          partsOf(read(), AgentRole.assistant).last is AgentTextPart &&
+          (partsOf(read(), AgentRole.assistant).last as AgentTextPart).text ==
+              'São 19h',
+      reason: 'primeiro text.delta',
+    );
+
+    expectUserOnly('que horas são?');
+    final assistant = partsOf(read(), AgentRole.assistant);
+    expect(assistant, hasLength(2));
+    expect(assistant[0], isA<AgentToolPart>());
+    expect((assistant[0] as AgentToolPart).status, AgentToolStatus.ok);
+    expect((assistant[1] as AgentTextPart).text, 'São 19h');
+
+    controller.add(const TextDelta('05'));
+    await _until(
+      () => (partsOf(read(), AgentRole.assistant).last as AgentTextPart).text ==
+          'São 19h05',
+      reason: 'segundo text.delta',
+    );
+
+    expectUserOnly('que horas são?');
+    expect(partsOf(read(), AgentRole.assistant), hasLength(2));
+  });
+
+  test('só texto: usuário fica intacto a cada delta', () async {
+    final controller = StreamController<AgentEvent>();
+    addTearDown(controller.close);
+    client.onTurn = (sessionId, message, approvals) => controller.stream;
+
+    notifier().send('oi');
+    await pumpEventQueue();
+
+    controller.add(const TextDelta('Olá'));
+    await _until(() => read().messages.last.plainText == 'Olá',
+        reason: 'primeiro delta');
+    expectUserOnly('oi');
+
+    controller.add(const TextDelta(', tudo bem?'));
+    await _until(() => read().messages.last.plainText == 'Olá, tudo bem?',
+        reason: 'segundo delta');
+
+    expectUserOnly('oi');
+    final assistant = partsOf(read(), AgentRole.assistant);
+    expect(assistant, hasLength(1));
+    expect((assistant.single as AgentTextPart).text, 'Olá, tudo bem?');
+  });
+
+  test('reasoning antes do texto: usuário fica intacto', () async {
+    final controller = StreamController<AgentEvent>();
+    addTearDown(controller.close);
+    client.onTurn = (sessionId, message, approvals) => controller.stream;
+
+    notifier().send('oi');
+    await pumpEventQueue();
+
+    controller.add(const ReasoningDelta('pensando'));
+    controller.add(const TextDelta('São 19h'));
+    await _until(() => read().messages.last.plainText == 'São 19h',
+        reason: 'texto depois do reasoning');
+
+    expectUserOnly('oi');
+    final assistant = partsOf(read(), AgentRole.assistant);
+    expect(assistant, hasLength(2));
+    expect((assistant[0] as AgentReasoningPart).text, 'pensando');
+    expect((assistant[1] as AgentTextPart).text, 'São 19h');
+  });
 }
