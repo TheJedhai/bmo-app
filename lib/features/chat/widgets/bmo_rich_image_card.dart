@@ -10,6 +10,7 @@ import '../../../core/platform/file_download.dart';
 import '../../gallery/data/image_filename.dart';
 import '../../gallery/providers/images_provider.dart';
 import '../data/bmo_rich_block.dart';
+import 'bmo_clamped_text.dart';
 
 /// Renders a rich-content block of type "image" — now live.
 ///
@@ -322,6 +323,7 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
   Widget _buildError(String? error) {
     return Container(
       height: 120,
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: BmoColors.screenBg,
         borderRadius: BorderRadius.circular(8),
@@ -329,24 +331,25 @@ class _BmoRichImageCardState extends ConsumerState<BmoRichImageCard> {
           color: BmoColors.textMuted.withValues(alpha: 0.3),
         ),
       ),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline,
-                  size: 28, color: BmoColors.accentYellow),
-              const SizedBox(height: 6),
-              Text(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline,
+                size: 28, color: BmoColors.accentYellow),
+            const SizedBox(height: 6),
+            Flexible(
+              child: BmoClampedText(
                 error ?? 'Erro ao gerar imagem',
+                maxLines: 3,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: BmoColors.textSecondary,
                     ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

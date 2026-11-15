@@ -11,6 +11,7 @@ import '../../../core/http/client_factory.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/bmo_rich_block.dart';
 import '../providers/chat_providers.dart';
+import 'bmo_clamped_text.dart';
 
 /// Renders a rich-content block of type "question" — an interactive prompt
 /// with selectable options the user can click to answer.
@@ -235,8 +236,9 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (prompt.isNotEmpty) ...[
-            Text(
+            BmoClampedText(
               prompt,
+              maxLines: 3,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: BmoColors.textPrimary,
                   ),
@@ -288,8 +290,9 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
             ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 8),
-            Text(
+            BmoClampedText(
               _errorMessage!,
+              maxLines: 3,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: BmoColors.accentYellow,
                   ),
