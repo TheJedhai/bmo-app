@@ -20,14 +20,14 @@ bool isKnownRoute(String path) =>
 
 /// Guarda de crash do que o router casa mas o pageBuilder quebra.
 ///
-/// `/coding/:projectId` é lido com `int.parse` no pageBuilder. O router casa
-/// `abc` como `projectId` (parâmetro é String pro matcher), mas o `int.parse`
-/// estouraria — o guard fica aqui, fora do `findMatch`, porque o router não
-/// conhece o tipo do parâmetro. `sessionId` é String livre e não entra.
+/// `/coding/:projectId` é lido com `int.tryParse` no pageBuilder e cai na
+/// lista quando não é número; o guard fica aqui, fora do `findMatch`, porque o
+/// router não conhece o tipo do parâmetro. Segmentos literais com o mesmo
+/// prefixo (`/coding/runs/:runId`) têm 4 segmentos e não entram.
 bool _paramCrashesPageBuilder(String path) {
   final parts = path.split('/');
-  // parts = ['', 'coding', '<projectId>', ...]
-  if (parts.length < 3 || parts[1] != 'coding') return false;
+  // parts = ['', 'coding', '<projectId>']
+  if (parts.length != 3 || parts[1] != 'coding') return false;
   return int.tryParse(parts[2]) == null;
 }
 

@@ -9,9 +9,9 @@ import '../../features/missions/presentation/missions_screen.dart';
 import '../../features/rss/presentation/rss_screen.dart';
 import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/calendars_screen.dart';
+import '../../features/coding/presentation/coding_project_screen.dart';
+import '../../features/coding/presentation/coding_run_screen.dart';
 import '../../features/coding/presentation/coding_screen.dart';
-import '../../features/coding/presentation/coding_chat_screen.dart';
-import '../../features/coding/presentation/coding_session_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
 import '../events/events_provider.dart';
@@ -162,8 +162,16 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/chat',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const AgentChatScreen(), state),
+          pageBuilder: (context, state) {
+            // Conversas de um projeto: `/chat?project=<id>` (mesmo padrão de
+            // `/noticias?article=`). Sem id = chat principal.
+            final projectId =
+                int.tryParse(state.uri.queryParameters['project'] ?? '');
+            return _buildFeaturePage(
+              AgentChatScreen(projectId: projectId),
+              state,
+            );
+          },
         ),
         GoRoute(
           path: '/missoes',
@@ -210,28 +218,32 @@ final appRouter = GoRouter(
           pageBuilder: (context, state) =>
               _buildFeaturePage(const CodingScreen(), state),
         ),
+        // Antes de `/coding/:projectId` para o segmento "runs" nunca ser lido
+        // como id de projeto.
         GoRoute(
-          path: '/coding/:projectId',
+          path: '/coding/runs/:runId',
           pageBuilder: (context, state) {
-            final projectId = int.parse(state.pathParameters['projectId']!);
+            final runId = int.tryParse(state.pathParameters['runId'] ?? '');
             return _buildFeaturePage(
-              CodingSessionScreen(projectId: projectId),
+              runId == null
+                  ? const CodingScreen()
+                  : CodingRunScreen(runId: runId),
               state,
             );
           },
-          routes: [
-            GoRoute(
-              path: ':sessionId',
-              pageBuilder: (context, state) {
-                final projectId = int.parse(state.pathParameters['projectId']!);
-                final sessionId = state.pathParameters['sessionId']!;
-                return _buildFeaturePage(
-                  CodingChatScreen(projectId: projectId, sessionId: sessionId),
-                  state,
-                );
-              },
-            ),
-          ],
+        ),
+        GoRoute(
+          path: '/coding/:projectId',
+          pageBuilder: (context, state) {
+            final projectId =
+                int.tryParse(state.pathParameters['projectId'] ?? '');
+            return _buildFeaturePage(
+              projectId == null
+                  ? const CodingScreen()
+                  : CodingProjectScreen(projectId: projectId),
+              state,
+            );
+          },
         ),
       ],
     ),

@@ -37,9 +37,10 @@ void main() {
       expect(resolveDeepLinkPath(Uri.parse('bmo://go/noticias')), '/noticias');
     });
 
-    test('rota com parâmetro /coding/:projectId[/:sessionId] funciona', () {
+    test('rota com parâmetro /coding/:projectId funciona', () {
       expect(resolveDeepLinkPath(Uri.parse('bmo://go/coding/123')), '/coding/123');
-      expect(resolveDeepLinkPath(Uri.parse('bmo://go/coding/123/abc')), '/coding/123/abc');
+      // A tela antiga de sessão de coding saiu do router (etapa 6).
+      expect(resolveDeepLinkPath(Uri.parse('bmo://go/coding/123/abc')), '/');
     });
 
     test('path desconhecido -> raiz, sem crash', () {
