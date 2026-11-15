@@ -209,11 +209,6 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'coding.project.synced':
       ref.invalidate(projectsProvider);
       break;
-    case 'coding.session.created':
-    case 'coding.session.updated':
-    case 'coding.session.deleted':
-      invalidateAllFamilyInstances(ref.container, sessionsProvider);
-      break;
 
     case 'connected':
       debugPrint('SSE connected');

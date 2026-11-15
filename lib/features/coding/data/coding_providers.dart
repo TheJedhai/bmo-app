@@ -5,7 +5,6 @@ import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
 import 'coding_client.dart';
 import 'models/coding_project.dart';
-import 'models/coding_session.dart';
 
 // ============================================================
 // Infra
@@ -69,15 +68,3 @@ final projectsProvider =
     AsyncNotifierProvider<ProjectsNotifier, List<CodingProject>>(
   ProjectsNotifier.new,
 );
-
-// ============================================================
-// Sessions — FutureProvider.family + mutations via codingClientProvider
-// ============================================================
-
-final sessionsProvider =
-    FutureProvider.autoDispose.family<List<CodingSession>, int>((ref, projectId) async {
-  final userId = ref.watch(currentUserIdProvider);
-  if (userId == null) return const [];
-  final client = ref.watch(codingClientProvider);
-  return client.listSessions(projectId);
-});

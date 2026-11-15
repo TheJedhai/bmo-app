@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 
 import 'models/coding_project.dart';
 import 'models/coding_run.dart';
-import 'models/coding_session.dart';
 import 'models/folder_item.dart';
 
 class CodingApiException implements Exception {
@@ -99,54 +98,6 @@ class CodingClient {
     return list
         .map((e) => FolderItem.fromJson(e as Map<String, dynamic>))
         .toList();
-  }
-
-  // ============================================================
-  // Sessions
-  // ============================================================
-
-  Future<List<CodingSession>> listSessions(int projectId) async {
-    final response = await _client.get(
-      Uri.parse('$_baseUrl/api/v1/coding/projects/$projectId/sessions'),
-    );
-    _ensureOk(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
-    return list
-        .map((e) => CodingSession.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<CodingSession> createSession(
-      int projectId, Map<String, dynamic> data) async {
-    final response = await _client.post(
-      Uri.parse('$_baseUrl/api/v1/coding/projects/$projectId/sessions'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(data),
-    );
-    _ensureOk(response);
-    return CodingSession.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  Future<CodingSession> updateSession(
-      int projectId, String sessionId, Map<String, dynamic> data) async {
-    final response = await _client.put(
-      Uri.parse(
-          '$_baseUrl/api/v1/coding/projects/$projectId/sessions/$sessionId'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(data),
-    );
-    _ensureOk(response);
-    return CodingSession.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
-  }
-
-  Future<void> deleteSession(int projectId, String sessionId) async {
-    final response = await _client.delete(
-      Uri.parse(
-          '$_baseUrl/api/v1/coding/projects/$projectId/sessions/$sessionId'),
-    );
-    _ensureOk(response);
   }
 
   // ============================================================
