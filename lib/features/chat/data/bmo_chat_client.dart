@@ -4,8 +4,9 @@ import 'dart:developer' as developer;
 
 import 'package:http/http.dart' as http;
 
+import 'package:bmo_app/features/agent_chat/data/sse_parser.dart';
+
 import 'chat_event.dart';
-import 'sse_parser.dart';
 
 /// Cliente do bmo-server. Faz POST /api/chat (stream SSE) e CRUD em
 /// /api/chats/* (gerenciamento de conversas).

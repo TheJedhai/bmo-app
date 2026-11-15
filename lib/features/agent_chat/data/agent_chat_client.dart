@@ -3,12 +3,11 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'package:bmo_app/features/chat/data/sse_parser.dart';
-
 import 'agent_event.dart';
 import 'agent_event_parser.dart';
 import 'agent_message.dart';
 import 'agent_session.dart';
+import 'sse_parser.dart';
 
 /// Erro devolvido pelo bmo-server no formato `{"error", "message"}`.
 class AgentChatException implements Exception {
