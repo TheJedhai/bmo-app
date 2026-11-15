@@ -10,7 +10,6 @@ import '../../../core/events/rich_blocks_state.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/bmo_rich_block.dart';
-import '../../chat/providers/chat_providers.dart';
 import 'bmo_clamped_text.dart';
 
 /// Renders a rich-content block of type "question" — an interactive prompt
@@ -131,13 +130,6 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
               {'status': 'answered', 'chosen_value': value},
             );
 
-        // If the block payload says there's no follow-up action, echo the
-        // chosen option label as a user chat message so the assistant can
-        // respond to it in the current conversation.
-        final hasAction = widget.block.payload['has_action'] as bool? ?? false;
-        if (!hasAction) {
-          _sendAsChatMessage(value);
-        }
       } else if (response.statusCode == 409) {
         // Already answered or cancelled — sync to discover the real state
         // and render it.  Don't show an error; the real state is what matters.
@@ -157,17 +149,6 @@ class _BmoRichQuestionCardState extends ConsumerState<BmoRichQuestionCard> {
         _errorMessage = 'Erro de conexão. Tente novamente.';
       });
     }
-  }
-
-  // ---- chat message echo ---------------------------------------------------
-
-  /// Echoes the chosen [value] as a user chat message so the assistant can
-  /// respond to it. Uses [activeChatEchoProvider] — a callback set by whichever
-  /// chat screen (normal or coding) is currently active.
-  void _sendAsChatMessage(String value) {
-    final echo = ref.read(activeChatEchoProvider);
-    if (echo == null) return;
-    echo(value);
   }
 
   // ---- build --------------------------------------------------------------
