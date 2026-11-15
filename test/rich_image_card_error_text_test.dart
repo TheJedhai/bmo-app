@@ -10,9 +10,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bmo_app/core/events/rich_blocks_provider.dart';
 import 'package:bmo_app/core/events/rich_blocks_state.dart';
-import 'package:bmo_app/features/chat/data/bmo_rich_block.dart';
-import 'package:bmo_app/features/chat/widgets/bmo_clamped_text.dart';
-import 'package:bmo_app/features/chat/widgets/bmo_rich_image_card.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
+import 'package:bmo_app/features/rich_blocks/widgets/bmo_clamped_text.dart';
+import 'package:bmo_app/features/rich_blocks/widgets/bmo_rich_image_card.dart';
 
 class FakeRichBlocks extends RichBlocks {
   FakeRichBlocks(this.initial);

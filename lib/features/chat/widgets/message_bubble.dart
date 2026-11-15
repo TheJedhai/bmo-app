@@ -3,7 +3,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../data/bmo_rich_parser.dart';
-import '../data/bmo_rich_registry.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_registry.dart';
 import '../data/chat_message.dart';
 import 'chat_avatar.dart';
 import 'delegation_chip.dart';

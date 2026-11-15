@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:bmo_app/core/events/events_provider.dart';
-import 'package:bmo_app/features/chat/data/bmo_rich_block.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
 import 'package:bmo_app/features/coding/data/coding_client.dart';
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
 import 'package:bmo_app/features/coding/data/models/coding_run.dart';

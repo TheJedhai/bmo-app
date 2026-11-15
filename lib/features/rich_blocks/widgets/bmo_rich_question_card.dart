@@ -10,7 +10,7 @@ import '../../../core/events/rich_blocks_state.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/bmo_rich_block.dart';
-import '../providers/chat_providers.dart';
+import '../../chat/providers/chat_providers.dart';
 import 'bmo_clamped_text.dart';
 
 /// Renders a rich-content block of type "question" — an interactive prompt

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:bmo_app/features/chat/data/bmo_rich_block.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
 import 'package:bmo_app/features/chat/data/bmo_rich_parser.dart';
 
 void main() {

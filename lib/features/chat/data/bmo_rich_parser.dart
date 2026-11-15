@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
-import 'bmo_rich_block.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
 
 /// A segment of parsed chat-message content.
 ///

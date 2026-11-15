@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:bmo_app/core/events/events_provider.dart';
 import 'package:bmo_app/core/navigation/app_router.dart';
 import 'package:bmo_app/core/theme/bmo_theme.dart';
-import 'package:bmo_app/features/chat/data/bmo_rich_block.dart';
-import 'package:bmo_app/features/chat/widgets/bmo_clamped_text.dart';
+import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
+import 'package:bmo_app/features/rich_blocks/widgets/bmo_clamped_text.dart';
 
 import '../../data/coding_providers.dart';
 import '../../data/coding_run_providers.dart';

@@ -9,10 +9,10 @@ import 'core/config/env.dart';
 import 'core/identity/identity_provider.dart';
 import 'core/platform/temp_orphan_sweep.dart';
 import 'core/platform/url_strategy.dart';
-import 'features/chat/data/bmo_rich_registry.dart';
-import 'features/chat/widgets/bmo_rich_image_card.dart';
-import 'features/chat/widgets/bmo_rich_question_card.dart';
 import 'features/coding/presentation/widgets/bmo_rich_coding_run_card.dart';
+import 'features/rich_blocks/data/bmo_rich_registry.dart';
+import 'features/rich_blocks/widgets/bmo_rich_image_card.dart';
+import 'features/rich_blocks/widgets/bmo_rich_question_card.dart';
 
 void main() async {
   assert(
