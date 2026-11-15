@@ -55,6 +55,8 @@ class AgentChatClient {
   ///
   /// Lança [AgentChatException] antes de emitir quando o servidor responde
   /// não-200 (404 de sessão, 409 de turno em andamento, 503 do agente).
+  /// `message` com aprovação pendente não erra: o servidor nega as pendências
+  /// e segue o turno.
   Stream<AgentEvent> sendTurn({
     String? sessionId,
     String? message,

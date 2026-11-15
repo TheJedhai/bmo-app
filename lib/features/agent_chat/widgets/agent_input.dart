@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 
-/// Composer do chat v2: mesma base do chat v1, mais `enabled`/`hintText` para
-/// o estado de aprovação pendente.
+/// Composer do chat v2: mesma base do chat v1, mais `enabled` (histórico
+/// carregando) e `hintText`.
 class AgentInput extends StatefulWidget {
   final bool isStreaming;
   final bool enabled;

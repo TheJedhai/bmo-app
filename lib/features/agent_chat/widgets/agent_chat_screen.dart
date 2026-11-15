@@ -81,13 +81,8 @@ class _AgentChatBody extends ConsumerWidget {
 
     final streaming =
         state.status == AgentConversationStatus.streaming;
-    final awaitingApproval = state.awaitsApproval;
     final connectionLost =
         state.status == AgentConversationStatus.connectionLost;
-
-    final hint = awaitingApproval
-        ? 'responda a aprovação acima'
-        : 'fala com o BMO...';
 
     return Column(
       children: [
@@ -98,7 +93,7 @@ class _AgentChatBody extends ConsumerWidget {
           ),
         Expanded(
           child: state.messages.isEmpty
-              ? _EmptyConversation(awaitingApproval: awaitingApproval)
+              ? const _EmptyConversation()
               : AgentMessageList(
                   messages: state.messages,
                   streaming: streaming,
@@ -132,10 +127,7 @@ class _AgentChatBody extends ConsumerWidget {
           padding: const EdgeInsets.all(12),
           child: AgentInput(
             isStreaming: streaming,
-            enabled: !streaming &&
-                !awaitingApproval &&
-                !state.loadingHistory,
-            hintText: hint,
+            enabled: !streaming && !state.loadingHistory,
             draft: state.restoreDraft,
             onSend: notifier.send,
             onCancel: notifier.cancel,
@@ -178,9 +170,7 @@ class _Banner extends StatelessWidget {
 }
 
 class _EmptyConversation extends StatelessWidget {
-  final bool awaitingApproval;
-
-  const _EmptyConversation({required this.awaitingApproval});
+  const _EmptyConversation();
 
   @override
   Widget build(BuildContext context) {
@@ -195,9 +185,7 @@ class _EmptyConversation extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            awaitingApproval
-                ? 'responda a aprovação acima'
-                : 'fala com o BMO',
+            'fala com o BMO',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: BmoColors.textSecondary,
             ),

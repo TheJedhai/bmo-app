@@ -57,7 +57,7 @@ Future<void> _until(bool Function() predicate) async {
 }
 
 void main() {
-  testWidgets('monta, envia e trava o input aguardando aprovação',
+  testWidgets('monta, envia e mantém o input liberado com aprovação pendente',
       (tester) async {
     final client = FakeAgentChatClient();
     final container = ProviderContainer(overrides: [
@@ -84,17 +84,17 @@ void main() {
     await tester.tap(find.byIcon(Icons.arrow_upward));
     await tester.pump();
 
-    await _until(() =>
-        container.read(agentConversationProvider).status ==
-        AgentConversationStatus.awaitingApproval);
+    await _until(() => container
+        .read(agentConversationProvider)
+        .messages
+        .any((message) => message.parts.any((p) => p is AgentApprovalPart)));
     await tester.pump();
 
     expect(find.text('Apagar a tarefa #12'), findsOneWidget);
-    expect(find.text('Aprovar'), findsOneWidget);
 
     final input = tester.widget<TextField>(find.byType(TextField).last);
-    expect(input.enabled, isFalse);
-    expect(input.decoration?.hintText, 'responda a aprovação acima');
+    expect(input.enabled, isTrue);
+    expect(input.decoration?.hintText, 'fala com o BMO...');
     expect(tester.takeException(), isNull);
   });
 }

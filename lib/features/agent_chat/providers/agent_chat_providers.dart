@@ -99,7 +99,7 @@ class AgentSessions extends _$AgentSessions {
 // Conversa
 // ============================================================
 
-enum AgentConversationStatus { idle, streaming, awaitingApproval, connectionLost }
+enum AgentConversationStatus { idle, streaming, connectionLost }
 
 class AgentConversationState {
   final String? sessionId;
@@ -123,9 +123,6 @@ class AgentConversationState {
   });
 
   bool get isBusy => status == AgentConversationStatus.streaming;
-
-  bool get awaitsApproval =>
-      status == AgentConversationStatus.awaitingApproval;
 
   AgentConversationState copyWith({
     String? sessionId,
@@ -216,7 +213,7 @@ class AgentConversation extends _$AgentConversation {
 
   void send(String text) {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || _snapshot.isBusy || _snapshot.awaitsApproval) return;
+    if (trimmed.isEmpty || _snapshot.isBusy) return;
 
     final userMessage = AgentMessage(
       id: _nextId(),
@@ -225,7 +222,9 @@ class AgentConversation extends _$AgentConversation {
       parts: [AgentTextPart(trimmed)],
     );
     _pendingMessage = trimmed;
-    _startTurn([..._snapshot.messages, userMessage]);
+    // O servidor nega as pendências ao receber mensagem nova; o card responde
+    // na hora, antes do POST.
+    _startTurn(_denyPending([..._snapshot.messages, userMessage]));
     _listen(
       (client) => client.sendTurn(sessionId: _sessionId, message: trimmed),
     );
@@ -313,26 +312,24 @@ class AgentConversation extends _$AgentConversation {
       case ReasoningDelta():
         _appendReasoning(event.text);
       case ToolStarted():
-        _updateAssistant((parts) => [
-              ...parts,
-              AgentToolPart(
-                callId: event.callId,
-                name: event.name,
-                label: event.label,
-                status: AgentToolStatus.running,
-              ),
-            ]);
+        // Retomada depois de aprovação: o call_id já tem chip numa mensagem
+        // anterior e é ele que reabre, nada de chip duplicado.
+        if (!_setToolStatus(event.callId, AgentToolStatus.running)) {
+          _updateAssistant((parts) => [
+                ...parts,
+                AgentToolPart(
+                  callId: event.callId,
+                  name: event.name,
+                  label: event.label,
+                  status: AgentToolStatus.running,
+                ),
+              ]);
+        }
       case ToolEnded():
-        _updateAssistant((parts) => [
-              for (final part in parts)
-                if (part is AgentToolPart && part.callId == event.callId)
-                  part.copyWith(
-                    status:
-                        event.ok ? AgentToolStatus.ok : AgentToolStatus.failed,
-                  )
-                else
-                  part,
-            ]);
+        _setToolStatus(
+          event.callId,
+          event.ok ? AgentToolStatus.ok : AgentToolStatus.failed,
+        );
       case RichBlockReceived():
         _updateAssistant((parts) => [
               ...parts,
@@ -344,6 +341,7 @@ class AgentConversation extends _$AgentConversation {
               ),
             ]);
       case ApprovalRequested():
+        _setToolStatus(event.callId, AgentToolStatus.awaiting);
         _updateAssistant((parts) => [
               ...parts,
               AgentApprovalPart(
@@ -419,12 +417,13 @@ class AgentConversation extends _$AgentConversation {
 
   void _finishTurn(String status) {
     _pendingMessage = null;
+    // `awaiting_approval` também é idle: o input continua liberado e o card
+    // pendente é só uma mensagem a mais na conversa.
     final messages = _dropEmptyAssistant(_snapshot.messages);
-    final next = switch (status) {
-      'awaiting_approval' => AgentConversationStatus.awaitingApproval,
-      _ => AgentConversationStatus.idle,
-    };
-    _emit(_snapshot.copyWith(messages: messages, status: next));
+    _emit(_snapshot.copyWith(
+      messages: messages,
+      status: AgentConversationStatus.idle,
+    ));
   }
 
   void _adoptSession(String? sessionId) {
@@ -570,24 +569,100 @@ class AgentConversation extends _$AgentConversation {
     _emit(_snapshot.copyWith(messages: messages));
   }
 
+  /// Decisão otimista (e o rollback): o card e o chip do mesmo `call_id`
+  /// andam juntos — `pending` = chip aguardando, `approved` = rodando,
+  /// `denied` = negado.
   List<AgentMessage> _withDecision(
     List<AgentMessage> messages,
     String callId,
-    AgentApprovalDecision decision,
-  ) =>
+    AgentApprovalDecision decision, {
+    bool ignored = false,
+  }) =>
       [
         for (final message in messages)
           if (message.isAssistant)
             message.copyWith(parts: [
               for (final part in message.parts)
                 if (part is AgentApprovalPart && part.callId == callId)
-                  part.copyWith(decision: decision)
+                  part.copyWith(
+                    decision: decision,
+                    ignored: ignored || part.ignored,
+                  )
+                else if (part is AgentToolPart && part.callId == callId)
+                  part.copyWith(status: _toolStatusFor(decision))
                 else
                   part,
             ])
           else
             message,
       ];
+
+  AgentApprovalDecision? _approvalDecisionOf(String callId) {
+    for (final message in _snapshot.messages) {
+      for (final part in message.parts) {
+        if (part is AgentApprovalPart && part.callId == callId) {
+          return part.decision;
+        }
+      }
+    }
+    return null;
+  }
+
+  AgentToolStatus _toolStatusFor(AgentApprovalDecision decision) =>
+      switch (decision) {
+        AgentApprovalDecision.pending => AgentToolStatus.awaiting,
+        AgentApprovalDecision.approved => AgentToolStatus.running,
+        AgentApprovalDecision.denied => AgentToolStatus.denied,
+      };
+
+  /// Nega as aprovações ainda pendentes — o servidor faz o mesmo ao receber a
+  /// mensagem nova.
+  List<AgentMessage> _denyPending(List<AgentMessage> messages) {
+    final pending = {
+      for (final message in messages)
+        for (final part in message.parts)
+          if (part is AgentApprovalPart &&
+              part.decision == AgentApprovalDecision.pending)
+            part.callId,
+    };
+    var next = messages;
+    for (final callId in pending) {
+      next = _withDecision(
+        next,
+        callId,
+        AgentApprovalDecision.denied,
+        ignored: true,
+      );
+    }
+    return next;
+  }
+
+  /// Atualiza o chip de um `call_id` em qualquer mensagem da sessão (o chip
+  /// original da aprovação reabre no turno de retomada). `false` = não existe.
+  bool _setToolStatus(String callId, AgentToolStatus status) {
+    // Negação vence: o tool.end da retomada não converte o chip em falha.
+    final denied = _approvalDecisionOf(callId) == AgentApprovalDecision.denied;
+    if (denied) status = AgentToolStatus.denied;
+    var found = false;
+    final messages = <AgentMessage>[];
+    for (final message in _snapshot.messages) {
+      final parts = <AgentPart>[];
+      var changed = false;
+      for (final part in message.parts) {
+        if (part is AgentToolPart && part.callId == callId) {
+          parts.add(part.copyWith(status: status));
+          changed = true;
+        } else {
+          parts.add(part);
+        }
+      }
+      found = found || changed;
+      messages.add(changed ? message.copyWith(parts: parts) : message);
+    }
+    if (!found) return false;
+    _emit(_snapshot.copyWith(messages: messages));
+    return true;
+  }
 
   List<AgentMessage> _dropEmptyAssistant(List<AgentMessage> messages) => [
         for (final message in messages)
@@ -650,7 +725,6 @@ class AgentConversation extends _$AgentConversation {
       return switch (error.errorCode) {
         'not_found' => 'sessão não encontrada',
         'turn_in_progress' => 'já existe um turno rodando nesta conversa',
-        'awaiting_approval' => 'responda a aprovação acima',
         'agent_unavailable' => 'o agente está indisponível',
         _ => error.message,
       };

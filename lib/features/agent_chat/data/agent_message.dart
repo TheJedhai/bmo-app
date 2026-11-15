@@ -23,7 +23,7 @@ class AgentReasoningPart extends AgentPart {
   const AgentReasoningPart(this.text);
 }
 
-enum AgentToolStatus { running, ok, failed }
+enum AgentToolStatus { running, awaiting, ok, failed, denied }
 
 class AgentToolPart extends AgentPart {
   final String callId;
@@ -69,21 +69,29 @@ class AgentApprovalPart extends AgentPart {
   final String summary;
   final AgentApprovalDecision decision;
 
+  /// Negada porque o usuário mandou outra mensagem em vez de decidir.
+  final bool ignored;
+
   const AgentApprovalPart({
     required this.callId,
     required this.tool,
     required this.label,
     required this.summary,
     required this.decision,
+    this.ignored = false,
   });
 
-  AgentApprovalPart copyWith({AgentApprovalDecision? decision}) =>
+  AgentApprovalPart copyWith({
+    AgentApprovalDecision? decision,
+    bool? ignored,
+  }) =>
       AgentApprovalPart(
         callId: callId,
         tool: tool,
         label: label,
         summary: summary,
         decision: decision ?? this.decision,
+        ignored: ignored ?? this.ignored,
       );
 }
 
@@ -138,12 +146,33 @@ class AgentMessage {
         if (part != null) parts.add(part);
       }
     }
+    _resolveApprovalTools(parts);
     return AgentMessage(
       id: json['id']?.toString() ?? '',
       role: role,
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
       parts: parts,
     );
+  }
+}
+
+/// O histórico só traz `ok` no tool; a `decision` da aprovação do mesmo
+/// `call_id` completa o estado que o stream ao vivo entrega.
+void _resolveApprovalTools(List<AgentPart> parts) {
+  final decisions = <String, AgentApprovalDecision>{
+    for (final part in parts)
+      if (part is AgentApprovalPart) part.callId: part.decision,
+  };
+  if (decisions.isEmpty) return;
+  for (var i = 0; i < parts.length; i++) {
+    final part = parts[i];
+    if (part is! AgentToolPart) continue;
+    final status = switch (decisions[part.callId]) {
+      AgentApprovalDecision.pending => AgentToolStatus.awaiting,
+      AgentApprovalDecision.denied => AgentToolStatus.denied,
+      AgentApprovalDecision.approved || null => part.status,
+    };
+    parts[i] = part.copyWith(status: status);
   }
 }
 

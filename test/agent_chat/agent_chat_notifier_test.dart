@@ -121,6 +121,57 @@ AgentApprovalPart? _approvalOf(List<AgentMessage> messages, String callId) {
   return null;
 }
 
+Iterable<AgentToolPart> _toolsOf(List<AgentMessage> messages, String callId) =>
+    messages.expand((m) => m.parts).whereType<AgentToolPart>().where(
+          (part) => part.callId == callId,
+        );
+
+AgentToolPart? _toolOf(List<AgentMessage> messages, String callId) {
+  final tools = _toolsOf(messages, callId);
+  return tools.isEmpty ? null : tools.single;
+}
+
+/// Forma comparável do estado: papel de cada mensagem e as partes, na ordem.
+/// É com isso que o estado ao vivo tem que bater com o `GET .../messages`.
+List<String> _signatureOf(List<AgentMessage> messages) => [
+      for (final message in messages)
+        '${message.role.name}:${message.parts.map(_partSignature).join(' ')}',
+    ];
+
+String _partSignature(AgentPart part) => switch (part) {
+      AgentTextPart() => 'text',
+      AgentReasoningPart() => 'reasoning',
+      AgentRichPart() => 'rich',
+      AgentToolPart(:final callId, :final status) => 'tool($callId,${status.name})',
+      AgentApprovalPart(:final callId, :final decision) =>
+        'approval($callId,${decision.name})',
+    };
+
+/// Mensagem do assistente no formato de `GET .../messages`.
+AgentMessage _historyAssistant(String id, List<Map<String, dynamic>> parts) =>
+    AgentMessage.fromJson({'id': id, 'role': 'assistant', 'parts': parts});
+
+Map<String, dynamic> _historyTool(String callId, {required bool ok}) => {
+      'type': 'tool',
+      'call_id': callId,
+      'name': 'delete_task',
+      'label': 'Apagar tarefa',
+      'ok': ok,
+    };
+
+Map<String, dynamic> _historyApproval(
+  String callId,
+  String decision,
+) =>
+    {
+      'type': 'approval',
+      'call_id': callId,
+      'tool': 'delete_task',
+      'label': 'Apagar tarefa',
+      'summary': 'Apagar a tarefa #12',
+      'decision': decision,
+    };
+
 void main() {
   late FakeAgentChatClient client;
   late ProviderContainer container;
@@ -190,13 +241,26 @@ void main() {
     expect(tool.status, AgentToolStatus.ok);
   });
 
-  test('aprovação: card pendente, decisão otimista e retomada em nova mensagem',
+  /// Simula o que o `GET .../messages` devolve depois do turno: recarregar a
+  /// sessão tem que produzir a mesma forma do estado ao vivo.
+  Future<void> reloadHistory(List<AgentMessage> history) async {
+    client.historyQueue = [history];
+    container.read(selectedAgentSessionProvider.notifier).select(null);
+    await pumpEventQueue();
+    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    await pumpEventQueue();
+  }
+
+  test('aprovação: chip aguardando, rodando e fechado no chip original',
       () async {
-    var call = 0;
     client.onTurn = (sessionId, message, approvals) async* {
-      call++;
-      if (call == 1) {
+      if (approvals == null) {
         yield const TurnStarted(input: 'message', sessionId: 'sess-1');
+        yield const ToolStarted(
+          callId: 'call-del',
+          name: 'delete_task',
+          label: 'Apagar tarefa',
+        );
         yield const ApprovalRequested(
           callId: 'call-del',
           tool: 'delete_task',
@@ -207,6 +271,12 @@ void main() {
         return;
       }
       yield const TurnStarted(input: 'approval', sessionId: 'sess-1');
+      yield const ToolStarted(
+        callId: 'call-del',
+        name: 'delete_task',
+        label: 'Apagar tarefa',
+      );
+      yield const ToolEnded(callId: 'call-del', ok: true, label: 'Apagar tarefa');
       yield const TextDelta('tarefa apagada');
       yield const TurnEnded(status: 'completed');
     };
@@ -214,26 +284,172 @@ void main() {
     notifier().send('apaga');
     await pumpEventQueue();
 
-    expect(read().status, AgentConversationStatus.awaitingApproval);
+    // Turno encerrado aguardando decisão: nada de spinner.
+    expect(read().status, AgentConversationStatus.idle);
+    expect(_toolOf(read().messages, 'call-del')?.status,
+        AgentToolStatus.awaiting);
     expect(
       _approvalOf(read().messages, 'call-del')?.decision,
       AgentApprovalDecision.pending,
     );
 
-    final before = read().messages.length;
     notifier().approve('call-del');
     // No clique, antes do POST responder.
     expect(
       _approvalOf(read().messages, 'call-del')?.decision,
       AgentApprovalDecision.approved,
     );
+    expect(_toolOf(read().messages, 'call-del')?.status,
+        AgentToolStatus.running);
+
     await pumpEventQueue();
 
     final state = read();
     expect(state.status, AgentConversationStatus.idle);
-    expect(state.messages.length, before + 1);
     expect(state.messages.last.plainText, 'tarefa apagada');
+    // O tool.start/tool.end da retomada fecharam o chip original.
+    expect(_toolOf(state.messages, 'call-del')?.status, AgentToolStatus.ok);
+    expect(_toolsOf(state.messages, 'call-del'), hasLength(1));
     expect(client.sentApprovals.last?['call-del']?.approved, isTrue);
+
+    final live = _signatureOf(state.messages);
+    await reloadHistory([
+      _user('apaga'),
+      _historyAssistant('row1:assistant', [
+        _historyTool('call-del', ok: true),
+        _historyApproval('call-del', 'approved'),
+      ]),
+      _assistant('tarefa apagada'),
+    ]);
+    expect(_signatureOf(read().messages), live);
+  });
+
+  test('negação: chip negado e sem duplicado', () async {
+    client.onTurn = (sessionId, message, approvals) async* {
+      if (approvals == null) {
+        yield const TurnStarted(input: 'message', sessionId: 'sess-1');
+        yield const ToolStarted(
+          callId: 'call-del',
+          name: 'delete_task',
+          label: 'Apagar tarefa',
+        );
+        yield const ApprovalRequested(
+          callId: 'call-del',
+          tool: 'delete_task',
+          label: 'Apagar tarefa',
+          summary: 'Apagar a tarefa #12',
+        );
+        yield const TurnEnded(status: 'awaiting_approval');
+        return;
+      }
+      yield const TurnStarted(input: 'approval', sessionId: 'sess-1');
+      yield const ToolEnded(callId: 'call-del', ok: false, label: 'Apagar tarefa');
+      yield const TextDelta('não apaguei');
+      yield const TurnEnded(status: 'completed');
+    };
+
+    notifier().send('apaga');
+    await pumpEventQueue();
+    notifier().deny('call-del', note: 'não');
+
+    expect(
+      _approvalOf(read().messages, 'call-del')?.decision,
+      AgentApprovalDecision.denied,
+    );
+    expect(_toolOf(read().messages, 'call-del')?.status,
+        AgentToolStatus.denied);
+
+    await pumpEventQueue();
+
+    final state = read();
+    expect(state.status, AgentConversationStatus.idle);
+    expect(state.messages.last.plainText, 'não apaguei');
+    // O tool.end da retomada não transforma a negação em falha.
+    expect(_toolOf(state.messages, 'call-del')?.status, AgentToolStatus.denied);
+    expect(_toolsOf(state.messages, 'call-del'), hasLength(1));
+
+    final live = _signatureOf(state.messages);
+    await reloadHistory([
+      _user('apaga'),
+      _historyAssistant('row1:assistant', [
+        _historyTool('call-del', ok: false),
+        _historyApproval('call-del', 'denied'),
+      ]),
+      _assistant('não apaguei'),
+    ]);
+    expect(_signatureOf(read().messages), live);
+  });
+
+  test('mensagem com pendência: card negado e turno segue', () async {
+    var call = 0;
+    client.onTurn = (sessionId, message, approvals) async* {
+      call++;
+      if (call == 1) {
+        yield const TurnStarted(input: 'message', sessionId: 'sess-1');
+        yield const ToolStarted(
+          callId: 'call-del',
+          name: 'delete_task',
+          label: 'Apagar tarefa',
+        );
+        yield const ApprovalRequested(
+          callId: 'call-del',
+          tool: 'delete_task',
+          label: 'Apagar tarefa',
+          summary: 'Apagar a tarefa #12',
+        );
+        yield const TurnEnded(status: 'awaiting_approval');
+        return;
+      }
+      // Turno novo numa sessão com pendência: o servidor nega e segue.
+      yield const TurnStarted(input: 'message', sessionId: 'sess-1');
+      yield const ToolEnded(callId: 'call-del', ok: false, label: 'Apagar tarefa');
+      yield const TextDelta('seguindo a conversa');
+      yield const TurnEnded(status: 'completed');
+    };
+
+    notifier().send('apaga');
+    await pumpEventQueue();
+    expect(
+      _approvalOf(read().messages, 'call-del')?.decision,
+      AgentApprovalDecision.pending,
+    );
+
+    notifier().send('deixa pra lá');
+    // Otimista, antes do POST.
+    expect(
+      _approvalOf(read().messages, 'call-del')?.decision,
+      AgentApprovalDecision.denied,
+    );
+    expect(_approvalOf(read().messages, 'call-del')?.ignored, isTrue);
+    expect(_toolOf(read().messages, 'call-del')?.status,
+        AgentToolStatus.denied);
+
+    await pumpEventQueue();
+
+    final state = read();
+    expect(state.status, AgentConversationStatus.idle);
+    expect(state.messages.map((m) => m.role), [
+      AgentRole.user,
+      AgentRole.assistant,
+      AgentRole.user,
+      AgentRole.assistant,
+    ]);
+    expect(state.messages[2].plainText, 'deixa pra lá');
+    expect(state.messages[3].plainText, 'seguindo a conversa');
+    expect(_toolsOf(state.messages, 'call-del'), hasLength(1));
+    expect(_toolOf(state.messages, 'call-del')?.status, AgentToolStatus.denied);
+
+    final live = _signatureOf(state.messages);
+    await reloadHistory([
+      _user('apaga'),
+      _historyAssistant('row1:assistant', [
+        _historyTool('call-del', ok: false),
+        _historyApproval('call-del', 'denied'),
+      ]),
+      _user('deixa pra lá'),
+      _assistant('seguindo a conversa'),
+    ]);
+    expect(_signatureOf(read().messages), live);
   });
 
   test('falha no POST de aprovação volta o card para pendente e mostra o erro',
@@ -243,6 +459,11 @@ void main() {
       call++;
       if (call == 1) {
         yield const TurnStarted(input: 'message', sessionId: 'sess-1');
+        yield const ToolStarted(
+          callId: 'call-del',
+          name: 'delete_task',
+          label: 'Apagar tarefa',
+        );
         yield const ApprovalRequested(
           callId: 'call-del',
           tool: 'delete_task',
@@ -270,6 +491,8 @@ void main() {
       _approvalOf(state.messages, 'call-del')?.decision,
       AgentApprovalDecision.pending,
     );
+    expect(_toolOf(state.messages, 'call-del')?.status,
+        AgentToolStatus.awaiting);
     expect(state.error, 'já existe um turno rodando nesta conversa');
     expect(state.status, AgentConversationStatus.idle);
   });

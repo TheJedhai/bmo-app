@@ -81,15 +81,14 @@ class AgentToolChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = switch (part.status) {
-      AgentToolStatus.running => BmoColors.accentYellow,
-      AgentToolStatus.ok => BmoColors.accentGreen,
-      AgentToolStatus.failed => BmoColors.accentRed,
-    };
-    final icon = switch (part.status) {
-      AgentToolStatus.running => null,
-      AgentToolStatus.ok => Icons.check,
-      AgentToolStatus.failed => Icons.close,
+    // `awaiting` é um relógio parado (sem spinner): o turno acabou, quem tem
+    // que agir é o usuário. `denied` não é falha, é decisão.
+    final (color, icon) = switch (part.status) {
+      AgentToolStatus.running => (BmoColors.accentYellow, null),
+      AgentToolStatus.awaiting => (BmoColors.accentYellow, Icons.hourglass_empty),
+      AgentToolStatus.ok => (BmoColors.accentGreen, Icons.check),
+      AgentToolStatus.failed => (BmoColors.accentRed, Icons.close),
+      AgentToolStatus.denied => (BmoColors.textSecondary, Icons.block),
     };
 
     return Container(
@@ -284,15 +283,28 @@ class _AgentApprovalCardState extends State<AgentApprovalCard> {
               ],
             ),
           ] else
-            Text(
-              part.decision == AgentApprovalDecision.approved
-                  ? 'aprovado'
-                  : 'negado',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: part.decision == AgentApprovalDecision.approved
-                    ? BmoColors.accentGreen
-                    : BmoColors.accentRed,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  part.decision == AgentApprovalDecision.approved
+                      ? 'aprovado'
+                      : 'negado',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: part.decision == AgentApprovalDecision.approved
+                        ? BmoColors.accentGreen
+                        : BmoColors.accentRed,
+                  ),
+                ),
+                if (part.ignored)
+                  Text(
+                    'ignorada: você seguiu a conversa',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: BmoColors.textMuted,
+                    ),
+                  ),
+              ],
             ),
         ],
       ),
