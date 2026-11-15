@@ -279,7 +279,7 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
                   ),
                 if (active) const SizedBox(width: 8),
                 TextButton(
-                  onPressed: () => appRouter.push('/coding/runs/$runId'),
+                  onPressed: () => appRouter.go('/coding/runs/$runId'),
                   child: const Text('Detalhes'),
                 ),
               ],

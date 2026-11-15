@@ -65,9 +65,11 @@ void main() {
           ),
         ),
         GoRoute(
-          path: '/chat',
+          path: '/coding/:projectId/chat',
           builder: (context, state) => Scaffold(
-            body: Text('chat do projeto ${state.uri.queryParameters['project']}'),
+            body: Text(
+              'chat do projeto ${state.pathParameters['projectId']}',
+            ),
           ),
         ),
       ],

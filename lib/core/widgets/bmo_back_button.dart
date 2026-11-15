@@ -6,9 +6,12 @@ import 'package:go_router/go_router.dart';
 ///
 /// When there is history on the shell navigator, it calls [GoRouter.pop].
 /// When opened directly (no history, e.g. /chat typed in the address bar), it
-/// navigates to `/` so the user always has a way back to the dashboard.
+/// navigates to [fallbackLocation] so the user always has a way back to the
+/// parent area (dashboard by default; `/coding/N` for a project chat).
 class BmoBackButton extends StatelessWidget {
-  const BmoBackButton({super.key});
+  const BmoBackButton({super.key, this.fallbackLocation = '/'});
+
+  final String fallbackLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +21,7 @@ class BmoBackButton extends StatelessWidget {
         if (context.canPop()) {
           context.pop();
         } else {
-          context.go('/');
+          context.go(fallbackLocation);
         }
       },
     );

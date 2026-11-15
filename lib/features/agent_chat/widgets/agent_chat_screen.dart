@@ -23,7 +23,8 @@ String _projectTitle(WidgetRef ref, int projectId) {
   return 'Chat';
 }
 
-/// Tela do chat v2, dona da rota `/chat`.
+/// Tela do chat v2: `/chat` (principal) e `/coding/:projectId/chat`
+/// (conversas do projeto, dentro da área de Coding).
 ///
 /// [projectId] opcional: `null` = chat principal; `N` = conversas do projeto
 /// (a lista e a criação de sessão mandam `project_id` ao servidor).
@@ -63,7 +64,10 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
         backgroundColor: BmoColors.screenBg,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: const BmoBackButton(),
+        leading: BmoBackButton(
+          // Chat de projeto volta para o projeto, não para a dashboard.
+          fallbackLocation: projectId == null ? '/' : '/coding/$projectId',
+        ),
         title: Text(
           projectId == null ? 'Chat' : _projectTitle(ref, projectId),
           style: Theme.of(context).textTheme.headlineSmall,

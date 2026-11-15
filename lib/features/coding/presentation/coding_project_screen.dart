@@ -17,7 +17,7 @@ const _kConversationsWidth = 320.0;
 
 /// Tela de um projeto de coding — `/coding/:projectId`.
 ///
-/// Conversas = sessões do chat v2 do projeto (abrem `/chat?project=N`);
+/// Conversas = sessões do chat v2 do projeto (abrem `/coding/N/chat`);
 /// execuções = histórico de runs autônomos (abrem `/coding/runs/N`).
 class CodingProjectScreen extends ConsumerWidget {
   final int projectId;
@@ -37,7 +37,9 @@ class CodingProjectScreen extends ConsumerWidget {
 
     final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
 
-    void openChat() => GoRouter.of(context).push('/chat?project=$projectId');
+    // Conversa de projeto vive sob /coding/:projectId — a aba Chat é só o
+    // chat principal. `go` para a URL refletir e o reload retomar no chat.
+    void openChat() => GoRouter.of(context).go('/coding/$projectId/chat');
 
     final conversations = AgentSessionList(
       projectId: projectId,
@@ -235,7 +237,8 @@ class _RunCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => GoRouter.of(context).push('/coding/runs/${run.id}'),
+        // `go` (não `push`): a URL reflete o detalhe do run.
+        onTap: () => GoRouter.of(context).go('/coding/runs/${run.id}'),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(

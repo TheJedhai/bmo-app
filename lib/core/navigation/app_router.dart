@@ -132,120 +132,147 @@ class _AppShell extends ConsumerWidget {
 // Router
 // ---------------------------------------------------------------------------
 
-/// Top-level [GoRouter] instance wired to [MaterialApp.router].
+/// Redireciona o link antigo `/chat?project=N` para a área do projeto.
 ///
-/// Route tree:
+/// Conversa de projeto não mora mais no Chat: `/coding/N/chat`. Mantém links
+/// antigos (bookmark, notificação, card velho) funcionando.
+String? redirectLegacyProjectChat(BuildContext context, GoRouterState state) {
+  if (state.uri.path != '/chat') return null;
+  final projectId = int.tryParse(state.uri.queryParameters['project'] ?? '');
+  if (projectId == null) return null;
+  return '/coding/$projectId/chat';
+}
+
+/// Rotas internas do [ShellRoute] (o chassis BMO fica no [appRouter]).
+///
+/// Públicas para os testes de navegação montarem um router enxuto com a
+/// mesma tabela de rotas, sem o shell/identidade.
+///
 /// ```
-/// ShellRoute (BmoFrame)
-///   /           DashboardScreen
-///   /chat       AgentChatScreen (chat v2)
-///   /missoes    MissionsScreen
-///   /casa       HomeDevicesScreen
-///   /noticias   RssScreen
-///   /cofre      VaultScreen
+/// /                      DashboardScreen
+/// /chat                  AgentChatScreen — só chat principal
+/// /missoes               MissionsScreen
+/// /casa                  HomeDevicesScreen
+/// /noticias              RssScreen
+/// /cofre                 VaultScreen
+/// /calendario            CalendarScreen
+/// /calendarios           CalendarsScreen
+/// /financas              FinancesScreen
+/// /coding                CodingScreen
+/// /coding/runs/:runId    CodingRunScreen
+/// /coding/:projectId/chat  AgentChatScreen do projeto
+/// /coding/:projectId     CodingProjectScreen
 /// ```
+final List<RouteBase> appRoutes = [
+  GoRoute(
+    path: '/',
+    pageBuilder: (context, state) => NoTransitionPage<void>(
+      key: state.pageKey,
+      child: const DashboardScreen(),
+    ),
+  ),
+  GoRoute(
+    path: '/chat',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const AgentChatScreen(), state),
+  ),
+  GoRoute(
+    path: '/missoes',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const MissionsScreen(), state),
+  ),
+  GoRoute(
+    path: '/casa',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const HomeDevicesScreen(), state),
+  ),
+  GoRoute(
+    path: '/noticias',
+    pageBuilder: (context, state) {
+      // Deep link vindo do card: /noticias?article=<id> abre o modal
+      // do artigo. Sem id (link puro ou id inválido) = lista normal.
+      final articleId =
+          int.tryParse(state.uri.queryParameters['article'] ?? '');
+      return _buildFeaturePage(RssScreen(articleId: articleId), state);
+    },
+  ),
+  GoRoute(
+    path: '/cofre',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const VaultScreen(), state),
+  ),
+  GoRoute(
+    path: '/calendario',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const CalendarScreen(), state),
+  ),
+  GoRoute(
+    path: '/calendarios',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const CalendarsScreen(), state),
+  ),
+  GoRoute(
+    path: '/financas',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const FinancesScreen(), state),
+  ),
+  GoRoute(
+    path: '/coding',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const CodingScreen(), state),
+  ),
+  // Antes de `/coding/:projectId` para o segmento "runs" nunca ser lido
+  // como id de projeto.
+  GoRoute(
+    path: '/coding/runs/:runId',
+    pageBuilder: (context, state) {
+      final runId = int.tryParse(state.pathParameters['runId'] ?? '');
+      return _buildFeaturePage(
+        runId == null ? const CodingScreen() : CodingRunScreen(runId: runId),
+        state,
+      );
+    },
+  ),
+  // Conversa de projeto vive dentro de Coding, não no Chat.
+  GoRoute(
+    path: '/coding/:projectId/chat',
+    pageBuilder: (context, state) {
+      final projectId =
+          int.tryParse(state.pathParameters['projectId'] ?? '');
+      return _buildFeaturePage(
+        projectId == null
+            ? const CodingScreen()
+            : AgentChatScreen(projectId: projectId),
+        state,
+      );
+    },
+  ),
+  GoRoute(
+    path: '/coding/:projectId',
+    pageBuilder: (context, state) {
+      final projectId =
+          int.tryParse(state.pathParameters['projectId'] ?? '');
+      return _buildFeaturePage(
+        projectId == null
+            ? const CodingScreen()
+            : CodingProjectScreen(projectId: projectId),
+        state,
+      );
+    },
+  ),
+];
+
+/// Top-level [GoRouter] instance wired to [MaterialApp.router].
 final appRouter = GoRouter(
   navigatorKey: rootNavigatorKey,
   initialLocation: '/',
+  redirect: redirectLegacyProjectChat,
   routes: [
     ShellRoute(
       navigatorKey: shellNavigatorKey,
       builder: (context, state, child) =>
           _AppShell(currentLocation: state.uri.path, child: child),
-      routes: [
-        GoRoute(
-          path: '/',
-          pageBuilder: (context, state) => NoTransitionPage<void>(
-            key: state.pageKey,
-            child: const DashboardScreen(),
-          ),
-        ),
-        GoRoute(
-          path: '/chat',
-          pageBuilder: (context, state) {
-            // Conversas de um projeto: `/chat?project=<id>` (mesmo padrão de
-            // `/noticias?article=`). Sem id = chat principal.
-            final projectId =
-                int.tryParse(state.uri.queryParameters['project'] ?? '');
-            return _buildFeaturePage(
-              AgentChatScreen(projectId: projectId),
-              state,
-            );
-          },
-        ),
-        GoRoute(
-          path: '/missoes',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const MissionsScreen(), state),
-        ),
-        GoRoute(
-          path: '/casa',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const HomeDevicesScreen(), state),
-        ),
-        GoRoute(
-          path: '/noticias',
-          pageBuilder: (context, state) {
-            // Deep link vindo do card: /noticias?article=<id> abre o modal
-            // do artigo. Sem id (link puro ou id inválido) = lista normal.
-            final articleId =
-                int.tryParse(state.uri.queryParameters['article'] ?? '');
-            return _buildFeaturePage(RssScreen(articleId: articleId), state);
-          },
-        ),
-        GoRoute(
-          path: '/cofre',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const VaultScreen(), state),
-        ),
-        GoRoute(
-          path: '/calendario',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const CalendarScreen(), state),
-        ),
-        GoRoute(
-          path: '/calendarios',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const CalendarsScreen(), state),
-        ),
-        GoRoute(
-          path: '/financas',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const FinancesScreen(), state),
-        ),
-        GoRoute(
-          path: '/coding',
-          pageBuilder: (context, state) =>
-              _buildFeaturePage(const CodingScreen(), state),
-        ),
-        // Antes de `/coding/:projectId` para o segmento "runs" nunca ser lido
-        // como id de projeto.
-        GoRoute(
-          path: '/coding/runs/:runId',
-          pageBuilder: (context, state) {
-            final runId = int.tryParse(state.pathParameters['runId'] ?? '');
-            return _buildFeaturePage(
-              runId == null
-                  ? const CodingScreen()
-                  : CodingRunScreen(runId: runId),
-              state,
-            );
-          },
-        ),
-        GoRoute(
-          path: '/coding/:projectId',
-          pageBuilder: (context, state) {
-            final projectId =
-                int.tryParse(state.pathParameters['projectId'] ?? '');
-            return _buildFeaturePage(
-              projectId == null
-                  ? const CodingScreen()
-                  : CodingProjectScreen(projectId: projectId),
-              state,
-            );
-          },
-        ),
-      ],
+      routes: appRoutes,
     ),
   ],
 );
