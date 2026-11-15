@@ -1,7 +1,7 @@
 # bmo_app
 
 Frontend Flutter web do BMO. Roda no navegador (desktop e mobile),
-acessa dois backends via Tailscale: QwenPaw (8088) e bmo-server (8089).
+acessa o bmo-server via Tailscale.
 
 ## Stack
 
@@ -9,7 +9,7 @@ acessa dois backends via Tailscale: QwenPaw (8088) e bmo-server (8089).
 - Riverpod para state management (`flutter_riverpod` + code generation)
 - `http` para REST
 - `flutter_svg` para assets vetoriais
-- `url_launcher` para abrir o Console do QwenPaw em nova aba
+- `url_launcher` para abrir link externo (artigo do RSS) em nova aba
 
 ## Estrutura
 
@@ -21,8 +21,9 @@ lib/
 │   ├── theme/             # BmoTheme, BmoColors
 │   └── widgets/           # widgets compartilhados (BmoFrame, etc)
 └── features/
-    ├── chat/              # aba Chat (QwenPaw API)
-    ├── tasks/             # aba Tarefas (bmo-server)
+    ├── agent_chat/        # aba Chat (API /api/v2)
+    ├── rich_blocks/       # registry de blocos ricos (image/question/coding_run)
+    ├── coding/            # projetos, conversas de projeto e runs
     └── ...                # uma pasta por feature
 ```
 
