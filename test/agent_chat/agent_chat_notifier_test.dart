@@ -47,6 +47,7 @@ class FakeAgentChatClient extends AgentChatClient {
     String? message,
     Map<String, AgentApprovalInput>? approvals,
     String channel = 'app',
+    int? projectId,
   }) {
     sentMessages.add(message);
     sentApprovals.add(approvals);
@@ -70,13 +71,13 @@ class FakeAgentChatClient extends AgentChatClient {
   }
 
   @override
-  Future<List<AgentSession>> listSessions() async {
+  Future<List<AgentSession>> listSessions({int? projectId}) async {
     listCalls++;
     return const [];
   }
 
   @override
-  Future<AgentSession> createSession({String? title}) async =>
+  Future<AgentSession> createSession({String? title, int? projectId}) async =>
       AgentSession(id: 'created', title: title ?? 'Nova conversa');
 
   @override
@@ -185,13 +186,13 @@ void main() {
     addTearDown(container.dispose);
     container.read(currentUserIdProvider.notifier).state = 1;
     // Mantém o provider vivo para reagir às mudanças de dependência.
-    container.listen(agentConversationProvider, (_, _) {});
+    container.listen(agentConversationProvider(null), (_, _) {});
   });
 
-  AgentConversationState read() => container.read(agentConversationProvider);
+  AgentConversationState read() => container.read(agentConversationProvider(null));
 
   AgentConversation notifier() =>
-      container.read(agentConversationProvider.notifier);
+      container.read(agentConversationProvider(null).notifier);
 
   test('turno completo acumula texto e adota o session_id do turn.start',
       () async {
@@ -212,7 +213,7 @@ void main() {
     expect(state.messages.last.plainText, 'Olá, Jedhai!');
     expect(state.status, AgentConversationStatus.idle);
     expect(state.sessionId, 'sess-1');
-    expect(container.read(selectedAgentSessionProvider), 'sess-1');
+    expect(container.read(selectedAgentSessionProvider(null)), 'sess-1');
   });
 
   test('ferramenta abre em rodando e fecha no tool.end', () async {
@@ -245,9 +246,9 @@ void main() {
   /// sessão tem que produzir a mesma forma do estado ao vivo.
   Future<void> reloadHistory(List<AgentMessage> history) async {
     client.historyQueue = [history];
-    container.read(selectedAgentSessionProvider.notifier).select(null);
+    container.read(selectedAgentSessionProvider(null).notifier).select(null);
     await pumpEventQueue();
-    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
   }
 
@@ -566,7 +567,7 @@ void main() {
     notifier().send('oi');
     await pumpEventQueue();
     expect(read().messages, isNotEmpty);
-    expect(container.read(selectedAgentSessionProvider), 'sess-1');
+    expect(container.read(selectedAgentSessionProvider(null)), 'sess-1');
 
     // Jedhai (1) → Convidado (2).
     container.read(currentUserIdProvider.notifier).state = 2;
@@ -574,7 +575,7 @@ void main() {
 
     expect(read().messages, isEmpty);
     expect(read().sessionId, isNull);
-    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(container.read(selectedAgentSessionProvider(null)), isNull);
     // Nada de buscar a sessão do perfil anterior.
     expect(client.fetchedSessions, isEmpty);
 
@@ -582,7 +583,7 @@ void main() {
     container.read(currentUserIdProvider.notifier).state = 1;
     await pumpEventQueue();
 
-    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(container.read(selectedAgentSessionProvider(null)), isNull);
     expect(client.fetchedSessions, isEmpty);
   });
 
@@ -590,7 +591,7 @@ void main() {
     client.historyQueue = [
       [_user('antiga'), _assistant('resposta antiga')],
     ];
-    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
     expect(client.fetchedSessions, ['sess-1']);
     expect(read().messages, hasLength(2));
@@ -598,24 +599,24 @@ void main() {
     container.read(currentUserIdProvider.notifier).state = 2;
     await pumpEventQueue();
 
-    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(container.read(selectedAgentSessionProvider(null)), isNull);
     expect(read().messages, isEmpty);
     expect(client.fetchedSessions, ['sess-1']);
   });
 
   test('404 no GET do histórico limpa a seleção, recarrega e avisa',
       () async {
-    container.listen(agentSessionsProvider, (_, _) {});
+    container.listen(agentSessionsProvider(null), (_, _) {});
     await pumpEventQueue();
     final before = client.listCalls;
 
     client.fetchError =
         const AgentChatException(404, 'not_found', 'Session sess-1 not found');
-    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
 
     final state = read();
-    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(container.read(selectedAgentSessionProvider(null)), isNull);
     expect(state.error, 'essa conversa não existe mais');
     expect(state.messages, isEmpty);
     expect(state.loadingHistory, isFalse);
@@ -623,11 +624,11 @@ void main() {
   });
 
   test('404 no envio limpa a seleção e devolve o texto ao campo', () async {
-    container.listen(agentSessionsProvider, (_, _) {});
+    container.listen(agentSessionsProvider(null), (_, _) {});
     client.historyQueue = [
       [_user('antiga'), _assistant('resposta antiga')],
     ];
-    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
     final before = client.listCalls;
 
@@ -638,7 +639,7 @@ void main() {
     await pumpEventQueue();
 
     final state = read();
-    expect(container.read(selectedAgentSessionProvider), isNull);
+    expect(container.read(selectedAgentSessionProvider(null)), isNull);
     expect(state.sessionId, isNull);
     expect(state.error, 'essa conversa não existe mais');
     expect(state.restoreDraft, 'que horas são?');
@@ -659,7 +660,7 @@ void main() {
     // A migração não pode ter recarregado o histórico.
     expect(client.fetchedSessions, isEmpty);
 
-    container.read(selectedAgentSessionProvider.notifier).select(null);
+    container.read(selectedAgentSessionProvider(null).notifier).select(null);
     await pumpEventQueue();
     expect(read().messages, isEmpty);
     expect(read().sessionId, isNull);
@@ -667,7 +668,7 @@ void main() {
     client.historyQueue = [
       [_user('primeira'), _assistant('resposta')],
     ];
-    container.read(selectedAgentSessionProvider.notifier).select('sess-1');
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
 
     final state = read();

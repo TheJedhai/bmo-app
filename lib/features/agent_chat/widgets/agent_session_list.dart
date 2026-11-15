@@ -6,10 +6,14 @@ import '../data/agent_session.dart';
 import '../providers/agent_chat_providers.dart';
 
 /// Sidebar de sessões do chat v2: nova, renomear, apagar e buscar.
+///
+/// [projectId] escolhe a família de sessões: `null` = chat principal,
+/// `N` = conversas daquele projeto.
 class AgentSessionList extends ConsumerStatefulWidget {
   final VoidCallback? onItemTap;
+  final int? projectId;
 
-  const AgentSessionList({super.key, this.onItemTap});
+  const AgentSessionList({super.key, this.onItemTap, this.projectId});
 
   @override
   ConsumerState<AgentSessionList> createState() => _AgentSessionListState();
@@ -29,7 +33,7 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
   /// envio (que vai com `session_id: null`) e a lista é atualizada no
   /// `turn.start`.
   void _create() {
-    ref.read(selectedAgentSessionProvider.notifier).select(null);
+    ref.read(selectedAgentSessionProvider(widget.projectId).notifier).select(null);
     widget.onItemTap?.call();
   }
 
@@ -40,7 +44,9 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     );
     if (name == null || name.trim().isEmpty) return;
     try {
-      await ref.read(agentSessionsProvider.notifier).rename(session.id, name.trim());
+      await ref
+        .read(agentSessionsProvider(widget.projectId).notifier)
+        .rename(session.id, name.trim());
     } catch (e) {
       _snack('falha ao renomear: $e');
     }
@@ -74,9 +80,12 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(agentSessionsProvider.notifier).delete(session.id);
-      if (ref.read(selectedAgentSessionProvider) == session.id) {
-        ref.read(selectedAgentSessionProvider.notifier).select(null);
+      await ref
+        .read(agentSessionsProvider(widget.projectId).notifier)
+        .delete(session.id);
+      if (ref.read(selectedAgentSessionProvider(widget.projectId)) ==
+          session.id) {
+        ref.read(selectedAgentSessionProvider(widget.projectId).notifier).select(null);
       }
     } catch (e) {
       _snack('falha ao apagar: $e');
@@ -91,8 +100,9 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sessionsAsync = ref.watch(agentSessionsProvider);
-    final selected = ref.watch(selectedAgentSessionProvider);
+    final sessionsAsync =
+        ref.watch(agentSessionsProvider(widget.projectId));
+    final selected = ref.watch(selectedAgentSessionProvider(widget.projectId));
 
     return Container(
       color: BmoColors.screenBg,
@@ -161,7 +171,7 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
               ),
               error: (error, _) => _SessionsError(
                 error: error,
-                onRetry: () => ref.invalidate(agentSessionsProvider),
+                onRetry: () => ref.invalidate(agentSessionsProvider(widget.projectId)),
               ),
               data: (sessions) {
                 final filtered = _query.isEmpty
@@ -187,7 +197,8 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                       selected: session.id == selected,
                       onTap: () {
                         ref
-                            .read(selectedAgentSessionProvider.notifier)
+                            .read(selectedAgentSessionProvider(widget.projectId)
+                                .notifier)
                             .select(session.id);
                         widget.onItemTap?.call();
                       },

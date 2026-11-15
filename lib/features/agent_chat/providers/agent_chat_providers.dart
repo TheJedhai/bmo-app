@@ -32,6 +32,9 @@ Duration agentChatPollInterval(AgentChatPollIntervalRef ref) =>
 /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
 /// `session_id: null`).
 ///
+/// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+/// Cada projeto tem a sua própria seleção.
+///
 /// Depende da identidade de propósito: quando o usuário atual muda, o build
 /// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
 /// para outro.
@@ -41,7 +44,7 @@ Duration agentChatPollInterval(AgentChatPollIntervalRef ref) =>
 @Riverpod(keepAlive: true)
 class SelectedAgentSession extends _$SelectedAgentSession {
   @override
-  String? build() {
+  String? build(int? projectId) {
     ref.watch(currentUserIdProvider);
     return null;
   }
@@ -56,12 +59,12 @@ class SelectedAgentSession extends _$SelectedAgentSession {
 @riverpod
 class AgentSessions extends _$AgentSessions {
   @override
-  Future<List<AgentSession>> build() async {
+  Future<List<AgentSession>> build(int? projectId) async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
 
     final client = ref.watch(agentChatClientProvider);
-    final sessions = await client.listSessions();
+    final sessions = await client.listSessions(projectId: projectId);
     sessions.sort((a, b) {
       final left = a.updatedAt ?? a.createdAt ?? DateTime(0);
       final right = b.updatedAt ?? b.createdAt ?? DateTime(0);
@@ -161,21 +164,30 @@ class AgentConversation extends _$AgentConversation {
 
   late AgentChatClient _client;
   late Duration _pollInterval;
+  int? _projectId;
 
   @override
-  AgentConversationState build() {
+  AgentConversationState build(int? projectId) {
     final userId = ref.watch(currentUserIdProvider);
 
     // `ref.read` de dentro de um callback assíncrono lança se o provider foi
     // reconstruído no meio; guarda as dependências estáveis no build.
     _disposed = false;
+    _projectId = projectId;
     _client = ref.read(agentChatClientProvider);
     _pollInterval = ref.read(agentChatPollIntervalProvider);
     _stopStream();
+    // Sem isto um stream de turno sobrevive à saída da tela (uma subscription
+    // viva por projeto visitado).
+    ref.onDispose(() {
+      _disposed = true;
+      _stopStream();
+    });
 
     // Troca de seleção vem por `listen` (não por `watch`): rebuild no meio de
     // um turno mataria o stream em andamento.
-    ref.listen<String?>(selectedAgentSessionProvider, (previous, next) {
+    ref.listen<String?>(selectedAgentSessionProvider(projectId),
+        (previous, next) {
       _handleSelection(next);
     });
 
@@ -183,7 +195,7 @@ class AgentConversation extends _$AgentConversation {
     _snapshot = const AgentConversationState();
     if (userId == null) return _snapshot;
 
-    final initial = ref.read(selectedAgentSessionProvider);
+    final initial = ref.read(selectedAgentSessionProvider(projectId));
     if (initial != null) {
       _sessionId = initial;
       _snapshot = AgentConversationState(
@@ -226,7 +238,11 @@ class AgentConversation extends _$AgentConversation {
     // na hora, antes do POST.
     _startTurn(_denyPending([..._snapshot.messages, userMessage]));
     _listen(
-      (client) => client.sendTurn(sessionId: _sessionId, message: trimmed),
+      (client) => client.sendTurn(
+        sessionId: _sessionId,
+        message: trimmed,
+        projectId: _projectId,
+      ),
     );
   }
 
@@ -272,6 +288,7 @@ class AgentConversation extends _$AgentConversation {
     _listen(
       (client) => client.sendTurn(
         sessionId: _sessionId,
+        projectId: _projectId,
         approvals: {
           callId: AgentApprovalInput(approved: approved, note: note),
         },
@@ -430,8 +447,10 @@ class AgentConversation extends _$AgentConversation {
     if (sessionId == null || sessionId == _sessionId) return;
     _sessionId = sessionId;
     _snapshot = _snapshot.copyWith(sessionId: sessionId);
-    ref.read(selectedAgentSessionProvider.notifier).select(sessionId);
-    ref.invalidate(agentSessionsProvider);
+    ref
+        .read(selectedAgentSessionProvider(_projectId).notifier)
+        .select(sessionId);
+    ref.invalidate(agentSessionsProvider(_projectId));
   }
 
   /// A sessão selecionada não existe mais para o usuário atual (troca de
@@ -442,9 +461,9 @@ class AgentConversation extends _$AgentConversation {
     _turnStarted = false;
     _turnEnded = true;
     _pendingMessage = null;
-    ref.invalidate(agentSessionsProvider);
+    ref.invalidate(agentSessionsProvider(_projectId));
     // Zera pelo `listen` da seleção (messages/erro do estado anterior caem).
-    ref.read(selectedAgentSessionProvider.notifier).select(null);
+    ref.read(selectedAgentSessionProvider(_projectId).notifier).select(null);
     _emit(_snapshot.copyWith(
       messages: const [],
       status: AgentConversationStatus.idle,

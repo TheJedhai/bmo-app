@@ -14,7 +14,7 @@ import 'package:bmo_app/features/dashboard/widgets/chat_card.dart';
 
 class FakeAgentSessions extends AgentSessions {
   @override
-  Future<List<AgentSession>> build() async => const [
+  Future<List<AgentSession>> build(int? projectId) async => const [
         AgentSession(id: 'sess-2', title: 'Segunda conversa'),
         AgentSession(id: 'sess-1', title: 'Primeira conversa'),
       ];
@@ -23,7 +23,7 @@ class FakeAgentSessions extends AgentSessions {
 void main() {
   testWidgets('lista as sessões e seleciona a tocada', (tester) async {
     final container = ProviderContainer(
-      overrides: [agentSessionsProvider.overrideWith(FakeAgentSessions.new)],
+      overrides: [agentSessionsProvider(null).overrideWith(FakeAgentSessions.new)],
     );
     addTearDown(container.dispose);
 
@@ -43,6 +43,6 @@ void main() {
     await tester.tap(find.text('Primeira conversa'));
     await tester.pump();
 
-    expect(container.read(selectedAgentSessionProvider), 'sess-1');
+    expect(container.read(selectedAgentSessionProvider(null)), 'sess-1');
   });
 }

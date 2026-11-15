@@ -45,10 +45,40 @@ final agentChatPollIntervalProvider = AutoDisposeProvider<Duration>.internal(
 // ignore: unused_element
 typedef AgentChatPollIntervalRef = AutoDisposeProviderRef<Duration>;
 String _$selectedAgentSessionHash() =>
-    r'4360a558832c38ac9c21b8de3bced167eb3886b1';
+    r'c7a2528ad440a655974e68f137e3f9498e7906ce';
+
+/// Copied from Dart SDK
+class _SystemHash {
+  _SystemHash._();
+
+  static int combine(int hash, int value) {
+    // ignore: parameter_assignments
+    hash = 0x1fffffff & (hash + value);
+    // ignore: parameter_assignments
+    hash = 0x1fffffff & (hash + ((0x0007ffff & hash) << 10));
+    return hash ^ (hash >> 6);
+  }
+
+  static int finish(int hash) {
+    // ignore: parameter_assignments
+    hash = 0x1fffffff & (hash + ((0x03ffffff & hash) << 3));
+    // ignore: parameter_assignments
+    hash = hash ^ (hash >> 11);
+    return 0x1fffffff & (hash + ((0x00003fff & hash) << 15));
+  }
+}
+
+abstract class _$SelectedAgentSession extends BuildlessNotifier<String?> {
+  late final int? projectId;
+
+  String? build(int? projectId);
+}
 
 /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
 /// `session_id: null`).
+///
+/// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+/// Cada projeto tem a sua própria seleção.
 ///
 /// Depende da identidade de propósito: quando o usuário atual muda, o build
 /// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
@@ -59,55 +89,477 @@ String _$selectedAgentSessionHash() =>
 ///
 /// Copied from [SelectedAgentSession].
 @ProviderFor(SelectedAgentSession)
-final selectedAgentSessionProvider =
-    NotifierProvider<SelectedAgentSession, String?>.internal(
-      SelectedAgentSession.new,
-      name: r'selectedAgentSessionProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$selectedAgentSessionHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+const selectedAgentSessionProvider = SelectedAgentSessionFamily();
 
-typedef _$SelectedAgentSession = Notifier<String?>;
-String _$agentSessionsHash() => r'19ae2402efe4cb80bd92fe13db0d92b6ce88fef9';
+/// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
+/// `session_id: null`).
+///
+/// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+/// Cada projeto tem a sua própria seleção.
+///
+/// Depende da identidade de propósito: quando o usuário atual muda, o build
+/// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+/// para outro.
+///
+/// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+/// dashboard, deep link), então não pode morrer por falta de listener.
+///
+/// Copied from [SelectedAgentSession].
+class SelectedAgentSessionFamily extends Family<String?> {
+  /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
+  /// `session_id: null`).
+  ///
+  /// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+  /// Cada projeto tem a sua própria seleção.
+  ///
+  /// Depende da identidade de propósito: quando o usuário atual muda, o build
+  /// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+  /// para outro.
+  ///
+  /// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+  /// dashboard, deep link), então não pode morrer por falta de listener.
+  ///
+  /// Copied from [SelectedAgentSession].
+  const SelectedAgentSessionFamily();
+
+  /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
+  /// `session_id: null`).
+  ///
+  /// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+  /// Cada projeto tem a sua própria seleção.
+  ///
+  /// Depende da identidade de propósito: quando o usuário atual muda, o build
+  /// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+  /// para outro.
+  ///
+  /// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+  /// dashboard, deep link), então não pode morrer por falta de listener.
+  ///
+  /// Copied from [SelectedAgentSession].
+  SelectedAgentSessionProvider call(int? projectId) {
+    return SelectedAgentSessionProvider(projectId);
+  }
+
+  @override
+  SelectedAgentSessionProvider getProviderOverride(
+    covariant SelectedAgentSessionProvider provider,
+  ) {
+    return call(provider.projectId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'selectedAgentSessionProvider';
+}
+
+/// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
+/// `session_id: null`).
+///
+/// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+/// Cada projeto tem a sua própria seleção.
+///
+/// Depende da identidade de propósito: quando o usuário atual muda, o build
+/// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+/// para outro.
+///
+/// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+/// dashboard, deep link), então não pode morrer por falta de listener.
+///
+/// Copied from [SelectedAgentSession].
+class SelectedAgentSessionProvider
+    extends NotifierProviderImpl<SelectedAgentSession, String?> {
+  /// Sessão aberta na tela. `null` = conversa nova (primeiro envio vai com
+  /// `session_id: null`).
+  ///
+  /// A chave é o projeto: `null` = chat principal; `N` = conversas do projeto.
+  /// Cada projeto tem a sua própria seleção.
+  ///
+  /// Depende da identidade de propósito: quando o usuário atual muda, o build
+  /// roda de novo e a seleção volta a `null` — sessão de um perfil nunca vaza
+  /// para outro.
+  ///
+  /// `keepAlive`: a seleção é gravada antes de a tela do chat existir (card da
+  /// dashboard, deep link), então não pode morrer por falta de listener.
+  ///
+  /// Copied from [SelectedAgentSession].
+  SelectedAgentSessionProvider(int? projectId)
+    : this._internal(
+        () => SelectedAgentSession()..projectId = projectId,
+        from: selectedAgentSessionProvider,
+        name: r'selectedAgentSessionProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$selectedAgentSessionHash,
+        dependencies: SelectedAgentSessionFamily._dependencies,
+        allTransitiveDependencies:
+            SelectedAgentSessionFamily._allTransitiveDependencies,
+        projectId: projectId,
+      );
+
+  SelectedAgentSessionProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.projectId,
+  }) : super.internal();
+
+  final int? projectId;
+
+  @override
+  String? runNotifierBuild(covariant SelectedAgentSession notifier) {
+    return notifier.build(projectId);
+  }
+
+  @override
+  Override overrideWith(SelectedAgentSession Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: SelectedAgentSessionProvider._internal(
+        () => create()..projectId = projectId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        projectId: projectId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<SelectedAgentSession, String?> createElement() {
+    return _SelectedAgentSessionProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is SelectedAgentSessionProvider &&
+        other.projectId == projectId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, projectId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin SelectedAgentSessionRef on NotifierProviderRef<String?> {
+  /// The parameter `projectId` of this provider.
+  int? get projectId;
+}
+
+class _SelectedAgentSessionProviderElement
+    extends NotifierProviderElement<SelectedAgentSession, String?>
+    with SelectedAgentSessionRef {
+  _SelectedAgentSessionProviderElement(super.provider);
+
+  @override
+  int? get projectId => (origin as SelectedAgentSessionProvider).projectId;
+}
+
+String _$agentSessionsHash() => r'519cd4e54360e843583ec91948c3e55077a43798';
+
+abstract class _$AgentSessions
+    extends BuildlessAutoDisposeAsyncNotifier<List<AgentSession>> {
+  late final int? projectId;
+
+  FutureOr<List<AgentSession>> build(int? projectId);
+}
 
 /// See also [AgentSessions].
 @ProviderFor(AgentSessions)
-final agentSessionsProvider =
-    AutoDisposeAsyncNotifierProvider<
-      AgentSessions,
-      List<AgentSession>
-    >.internal(
-      AgentSessions.new,
-      name: r'agentSessionsProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$agentSessionsHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+const agentSessionsProvider = AgentSessionsFamily();
 
-typedef _$AgentSessions = AutoDisposeAsyncNotifier<List<AgentSession>>;
-String _$agentConversationHash() => r'2b383cb5ab8b43672b51d8b98fbbac0d8537c58a';
+/// See also [AgentSessions].
+class AgentSessionsFamily extends Family<AsyncValue<List<AgentSession>>> {
+  /// See also [AgentSessions].
+  const AgentSessionsFamily();
+
+  /// See also [AgentSessions].
+  AgentSessionsProvider call(int? projectId) {
+    return AgentSessionsProvider(projectId);
+  }
+
+  @override
+  AgentSessionsProvider getProviderOverride(
+    covariant AgentSessionsProvider provider,
+  ) {
+    return call(provider.projectId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'agentSessionsProvider';
+}
+
+/// See also [AgentSessions].
+class AgentSessionsProvider
+    extends
+        AutoDisposeAsyncNotifierProviderImpl<
+          AgentSessions,
+          List<AgentSession>
+        > {
+  /// See also [AgentSessions].
+  AgentSessionsProvider(int? projectId)
+    : this._internal(
+        () => AgentSessions()..projectId = projectId,
+        from: agentSessionsProvider,
+        name: r'agentSessionsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$agentSessionsHash,
+        dependencies: AgentSessionsFamily._dependencies,
+        allTransitiveDependencies:
+            AgentSessionsFamily._allTransitiveDependencies,
+        projectId: projectId,
+      );
+
+  AgentSessionsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.projectId,
+  }) : super.internal();
+
+  final int? projectId;
+
+  @override
+  FutureOr<List<AgentSession>> runNotifierBuild(
+    covariant AgentSessions notifier,
+  ) {
+    return notifier.build(projectId);
+  }
+
+  @override
+  Override overrideWith(AgentSessions Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: AgentSessionsProvider._internal(
+        () => create()..projectId = projectId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        projectId: projectId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeAsyncNotifierProviderElement<AgentSessions, List<AgentSession>>
+  createElement() {
+    return _AgentSessionsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AgentSessionsProvider && other.projectId == projectId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, projectId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin AgentSessionsRef
+    on AutoDisposeAsyncNotifierProviderRef<List<AgentSession>> {
+  /// The parameter `projectId` of this provider.
+  int? get projectId;
+}
+
+class _AgentSessionsProviderElement
+    extends
+        AutoDisposeAsyncNotifierProviderElement<
+          AgentSessions,
+          List<AgentSession>
+        >
+    with AgentSessionsRef {
+  _AgentSessionsProviderElement(super.provider);
+
+  @override
+  int? get projectId => (origin as AgentSessionsProvider).projectId;
+}
+
+String _$agentConversationHash() => r'4add320fb1d03a0957b7edb27c617ff457ae2e68';
+
+abstract class _$AgentConversation
+    extends BuildlessAutoDisposeNotifier<AgentConversationState> {
+  late final int? projectId;
+
+  AgentConversationState build(int? projectId);
+}
 
 /// See also [AgentConversation].
 @ProviderFor(AgentConversation)
-final agentConversationProvider =
-    AutoDisposeNotifierProvider<
-      AgentConversation,
-      AgentConversationState
-    >.internal(
-      AgentConversation.new,
-      name: r'agentConversationProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$agentConversationHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+const agentConversationProvider = AgentConversationFamily();
 
-typedef _$AgentConversation = AutoDisposeNotifier<AgentConversationState>;
+/// See also [AgentConversation].
+class AgentConversationFamily extends Family<AgentConversationState> {
+  /// See also [AgentConversation].
+  const AgentConversationFamily();
+
+  /// See also [AgentConversation].
+  AgentConversationProvider call(int? projectId) {
+    return AgentConversationProvider(projectId);
+  }
+
+  @override
+  AgentConversationProvider getProviderOverride(
+    covariant AgentConversationProvider provider,
+  ) {
+    return call(provider.projectId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'agentConversationProvider';
+}
+
+/// See also [AgentConversation].
+class AgentConversationProvider
+    extends
+        AutoDisposeNotifierProviderImpl<
+          AgentConversation,
+          AgentConversationState
+        > {
+  /// See also [AgentConversation].
+  AgentConversationProvider(int? projectId)
+    : this._internal(
+        () => AgentConversation()..projectId = projectId,
+        from: agentConversationProvider,
+        name: r'agentConversationProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$agentConversationHash,
+        dependencies: AgentConversationFamily._dependencies,
+        allTransitiveDependencies:
+            AgentConversationFamily._allTransitiveDependencies,
+        projectId: projectId,
+      );
+
+  AgentConversationProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.projectId,
+  }) : super.internal();
+
+  final int? projectId;
+
+  @override
+  AgentConversationState runNotifierBuild(
+    covariant AgentConversation notifier,
+  ) {
+    return notifier.build(projectId);
+  }
+
+  @override
+  Override overrideWith(AgentConversation Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: AgentConversationProvider._internal(
+        () => create()..projectId = projectId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        projectId: projectId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeNotifierProviderElement<AgentConversation, AgentConversationState>
+  createElement() {
+    return _AgentConversationProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AgentConversationProvider && other.projectId == projectId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, projectId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin AgentConversationRef
+    on AutoDisposeNotifierProviderRef<AgentConversationState> {
+  /// The parameter `projectId` of this provider.
+  int? get projectId;
+}
+
+class _AgentConversationProviderElement
+    extends
+        AutoDisposeNotifierProviderElement<
+          AgentConversation,
+          AgentConversationState
+        >
+    with AgentConversationRef {
+  _AgentConversationProviderElement(super.provider);
+
+  @override
+  int? get projectId => (origin as AgentConversationProvider).projectId;
+}
+
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

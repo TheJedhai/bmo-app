@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:bmo_app/features/coding/data/coding_providers.dart';
+
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../../../core/widgets/bmo_frame.dart';
@@ -11,11 +13,26 @@ import 'agent_session_list.dart';
 
 const _kSidebarWidth = 260.0;
 
+/// Nome do projeto no cabeçalho; "Chat" enquanto a lista de projetos não
+/// chegou (ou se ela falhar).
+String _projectTitle(WidgetRef ref, int projectId) {
+  final projects = ref.watch(projectsProvider).valueOrNull;
+  for (final project in projects ?? const []) {
+    if (project.id == projectId) return project.name;
+  }
+  return 'Chat';
+}
+
 /// Tela do chat v2, dona da rota `/chat`.
+///
+/// [projectId] opcional: `null` = chat principal; `N` = conversas do projeto
+/// (a lista e a criação de sessão mandam `project_id` ao servidor).
 ///
 /// Insets de top bar/nav bar vêm do `_AppShell` do router — nada de SafeArea.
 class AgentChatScreen extends ConsumerStatefulWidget {
-  const AgentChatScreen({super.key});
+  final int? projectId;
+
+  const AgentChatScreen({super.key, this.projectId});
 
   @override
   ConsumerState<AgentChatScreen> createState() => _AgentChatScreenState();
@@ -28,6 +45,7 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
   Widget build(BuildContext context) {
     final isMobile =
         MediaQuery.of(context).size.width < kMobileBreakpoint;
+    final projectId = widget.projectId;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -35,7 +53,10 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
       drawer: isMobile
           ? Drawer(
               backgroundColor: BmoColors.screenBg,
-              child: AgentSessionList(onItemTap: () => Navigator.of(context).pop()),
+              child: AgentSessionList(
+                projectId: projectId,
+                onItemTap: () => Navigator.of(context).pop(),
+              ),
             )
           : null,
       appBar: AppBar(
@@ -43,7 +64,10 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: const BmoBackButton(),
-        title: Text('Chat', style: Theme.of(context).textTheme.headlineSmall),
+        title: Text(
+          projectId == null ? 'Chat' : _projectTitle(ref, projectId),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
         actions: isMobile
             ? [
                 IconButton(
@@ -55,16 +79,19 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
             : null,
       ),
       body: isMobile
-          ? const _AgentChatBody()
-          : const Row(
+          ? _AgentChatBody(projectId: projectId)
+          : Row(
               children: [
-                SizedBox(width: _kSidebarWidth, child: AgentSessionList()),
+                SizedBox(
+                  width: _kSidebarWidth,
+                  child: AgentSessionList(projectId: projectId),
+                ),
                 VerticalDivider(
                   width: 1,
                   thickness: 1,
                   color: BmoColors.textMuted,
                 ),
-                Expanded(child: _AgentChatBody()),
+                Expanded(child: _AgentChatBody(projectId: projectId)),
               ],
             ),
     );
@@ -72,12 +99,14 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
 }
 
 class _AgentChatBody extends ConsumerWidget {
-  const _AgentChatBody();
+  final int? projectId;
+
+  const _AgentChatBody({required this.projectId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(agentConversationProvider);
-    final notifier = ref.read(agentConversationProvider.notifier);
+    final state = ref.watch(agentConversationProvider(projectId));
+    final notifier = ref.read(agentConversationProvider(projectId).notifier);
 
     final streaming =
         state.status == AgentConversationStatus.streaming;

@@ -21,7 +21,7 @@ class ChatCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sessionsAsync = ref.watch(agentSessionsProvider);
+    final sessionsAsync = ref.watch(agentSessionsProvider(null));
 
     return sessionsAsync.when(
       loading: () => const _LoadingState(),
@@ -30,7 +30,7 @@ class ChatCard extends ConsumerWidget {
         sessions: sessions,
         accent: accent,
         onNewChat: () {
-          ref.read(selectedAgentSessionProvider.notifier).select(null);
+          ref.read(selectedAgentSessionProvider(null).notifier).select(null);
           appRouter.push('/chat');
         },
       ),
@@ -115,7 +115,9 @@ class _SessionRow extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            ref.read(selectedAgentSessionProvider.notifier).select(session.id);
+            ref
+                .read(selectedAgentSessionProvider(null).notifier)
+                .select(session.id);
             appRouter.push('/chat');
           },
           borderRadius: BorderRadius.circular(8),

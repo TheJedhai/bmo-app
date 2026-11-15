@@ -29,6 +29,7 @@ class FakeAgentChatClient extends AgentChatClient {
     String? message,
     Map<String, AgentApprovalInput>? approvals,
     String channel = 'app',
+    int? projectId,
   }) async* {
     yield const TurnStarted(input: 'message', sessionId: 'sess-1');
     yield const ApprovalRequested(
@@ -41,7 +42,7 @@ class FakeAgentChatClient extends AgentChatClient {
   }
 
   @override
-  Future<List<AgentSession>> listSessions() async => const [];
+  Future<List<AgentSession>> listSessions({int? projectId}) async => const [];
   @override
   Future<List<AgentMessage>> fetchMessages(String sessionId) async => const [];
   @override
@@ -85,7 +86,7 @@ void main() {
     await tester.pump();
 
     await _until(() => container
-        .read(agentConversationProvider)
+        .read(agentConversationProvider(null))
         .messages
         .any((message) => message.parts.any((p) => p is AgentApprovalPart)));
     await tester.pump();

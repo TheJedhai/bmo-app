@@ -62,6 +62,7 @@ class AgentChatClient {
     String? message,
     Map<String, AgentApprovalInput>? approvals,
     String channel = 'app',
+    int? projectId,
   }) async* {
     final body = <String, dynamic>{
       'session_id': ?sessionId,
@@ -71,6 +72,9 @@ class AgentChatClient {
           for (final entry in approvals.entries) entry.key: entry.value.toJson(),
         },
       'channel': channel,
+      // O servidor só usa `project_id` quando a sessão ainda vai nascer
+      // (`session_id: null`).
+      if (sessionId == null) 'project_id': ?projectId,
     };
 
     final request = http.Request('POST', Uri.parse('$_baseUrl/api/v2/chat'))
@@ -102,8 +106,14 @@ class AgentChatClient {
   // ── sessões ───────────────────────────────────────────────────────────────
 
   /// `GET /api/v2/sessions` (mais recentes primeiro).
-  Future<List<AgentSession>> listSessions() async {
-    final response = await _client.get(Uri.parse('$_baseUrl/api/v2/sessions'));
+  ///
+  /// Sem [projectId] o servidor devolve só as sessões sem projeto (chat
+  /// principal); com ele, as do projeto.
+  Future<List<AgentSession>> listSessions({int? projectId}) async {
+    final uri = Uri.parse('$_baseUrl/api/v2/sessions').replace(
+      queryParameters: projectId == null ? null : {'project_id': '$projectId'},
+    );
+    final response = await _client.get(uri);
     _ensureOk(response, 200);
     final decoded = jsonDecode(response.body);
     if (decoded is! List) return const [];
@@ -114,11 +124,11 @@ class AgentChatClient {
   }
 
   /// `POST /api/v2/sessions`
-  Future<AgentSession> createSession({String? title}) async {
+  Future<AgentSession> createSession({String? title, int? projectId}) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v2/sessions'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'title': ?title}),
+      body: jsonEncode({'title': ?title, 'project_id': ?projectId}),
     );
     _ensureOk(response, 201);
     return AgentSession.fromJson(
