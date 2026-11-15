@@ -4,8 +4,8 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../rich_blocks/data/bmo_rich_block.dart';
 import '../../rich_blocks/data/bmo_rich_registry.dart';
-import '../../chat/widgets/reasoning_box.dart';
 import '../data/agent_message.dart';
+import 'reasoning_box.dart';
 
 /// Texto do assistente em markdown, com os mesmos estilos do chat v1.
 class AgentTextBlock extends StatelessWidget {

@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_frame.dart';
-import '../../chat/data/chat_message.dart';
-import '../../chat/widgets/chat_avatar.dart';
-import '../../chat/widgets/speech_bubble.dart';
 import '../data/agent_message.dart';
 import 'agent_part_widgets.dart';
+import 'chat_avatar.dart';
+import 'speech_bubble.dart';
 
 class AgentMessageBubble extends StatelessWidget {
   final AgentMessage message;
@@ -36,7 +35,7 @@ class AgentMessageBubble extends StatelessWidget {
         : BmoColors.textMuted.withValues(alpha: 0.35);
 
     final avatar = ChatAvatar(
-      role: isUser ? ChatRole.user : ChatRole.assistant,
+      role: isUser ? AgentRole.user : AgentRole.assistant,
       size: avatarSize,
     );
 

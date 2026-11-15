@@ -3,17 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/identity/identity_provider.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../data/chat_message.dart';
+import '../data/agent_message.dart';
 
 class ChatAvatar extends ConsumerWidget {
-  final ChatRole role;
+  final AgentRole role;
   final double size;
 
   const ChatAvatar({super.key, required this.role, this.size = 36});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (role == ChatRole.assistant) {
+    if (role == AgentRole.assistant) {
       return ClipOval(
         child: Image.asset(
           'assets/avatars/bmo.png',

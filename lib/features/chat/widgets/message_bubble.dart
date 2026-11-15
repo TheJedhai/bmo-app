@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
-import '../../../core/theme/bmo_theme.dart';
-import '../data/bmo_rich_parser.dart';
+import 'package:bmo_app/features/agent_chat/data/agent_message.dart';
+import 'package:bmo_app/features/agent_chat/widgets/chat_avatar.dart';
+import 'package:bmo_app/features/agent_chat/widgets/reasoning_box.dart';
+import 'package:bmo_app/features/agent_chat/widgets/speech_bubble.dart';
 import 'package:bmo_app/features/rich_blocks/data/bmo_rich_registry.dart';
-import '../data/chat_message.dart';
-import 'chat_avatar.dart';
-import 'delegation_chip.dart';
-import 'reasoning_box.dart';
-import 'speech_bubble.dart';
+
+import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_frame.dart';
+import '../data/bmo_rich_parser.dart';
+import '../data/chat_message.dart';
+import 'delegation_chip.dart';
 
 /// Remove prefixos injetados pelo backend ([contexto: ...], [projeto: ...],
 /// [regra: ...]) de mensagens de usuário para exibição. Os blocos podem ser
@@ -46,7 +48,10 @@ class MessageBubble extends StatelessWidget {
         ? Color.lerp(BmoColors.bodyGreen, Colors.white, 0.18)!
         : BmoColors.textMuted.withValues(alpha: 0.35);
 
-    final avatar = ChatAvatar(role: message.role, size: avatarSize);
+    final avatar = ChatAvatar(
+      role: isUser ? AgentRole.user : AgentRole.assistant,
+      size: avatarSize,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 7),
