@@ -7,6 +7,16 @@ import '../../features/rss/data/rss_providers.dart';
 import '../identity/identity_state.dart';
 import '../theme/bmo_theme.dart';
 
+/// Item da nav bar ativo também nas sub-rotas do item.
+///
+/// `/coding` fica ativo em `/coding/4`, `/coding/4/chat` e
+/// `/coding/runs/42`. A raiz `/` (dashboard) só casa exata — prefixo ali
+/// marcaria tudo.
+bool navRouteIsActive(String route, String location) {
+  if (route == '/') return location == '/';
+  return location == route || location.startsWith('$route/');
+}
+
 /// Barra de navegação inferior flutuante — pílula compacta só com ícones.
 ///
 /// Flutua acima da borda inferior da tela, centralizada horizontalmente.
@@ -66,8 +76,11 @@ class BmoNavBar extends ConsumerWidget {
               for (final spec in navSpecs) ...[
                 _NavBarItem(
                   spec: spec,
-                  isActive: currentLocation == spec.route,
+                  isActive: navRouteIsActive(spec.route!, currentLocation),
                   onTap: () {
+                    // Sempre vai para a raiz do item quando a rota atual é
+                    // outra (mesmo que o item esteja marcado como ativo por
+                    // estar numa sub-rota). Tocar de novo na raiz não faz nada.
                     if (currentLocation == spec.route) return;
                     GoRouter.of(context).go(spec.route!);
                   },
