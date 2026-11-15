@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'models/coding_project.dart';
+import 'models/coding_run.dart';
 import 'models/coding_session.dart';
 import 'models/folder_item.dart';
 
@@ -144,6 +145,64 @@ class CodingClient {
     final response = await _client.delete(
       Uri.parse(
           '$_baseUrl/api/v1/coding/projects/$projectId/sessions/$sessionId'),
+    );
+    _ensureOk(response);
+  }
+
+  // ============================================================
+  // Runs (autonomous)
+  // ============================================================
+
+  Future<List<CodingRun>> listRuns({
+    int? projectId,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final params = <String, String>{
+      'limit': '$limit',
+      'offset': '$offset',
+      if (projectId != null) 'project_id': '$projectId',
+    };
+    final uri = Uri.parse('$_baseUrl/api/v1/coding/runs')
+        .replace(queryParameters: params);
+    final response = await _client.get(uri);
+    _ensureOk(response);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final runs = decoded['runs'] as List<dynamic>? ?? const [];
+    return runs
+        .map((e) => CodingRun.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<CodingRun> getRun(int runId) async {
+    final response = await _client.get(
+      Uri.parse('$_baseUrl/api/v1/coding/runs/$runId'),
+    );
+    _ensureOk(response);
+    return CodingRun.fromJson(
+        jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<List<CodingRunEvent>> listRunEvents(
+    int runId, {
+    int afterSeq = 0,
+    int limit = 200,
+  }) async {
+    final uri = Uri.parse('$_baseUrl/api/v1/coding/runs/$runId/events').replace(
+      queryParameters: {'after_seq': '$afterSeq', 'limit': '$limit'},
+    );
+    final response = await _client.get(uri);
+    _ensureOk(response);
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => CodingRunEvent.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// `POST /coding/runs/{id}/kill` — idempotente do lado do servidor.
+  Future<void> killRun(int runId) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/coding/runs/$runId/kill'),
     );
     _ensureOk(response);
   }
