@@ -12,6 +12,7 @@ import 'core/platform/url_strategy.dart';
 import 'features/chat/data/bmo_rich_registry.dart';
 import 'features/chat/widgets/bmo_rich_image_card.dart';
 import 'features/chat/widgets/bmo_rich_question_card.dart';
+import 'features/coding/presentation/widgets/bmo_rich_coding_run_card.dart';
 
 void main() async {
   assert(
@@ -43,6 +44,10 @@ void main() async {
 
   BmoRichRegistry.register('image', (block) => BmoRichImageCard(block: block));
   BmoRichRegistry.register('question', (block) => BmoRichQuestionCard(block: block));
+  BmoRichRegistry.register(
+    'coding_run',
+    (block) => BmoRichCodingRunCard(block: block),
+  );
   runApp(
     ProviderScope(
       overrides: [
