@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 
+/// Duração mínima visual de um evento na grade: um evento com fim inválido
+/// (fim não é depois do início) aparece ancorado no horário de início com
+/// esta duração, em vez de esticar a grade.
+const Duration kMinEventVisualDuration = Duration(minutes: 30);
+
 /// Combina [day] com os horários "HH:mm" ([startTime], [endTime]) num
-/// [DateTimeRange]. Regra de produto: um evento dura no máximo 1 dia; se
-/// [endTime] for anterior a [startTime], o fim cai no dia seguinte.
+/// [DateTimeRange] para desenhar o evento.
 ///
-/// Ponto único da convenção de fim após meia-noite — mesmo espírito do par
-/// [appDayToIso]/[isoToAppDay]. Reaparece no widget iOS, exportação e
-/// lembretes. Ao montar um intervalo a partir de `start_time`/`end_time` do
-/// backend, use esta função em vez de aritmética solta nos builders.
+/// Regra de produto: o fim precisa ser depois do início. Dado legado com fim
+/// menor ou igual ao início não quebra a grade — o evento fica no horário de
+/// início com [kMinEventVisualDuration].
 DateTimeRange timeRangeOnDay(DateTime day, String startTime, String endTime) {
   final start = _timeOn(day, startTime);
-  var end = _timeOn(day, endTime);
-  if (end.isBefore(start)) {
-    end = end.add(const Duration(days: 1));
-  }
-  return DateTimeRange(start: start, end: end);
+  final end = _timeOn(day, endTime);
+  return DateTimeRange(
+    start: start,
+    end: end.isAfter(start) ? end : start.add(kMinEventVisualDuration),
+  );
 }
 
 DateTime _timeOn(DateTime day, String time) {

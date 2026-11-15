@@ -8,6 +8,7 @@ import '../../data/calendar_client.dart';
 import '../../data/calendar_providers.dart';
 import '../../data/models/calendar.dart';
 import '../../data/models/calendar_event.dart';
+import 'event_form_time.dart';
 import 'scope_dialog.dart';
 
 /// Presets de lembrete em minutos com rótulos pt-BR.
@@ -73,16 +74,17 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
 
   // Editable fields
   Calendar? _selectedCalendar;
-  bool _allDay = false;
   DateTime _startDate = DateTime.now();
-  TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
+  late EventTimeSelection _time;
   RecurrenceType _recurrence = RecurrenceType.none;
   int _recurrenceInterval = 1;
   final Set<int> _recurrenceDays = {}; // Semanais, dia do seletor (dom=1..sáb=7)
   bool _lastDayOfMonth = false; // -1 in recurrence_days for monthly
   DateTime? _recurrenceEnd;
   int? _reminderMinutes;
+
+  /// Erro devolvido pelo servidor (ex.: 400 `invalid_time_range`).
+  String? _serverError;
 
   bool get _isEditing => widget.event != null;
 
@@ -93,22 +95,13 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     if (e != null) {
       _titleCtrl.text = e.title ?? '';
       _notesCtrl.text = e.notes ?? '';
-      _allDay = e.allDay;
       _startDate = e.occurrenceDate;
-      if (e.startTime != null) {
-        final parts = e.startTime!.split(':');
-        _startTime = TimeOfDay(
-          hour: int.tryParse(parts[0]) ?? 9,
-          minute: int.tryParse(parts[1]) ?? 0,
-        );
-      }
-      if (e.endTime != null) {
-        final parts = e.endTime!.split(':');
-        _endTime = TimeOfDay(
-          hour: int.tryParse(parts[0]) ?? 10,
-          minute: int.tryParse(parts[1]) ?? 0,
-        );
-      }
+      final start = _parseTime(e.startTime) ??
+          const TimeOfDay(hour: 9, minute: 0);
+      final end = _parseTime(e.endTime);
+      _time = end != null
+          ? EventTimeSelection(start: start, end: end, allDay: e.allDay)
+          : EventTimeSelection.newEvent(start: start, allDay: e.allDay);
       _recurrence = e.recurrenceType;
       _recurrenceInterval = e.recurrenceInterval;
       _recurrenceDays
@@ -120,21 +113,22 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     } else {
       _startDate = widget.initialDate ?? DateTime.now();
       // Pre-fill times from drag gesture (week/day view create-by-drag).
-      if (widget.initialStartTime != null) {
-        final parts = widget.initialStartTime!.split(':');
-        _startTime = TimeOfDay(
-          hour: int.tryParse(parts[0]) ?? 9,
-          minute: int.tryParse(parts[1]) ?? 0,
-        );
-      }
-      if (widget.initialEndTime != null) {
-        final parts = widget.initialEndTime!.split(':');
-        _endTime = TimeOfDay(
-          hour: int.tryParse(parts[0]) ?? 10,
-          minute: int.tryParse(parts[1]) ?? 0,
-        );
-      }
+      _time = EventTimeSelection.newEvent(
+        start: _parseTime(widget.initialStartTime) ??
+            const TimeOfDay(hour: 9, minute: 0),
+        end: _parseTime(widget.initialEndTime),
+      );
     }
+  }
+
+  TimeOfDay? _parseTime(String? value) {
+    if (value == null) return null;
+    final parts = value.split(':');
+    if (parts.length < 2) return null;
+    return TimeOfDay(
+      hour: int.tryParse(parts[0]) ?? 9,
+      minute: int.tryParse(parts[1]) ?? 0,
+    );
   }
 
   @override
@@ -242,13 +236,13 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
                 color: BmoColors.textPrimary,
               ),
             ),
-            value: _allDay,
+            value: _time.allDay,
             contentPadding: EdgeInsets.zero,
-            onChanged: (v) => setState(() => _allDay = v),
+            onChanged: (v) => setState(() => _time.setAllDay(v)),
           ),
 
           // All-day reminder note
-          if (_allDay && _reminderMinutes != null)
+          if (_time.allDay && _reminderMinutes != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
@@ -273,22 +267,31 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           const SizedBox(height: 12),
 
           // Times (only when not all-day)
-          if (!_allDay) ...[
+          if (!_time.allDay) ...[
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: _buildTimeField(
                     label: 'Hora início',
-                    time: _startTime,
-                    onTimeChanged: (t) => setState(() => _startTime = t),
+                    time: _time.start,
+                    onTimeChanged: (t) => setState(() {
+                      _time.moveStart(t);
+                      _serverError = null;
+                    }),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildTimeField(
                     label: 'Hora fim',
-                    time: _endTime,
-                    onTimeChanged: (t) => setState(() => _endTime = t),
+                    time: _time.end,
+                    errorText:
+                        _time.isValid ? null : 'o fim precisa ser depois do início',
+                    onTimeChanged: (t) => setState(() {
+                      _time.changeEnd(t);
+                      _serverError = null;
+                    }),
                   ),
                 ),
               ],
@@ -421,12 +424,25 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           ),
           const SizedBox(height: 24),
 
-          // Save button
+          // Erro devolvido pelo servidor (ex.: 400 invalid_time_range).
+          if (_serverError != null) ...[
+            Text(
+              _serverError!,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 12,
+                color: BmoColors.accentRed,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+
+          // Save button — bloqueado enquanto o intervalo for inválido.
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              onPressed: _save,
+              onPressed: _time.isValid ? _save : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: BmoColors.accentGreen,
                 foregroundColor: BmoColors.screenBg,
@@ -647,6 +663,7 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
     required String label,
     required TimeOfDay time,
     required ValueChanged<TimeOfDay> onTimeChanged,
+    String? errorText,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,6 +702,9 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
             decoration: BoxDecoration(
               color: BmoColors.screenBgElevated,
               borderRadius: BorderRadius.circular(8),
+              border: errorText == null
+                  ? null
+                  : Border.all(color: BmoColors.accentRed, width: 1),
             ),
             child: Text(
               '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
@@ -696,6 +716,18 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
             ),
           ),
         ),
+        if (errorText != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              errorText,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                color: BmoColors.accentRed,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -790,6 +822,8 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
 
   void _save() async {
     if (_selectedCalendar == null) return;
+    // Intervalo inválido não vai para o servidor (botão já fica desabilitado).
+    if (!_time.isValid) return;
 
     final title = _titleCtrl.text.trim();
     final notes = _notesCtrl.text.trim();
@@ -820,12 +854,12 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           widget.event!.id,
           title: title,
           notes: notes,
-          allDay: _allDay,
+          allDay: _time.allDay,
           occurrenceDate: scopeOccurrenceDate ?? _formatDateISO(_startDate),
-          startTime: _allDay ? null : _formatTimeStr(_startTime),
-          endTime: _allDay ? null : _formatTimeStr(_endTime),
-          clearStartTime: _allDay,
-          clearEndTime: _allDay,
+          startTime: _time.allDay ? null : _formatTimeStr(_time.start),
+          endTime: _time.allDay ? null : _formatTimeStr(_time.end),
+          clearStartTime: _time.allDay,
+          clearEndTime: _time.allDay,
           startDate: _formatDateISO(_startDate),
           recurrenceType: _recurrence == RecurrenceType.none
               ? null
@@ -846,10 +880,10 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
           calendarId: _selectedCalendar!.id,
           title: title.isNotEmpty ? title : null,
           notes: notes.isNotEmpty ? notes : null,
-          allDay: _allDay,
+          allDay: _time.allDay,
           occurrenceDate: _formatDateISO(_startDate),
-          startTime: _allDay ? null : _formatTimeStr(_startTime),
-          endTime: _allDay ? null : _formatTimeStr(_endTime),
+          startTime: _time.allDay ? null : _formatTimeStr(_time.start),
+          endTime: _time.allDay ? null : _formatTimeStr(_time.end),
           startDate: _formatDateISO(_startDate),
           recurrenceType:
               _recurrence == RecurrenceType.none ? null : _recurrence.name,
@@ -863,11 +897,15 @@ class _EventFormSheetState extends ConsumerState<_EventFormSheet> {
         if (mounted) Navigator.of(context).pop(created);
       }
     } on CalendarApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro: ${e.message}')),
-        );
+      if (!mounted) return;
+      if (e.errorCode == 'invalid_time_range') {
+        // Erro de formulário: fica no próprio formulário, não em snackbar.
+        setState(() => _serverError = e.message);
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro: ${e.message}')),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
