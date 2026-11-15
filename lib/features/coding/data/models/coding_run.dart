@@ -24,6 +24,11 @@ class CodingRun {
   final int? durationMs;
   final DateTime? createdAt;
 
+  /// Motivo da falha, quando o servidor informa (pode vir null — inclusive em
+  /// servidor antigo, que não manda esses campos).
+  final String? errorCode;
+  final String? errorMessage;
+
   const CodingRun({
     required this.id,
     required this.projectId,
@@ -37,11 +42,17 @@ class CodingRun {
     this.costUsd,
     this.durationMs,
     this.createdAt,
+    this.errorCode,
+    this.errorMessage,
   });
 
   /// Run ainda pode ser parado.
   bool get isActive =>
       status == CodingRunStatus.queued || status == CodingRunStatus.running;
+
+  /// Status de falha, onde `error_message` faz sentido mostrar.
+  bool get isFailure =>
+      status == CodingRunStatus.failed || status == CodingRunStatus.timeout;
 
   factory CodingRun.fromJson(Map<String, dynamic> json) => CodingRun(
     id: _int(json['id']),
@@ -60,6 +71,8 @@ class CodingRun {
     costUsd: _double(json['cost_usd']),
     durationMs: json['duration_ms'] == null ? null : _int(json['duration_ms']),
     createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+    errorCode: json['error_code']?.toString(),
+    errorMessage: json['error_message']?.toString(),
   );
 
   static int _int(dynamic value) {

@@ -166,4 +166,37 @@ void main() {
     expect(find.textContaining('falha ao parar'), findsOneWidget);
     expect(client.killed, isEmpty);
   });
+
+  testWidgets('falha mostra o error_message do snapshot REST', (tester) async {
+    client.run = CodingRun(
+      id: 7,
+      projectId: 1,
+      prompt: 'conserta o build',
+      status: CodingRunStatus.failed,
+      errorCode: 'build_failed',
+      errorMessage: 'build quebrou na linha 10',
+    );
+    await pumpCard(tester);
+
+    expect(find.text('falha'), findsOneWidget);
+    expect(find.text('build quebrou na linha 10'), findsOneWidget);
+  });
+
+  testWidgets('falha mostra o error_message vindo do rich.update',
+      (tester) async {
+    await pumpCard(tester);
+
+    events.add(
+      _update({
+        'status': 'failed',
+        'error_code': 'build_failed',
+        'error_message': 'teste quebrou: esperava 2',
+      }),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('falha'), findsOneWidget);
+    expect(find.text('teste quebrou: esperava 2'), findsOneWidget);
+  });
 }

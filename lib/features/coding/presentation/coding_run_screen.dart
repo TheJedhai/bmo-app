@@ -217,6 +217,29 @@ class _Summary extends StatelessWidget {
               label: 'quando',
               value: formatRunTimestamp(run.startedAt ?? run.createdAt),
             ),
+            // Motivo da falha (ausente em servidor antigo ou run sem erro).
+            if (run.isFailure &&
+                run.errorMessage != null &&
+                run.errorMessage!.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'erro',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              SelectableText(
+                run.errorMessage!,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 12,
+                  color: BmoColors.accentRed,
+                ),
+              ),
+            ],
           ],
         ),
       ),

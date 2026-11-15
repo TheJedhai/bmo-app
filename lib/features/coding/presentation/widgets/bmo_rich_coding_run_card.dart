@@ -174,6 +174,11 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
     final commit = _live['commit_sha']?.toString() ?? run?.commitSha;
     final cost = _asDouble(_live['cost_usd']) ?? run?.costUsd;
     final lastEvent = _live['last_event']?.toString();
+    final failure = status == CodingRunStatus.failed ||
+        status == CodingRunStatus.timeout;
+    final errorMessage = failure
+        ? (_live['error_message']?.toString() ?? run?.errorMessage)
+        : null;
     final active =
         status == CodingRunStatus.queued || status == CodingRunStatus.running;
 
@@ -218,6 +223,17 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: BmoColors.textSecondary),
+              ),
+            ],
+            // Motivo da falha vindo do servidor (ausente em servidor antigo).
+            if (errorMessage != null && errorMessage.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              BmoClampedText(
+                errorMessage,
+                maxLines: 3,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: BmoColors.accentRed),
               ),
             ],
             const SizedBox(height: 8),
