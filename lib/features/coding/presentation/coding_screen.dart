@@ -112,8 +112,11 @@ class CodingScreen extends ConsumerWidget {
                   return _ProjectCard(
                     project: projects[index],
                     onTap: () {
+                      // `go` (não `push`): o go_router só reflete na URL a
+                      // navegação declarativa. Com `push` a tela abria com a
+                      // URL ainda em `/coding` e recarregar perdia o projeto.
                       GoRouter.of(context)
-                          .push('/coding/${projects[index].id}');
+                          .go('/coding/${projects[index].id}');
                     },
                     onEdit: () =>
                         _openProjectForm(context, ref, existing: projects[index]),
