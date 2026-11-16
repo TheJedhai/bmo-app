@@ -162,7 +162,7 @@ class _CodingRunProviderElement
   int get runId => (origin as CodingRunProvider).runId;
 }
 
-String _$codingRunsHash() => r'd6fb3b5af28540f2094dfc43a85c314d22169198';
+String _$codingRunsHash() => r'a8d230721f10a2d889e281595d45a2a0f65366c6';
 
 abstract class _$CodingRuns
     extends BuildlessAutoDisposeAsyncNotifier<List<CodingRun>> {
@@ -315,6 +315,180 @@ class _CodingRunsProviderElement
 
   @override
   int get projectId => (origin as CodingRunsProvider).projectId;
+}
+
+String _$codingRunLiveHash() => r'b6834f528445ecd919de7458ac2901e10837d333';
+
+abstract class _$CodingRunLive
+    extends BuildlessNotifier<Map<String, dynamic>?> {
+  late final int runId;
+
+  Map<String, dynamic>? build(int runId);
+}
+
+/// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+/// `rich.update` do card), guardado por run id.
+///
+/// O payload do bloco no histórico é o do momento da criação; um card
+/// remontado por scroll/reload precisa do estado mais recente sem esperar o
+/// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+///
+/// Copied from [CodingRunLive].
+@ProviderFor(CodingRunLive)
+const codingRunLiveProvider = CodingRunLiveFamily();
+
+/// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+/// `rich.update` do card), guardado por run id.
+///
+/// O payload do bloco no histórico é o do momento da criação; um card
+/// remontado por scroll/reload precisa do estado mais recente sem esperar o
+/// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+///
+/// Copied from [CodingRunLive].
+class CodingRunLiveFamily extends Family<Map<String, dynamic>?> {
+  /// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+  /// `rich.update` do card), guardado por run id.
+  ///
+  /// O payload do bloco no histórico é o do momento da criação; um card
+  /// remontado por scroll/reload precisa do estado mais recente sem esperar o
+  /// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+  ///
+  /// Copied from [CodingRunLive].
+  const CodingRunLiveFamily();
+
+  /// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+  /// `rich.update` do card), guardado por run id.
+  ///
+  /// O payload do bloco no histórico é o do momento da criação; um card
+  /// remontado por scroll/reload precisa do estado mais recente sem esperar o
+  /// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+  ///
+  /// Copied from [CodingRunLive].
+  CodingRunLiveProvider call(int runId) {
+    return CodingRunLiveProvider(runId);
+  }
+
+  @override
+  CodingRunLiveProvider getProviderOverride(
+    covariant CodingRunLiveProvider provider,
+  ) {
+    return call(provider.runId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'codingRunLiveProvider';
+}
+
+/// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+/// `rich.update` do card), guardado por run id.
+///
+/// O payload do bloco no histórico é o do momento da criação; um card
+/// remontado por scroll/reload precisa do estado mais recente sem esperar o
+/// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+///
+/// Copied from [CodingRunLive].
+class CodingRunLiveProvider
+    extends NotifierProviderImpl<CodingRunLive, Map<String, dynamic>?> {
+  /// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+  /// `rich.update` do card), guardado por run id.
+  ///
+  /// O payload do bloco no histórico é o do momento da criação; um card
+  /// remontado por scroll/reload precisa do estado mais recente sem esperar o
+  /// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+  ///
+  /// Copied from [CodingRunLive].
+  CodingRunLiveProvider(int runId)
+    : this._internal(
+        () => CodingRunLive()..runId = runId,
+        from: codingRunLiveProvider,
+        name: r'codingRunLiveProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$codingRunLiveHash,
+        dependencies: CodingRunLiveFamily._dependencies,
+        allTransitiveDependencies:
+            CodingRunLiveFamily._allTransitiveDependencies,
+        runId: runId,
+      );
+
+  CodingRunLiveProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.runId,
+  }) : super.internal();
+
+  final int runId;
+
+  @override
+  Map<String, dynamic>? runNotifierBuild(covariant CodingRunLive notifier) {
+    return notifier.build(runId);
+  }
+
+  @override
+  Override overrideWith(CodingRunLive Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: CodingRunLiveProvider._internal(
+        () => create()..runId = runId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        runId: runId,
+      ),
+    );
+  }
+
+  @override
+  NotifierProviderElement<CodingRunLive, Map<String, dynamic>?>
+  createElement() {
+    return _CodingRunLiveProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CodingRunLiveProvider && other.runId == runId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, runId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CodingRunLiveRef on NotifierProviderRef<Map<String, dynamic>?> {
+  /// The parameter `runId` of this provider.
+  int get runId;
+}
+
+class _CodingRunLiveProviderElement
+    extends NotifierProviderElement<CodingRunLive, Map<String, dynamic>?>
+    with CodingRunLiveRef {
+  _CodingRunLiveProviderElement(super.provider);
+
+  @override
+  int get runId => (origin as CodingRunLiveProvider).runId;
 }
 
 String _$codingRunEventsHash() => r'ebd9713a305dd4b1de709585f75aba01ba2701ed';

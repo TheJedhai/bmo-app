@@ -69,6 +69,45 @@ class CodingRuns extends _$CodingRuns {
   }
 }
 
+/// Último objeto vivo de um run (`coding.run.created/updated {patch}` e o
+/// `rich.update` do card), guardado por run id.
+///
+/// O payload do bloco no histórico é o do momento da criação; um card
+/// remontado por scroll/reload precisa do estado mais recente sem esperar o
+/// próximo evento. `keepAlive`: sobrevive ao unmount do card.
+@Riverpod(keepAlive: true)
+class CodingRunLive extends _$CodingRunLive {
+  @override
+  Map<String, dynamic>? build(int runId) {
+    ref.listen<AsyncValue<Map<String, dynamic>>>(eventsStreamProvider, (
+      previous,
+      next,
+    ) {
+      final event = next.valueOrNull;
+      if (event != null) _applyEvent(event);
+    });
+    return null;
+  }
+
+  void _applyEvent(Map<String, dynamic> event) {
+    final type = event['type'];
+    if (type == 'coding.run.created' || type == 'coding.run.updated') {
+      final patch = event['patch'];
+      if (patch is! Map) return;
+      final map = Map<String, dynamic>.from(patch);
+      final rawId = map['run_id'] ?? map['id'];
+      final id = rawId is num ? rawId.toInt() : int.tryParse('$rawId');
+      if (id != runId) return;
+      state = map;
+      return;
+    }
+    if (type == 'rich.update' && event['block_id'] == 'coding-run-$runId') {
+      final patch = event['patch'];
+      if (patch is Map) state = Map<String, dynamic>.from(patch);
+    }
+  }
+}
+
 /// Snapshot REST de um run — usado pelo detalhe e re-sincronizado pelo card
 /// rico no mount e no reconnect do SSE.
 @riverpod

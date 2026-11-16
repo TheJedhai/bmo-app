@@ -14,10 +14,11 @@ import 'coding_run_look.dart';
 
 /// Card do bloco rico `coding_run` (run autônomo de um projeto).
 ///
-/// O payload só traz `run_id`; o estado vem do REST (`codingRunProvider`) e é
-/// sobreposto pelos patches de `rich.update` do `/api/v1/stream`. O EventBus é
-/// efêmero, então o card re-sincroniza por REST no mount e no reconnect do SSE
-/// (`sseGenerationProvider`), como o card de imagem.
+/// O payload só traz `run_id`; o estado vem do [codingRunLiveProvider] (último
+/// objeto vivo do run, guardado por id e alimentado por `coding.run.*` e pelo
+/// `rich.update`). Sem estado vivo — run nunca visto neste app — cai no
+/// REST (`codingRunProvider`), re-sincronizado no mount e no reconnect do SSE
+/// (`sseGenerationProvider`).
 class BmoRichCodingRunCard extends ConsumerStatefulWidget {
   final BmoRichBlock block;
 
@@ -29,8 +30,8 @@ class BmoRichCodingRunCard extends ConsumerStatefulWidget {
 }
 
 class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
-  /// Campos recebidos por `rich.update` depois do último snapshot REST.
-  Map<String, dynamic> _live = {};
+  /// Status aplicado localmente pelo "Parar" (o SSE confirma depois).
+  String? _statusOverride;
 
   bool _killing = false;
   String? _error;
@@ -47,20 +48,16 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
   @override
   void initState() {
     super.initState();
-    // Re-sync por REST depois do primeiro frame (não bloqueia o paint).
+    // Sem estado vivo conhecido, busca o run por REST depois do primeiro
+    // frame (não bloqueia o paint).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _runId > 0) _resync();
+      if (!mounted || _runId <= 0) return;
+      if (ref.read(codingRunLiveProvider(_runId)) == null) _resync();
     });
   }
 
   void _resync() {
     ref.invalidate(codingRunProvider(_runId));
-  }
-
-  /// O patch do evento é o objeto completo do run — substitui, não acumula.
-  void _applyLive(Map<String, dynamic> patch) {
-    if (!mounted) return;
-    setState(() => _live = Map<String, dynamic>.from(patch));
   }
 
   Future<void> _kill() async {
@@ -70,9 +67,9 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
     });
     try {
       await ref.read(codingClientProvider).killRun(_runId);
-      // O `rich.update` de parado também chega; aplicar local evita o botão
-      // travado se o SSE cair no meio.
-      _applyLive({'status': 'killed'});
+      // O evento de parado também chega; aplicar local evita o botão travado
+      // se o SSE cair no meio.
+      if (mounted) setState(() => _statusOverride = 'killed');
     } catch (e) {
       if (mounted) setState(() => _error = 'falha ao parar: $e');
     } finally {
@@ -93,41 +90,22 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
       );
     }
 
-    final snapshot = ref.watch(codingRunProvider(runId));
+    final live = ref.watch(codingRunLiveProvider(runId));
+    // Com estado vivo não vale a pena buscar o REST (o GET só existe para o
+    // card remontado sem evento conhecido).
+    final snapshot = live == null
+        ? ref.watch(codingRunProvider(runId))
+        : const AsyncValue<CodingRun>.loading();
 
-    // Patches em tempo real (o listener do app já assina o stream; aqui só
-    // filtramos o bloco deste card).
-    ref.listen<AsyncValue<Map<String, dynamic>>>(eventsStreamProvider, (
-      previous,
-      next,
-    ) {
-      final event = next.valueOrNull;
-      if (event == null) return;
-      if (event['type'] != 'rich.update') return;
-      if (event['block_id'] != widget.block.blockId) return;
-      final patch = event['patch'];
-      if (patch is Map) _applyLive(Map<String, dynamic>.from(patch));
-    });
-
-    // Re-sync em cada reconexão do SSE.
+    // Re-sync em cada reconexão do SSE (só quando não há estado vivo).
     ref.listen<int>(sseGenerationProvider, (previous, next) {
-      if (previous != next) _resync();
-    });
-
-    // Snapshot novo do REST invalida os patches antigos.
-    ref.listen<AsyncValue<CodingRun>>(codingRunProvider(runId), (
-      previous,
-      next,
-    ) {
-      if (previous?.isLoading == true && next.hasValue) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _live = {});
-        });
+      if (previous != next && ref.read(codingRunLiveProvider(runId)) == null) {
+        _resync();
       }
     });
 
     final run = snapshot.valueOrNull;
-    if (run == null && _live.isEmpty) {
+    if (run == null && live == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Container(
@@ -163,30 +141,28 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
       );
     }
 
-    final rawStatus = _live['status'];
+    final rawStatus = _statusOverride ?? live?['status'];
     final status = codingRunStatusFrom(
       rawStatus is String ? rawStatus : run?.status.name,
     );
     final look = codingRunLook(status);
-    final durationMs = _asInt(_live['duration_ms']) ?? run?.durationMs;
+    final durationMs = _asInt(live?['duration_ms']) ?? run?.durationMs;
     final filesChanged =
-        _asInt(_live['files_changed_count']) ?? run?.filesChangedCount;
-    final branch = _live['branch']?.toString() ?? run?.branch;
-    final commit = _live['commit_sha']?.toString() ?? run?.commitSha;
+        _asInt(live?['files_changed_count']) ?? run?.filesChangedCount;
+    final branch = live?['branch']?.toString() ?? run?.branch;
+    final commit = live?['commit_sha']?.toString() ?? run?.commitSha;
     // Custo real do servidor; o `cost_usd` do Claude Code não aparece aqui.
-    // O patch do evento é o objeto completo do run (`run_id` dentro).
     final cost =
-        _asDouble(_live['cost_usd_computed']) ?? run?.costUsdComputed;
-    final mergedAt = _live['merged_at']?.toString() ?? run?.mergedAt?.toIso8601String();
+        _asDouble(live?['cost_usd_computed']) ?? run?.costUsdComputed;
+    final mergedAt =
+        live?['merged_at']?.toString() ?? run?.mergedAt?.toIso8601String();
     final isMerged = mergedAt != null && mergedAt.isNotEmpty;
-    final parentRunId =
-        _asInt(_live['parent_run_id']) ?? run?.parentRunId;
-    final lastEvent =
-        _live['last_event']?.toString() ?? run?.lastEvent;
+    final parentRunId = _asInt(live?['parent_run_id']) ?? run?.parentRunId;
+    final lastEvent = live?['last_event']?.toString() ?? run?.lastEvent;
     final failure = status == CodingRunStatus.failed ||
         status == CodingRunStatus.timeout;
     final errorMessage = failure
-        ? (_live['error_message']?.toString() ?? run?.errorMessage)
+        ? (live?['error_message']?.toString() ?? run?.errorMessage)
         : null;
     final active =
         status == CodingRunStatus.queued || status == CodingRunStatus.running;
