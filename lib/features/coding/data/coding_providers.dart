@@ -50,6 +50,18 @@ class ProjectsNotifier extends AsyncNotifier<List<CodingProject>> {
     return project;
   }
 
+  /// `coding.plan.updated {project_id, plan}` — plano ativo ao vivo.
+  /// `plan: null` limpa (plano cancelado/concluído no servidor).
+  void applyPlan(int projectId, Map<String, dynamic>? plan) {
+    final current = state.valueOrNull;
+    if (current == null) return;
+    final parsed = plan == null ? null : CodingPlan.fromJson(plan);
+    state = AsyncData([
+      for (final project in current)
+        if (project.id == projectId) project.copyWithPlan(parsed) else project,
+    ]);
+  }
+
   Future<void> deleteProject(int id) async {
     final client = ref.read(codingClientProvider);
     await client.deleteProject(id);

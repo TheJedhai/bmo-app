@@ -53,6 +53,11 @@ final _run = CodingRun(
   durationMs: 65000,
 );
 
+class FakeRuns extends CodingRuns {
+  @override
+  Future<List<CodingRun>> build(int projectId) async => [_run];
+}
+
 void main() {
   testWidgets('mostra conversas e runs do projeto e abre a conversa',
       (tester) async {
@@ -80,7 +85,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         agentSessionsProvider(1).overrideWith(FakeAgentSessions.new),
-        codingRunsProvider(1).overrideWith((ref) async => [_run]),
+        codingRunsProvider(1).overrideWith(FakeRuns.new),
         projectsProvider.overrideWith(FakeProjects.new),
         eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
       ],

@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../../core/events/events_provider.dart';
 import '../../../core/identity/identity_state.dart';
 import 'coding_providers.dart';
 import 'models/coding_run.dart';
@@ -10,13 +11,73 @@ part 'coding_run_providers.g.dart';
 const int kCodingRunEventsPageSize = 200;
 
 /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-/// devolve).
+/// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+/// `/api/v1/stream`.
 @riverpod
-Future<List<CodingRun>> codingRuns(CodingRunsRef ref, int projectId) async {
-  final userId = ref.watch(currentUserIdProvider);
-  if (userId == null) return const [];
-  final client = ref.watch(codingClientProvider);
-  return client.listRuns(projectId: projectId);
+class CodingRuns extends _$CodingRuns {
+  @override
+  Future<List<CodingRun>> build(int projectId) async {
+    final userId = ref.watch(currentUserIdProvider);
+
+    ref.listen<AsyncValue<Map<String, dynamic>>>(eventsStreamProvider, (
+      previous,
+      next,
+    ) {
+      final event = next.valueOrNull;
+      if (event != null) _applyLive(event);
+    });
+
+    if (userId == null) return const [];
+    final client = ref.watch(codingClientProvider);
+    return client.listRuns(projectId: projectId);
+  }
+
+  void _applyLive(Map<String, dynamic> event) {
+    final type = event['type'];
+    if (type != 'coding.run.created' && type != 'coding.run.updated') return;
+
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    if (type == 'coding.run.created') {
+      final json = event['run'] is Map
+          ? Map<String, dynamic>.from(event['run'] as Map)
+          : event;
+      final run = CodingRun.fromJson(json);
+      if (run.id <= 0 || run.projectId != projectId) return;
+      state = AsyncData([
+        run,
+        for (final existing in current)
+          if (existing.id != run.id) existing,
+      ]);
+      return;
+    }
+
+    final patch = event['patch'];
+    if (patch is! Map) return;
+    final patchMap = Map<String, dynamic>.from(patch);
+    final runId = patchMap['id'] ?? event['run_id'];
+    final id = runId is num ? runId.toInt() : int.tryParse('$runId');
+    if (id == null) return;
+
+    final patchProject = patchMap['project_id'];
+    if (patchProject != null &&
+        (patchProject is num ? patchProject.toInt() : 0) != projectId) {
+      return;
+    }
+
+    var changed = false;
+    final next = <CodingRun>[];
+    for (final run in current) {
+      if (run.id == id) {
+        changed = true;
+        next.add(run.mergePatch(patchMap));
+      } else {
+        next.add(run);
+      }
+    }
+    if (changed) state = AsyncData(next);
+  }
 }
 
 /// Snapshot REST de um run — usado pelo detalhe e re-sincronizado pelo card

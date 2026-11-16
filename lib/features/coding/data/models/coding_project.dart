@@ -159,3 +159,22 @@ class CodingProject {
     );
   }
 }
+
+extension CodingProjectPlan on CodingProject {
+  /// Troca o plano ativo; `null` limpa (`copyWith` não consegue soltar).
+  CodingProject copyWithPlan(CodingPlan? plan) => CodingProject(
+        id: id,
+        name: name,
+        primaryPath: primaryPath,
+        extraPaths: extraPaths,
+        permissionMode: permissionMode,
+        allowRules: allowRules,
+        denyRules: denyRules,
+        knowledge: knowledge,
+        baseBranch: baseBranch,
+        approvalMode: approvalMode,
+        plan: plan,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+}

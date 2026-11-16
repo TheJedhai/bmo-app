@@ -6,7 +6,7 @@ part of 'coding_run_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$codingRunsHash() => r'6077b93bbcb13e1711fb7ef7499d32ece9391477';
+String _$codingRunHash() => r'9e36b904ca99ae07a6e4e7ab87a53883a1e36882';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -28,143 +28,6 @@ class _SystemHash {
     return 0x1fffffff & (hash + ((0x00003fff & hash) << 15));
   }
 }
-
-/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-/// devolve).
-///
-/// Copied from [codingRuns].
-@ProviderFor(codingRuns)
-const codingRunsProvider = CodingRunsFamily();
-
-/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-/// devolve).
-///
-/// Copied from [codingRuns].
-class CodingRunsFamily extends Family<AsyncValue<List<CodingRun>>> {
-  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-  /// devolve).
-  ///
-  /// Copied from [codingRuns].
-  const CodingRunsFamily();
-
-  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-  /// devolve).
-  ///
-  /// Copied from [codingRuns].
-  CodingRunsProvider call(int projectId) {
-    return CodingRunsProvider(projectId);
-  }
-
-  @override
-  CodingRunsProvider getProviderOverride(
-    covariant CodingRunsProvider provider,
-  ) {
-    return call(provider.projectId);
-  }
-
-  static const Iterable<ProviderOrFamily>? _dependencies = null;
-
-  @override
-  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
-
-  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
-
-  @override
-  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
-      _allTransitiveDependencies;
-
-  @override
-  String? get name => r'codingRunsProvider';
-}
-
-/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-/// devolve).
-///
-/// Copied from [codingRuns].
-class CodingRunsProvider extends AutoDisposeFutureProvider<List<CodingRun>> {
-  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
-  /// devolve).
-  ///
-  /// Copied from [codingRuns].
-  CodingRunsProvider(int projectId)
-    : this._internal(
-        (ref) => codingRuns(ref as CodingRunsRef, projectId),
-        from: codingRunsProvider,
-        name: r'codingRunsProvider',
-        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-            ? null
-            : _$codingRunsHash,
-        dependencies: CodingRunsFamily._dependencies,
-        allTransitiveDependencies: CodingRunsFamily._allTransitiveDependencies,
-        projectId: projectId,
-      );
-
-  CodingRunsProvider._internal(
-    super._createNotifier, {
-    required super.name,
-    required super.dependencies,
-    required super.allTransitiveDependencies,
-    required super.debugGetCreateSourceHash,
-    required super.from,
-    required this.projectId,
-  }) : super.internal();
-
-  final int projectId;
-
-  @override
-  Override overrideWith(
-    FutureOr<List<CodingRun>> Function(CodingRunsRef provider) create,
-  ) {
-    return ProviderOverride(
-      origin: this,
-      override: CodingRunsProvider._internal(
-        (ref) => create(ref as CodingRunsRef),
-        from: from,
-        name: null,
-        dependencies: null,
-        allTransitiveDependencies: null,
-        debugGetCreateSourceHash: null,
-        projectId: projectId,
-      ),
-    );
-  }
-
-  @override
-  AutoDisposeFutureProviderElement<List<CodingRun>> createElement() {
-    return _CodingRunsProviderElement(this);
-  }
-
-  @override
-  bool operator ==(Object other) {
-    return other is CodingRunsProvider && other.projectId == projectId;
-  }
-
-  @override
-  int get hashCode {
-    var hash = _SystemHash.combine(0, runtimeType.hashCode);
-    hash = _SystemHash.combine(hash, projectId.hashCode);
-
-    return _SystemHash.finish(hash);
-  }
-}
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-mixin CodingRunsRef on AutoDisposeFutureProviderRef<List<CodingRun>> {
-  /// The parameter `projectId` of this provider.
-  int get projectId;
-}
-
-class _CodingRunsProviderElement
-    extends AutoDisposeFutureProviderElement<List<CodingRun>>
-    with CodingRunsRef {
-  _CodingRunsProviderElement(super.provider);
-
-  @override
-  int get projectId => (origin as CodingRunsProvider).projectId;
-}
-
-String _$codingRunHash() => r'9e36b904ca99ae07a6e4e7ab87a53883a1e36882';
 
 /// Snapshot REST de um run — usado pelo detalhe e re-sincronizado pelo card
 /// rico no mount e no reconnect do SSE.
@@ -297,6 +160,161 @@ class _CodingRunProviderElement
 
   @override
   int get runId => (origin as CodingRunProvider).runId;
+}
+
+String _$codingRunsHash() => r'd6fb3b5af28540f2094dfc43a85c314d22169198';
+
+abstract class _$CodingRuns
+    extends BuildlessAutoDisposeAsyncNotifier<List<CodingRun>> {
+  late final int projectId;
+
+  FutureOr<List<CodingRun>> build(int projectId);
+}
+
+/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+/// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+/// `/api/v1/stream`.
+///
+/// Copied from [CodingRuns].
+@ProviderFor(CodingRuns)
+const codingRunsProvider = CodingRunsFamily();
+
+/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+/// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+/// `/api/v1/stream`.
+///
+/// Copied from [CodingRuns].
+class CodingRunsFamily extends Family<AsyncValue<List<CodingRun>>> {
+  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+  /// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+  /// `/api/v1/stream`.
+  ///
+  /// Copied from [CodingRuns].
+  const CodingRunsFamily();
+
+  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+  /// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+  /// `/api/v1/stream`.
+  ///
+  /// Copied from [CodingRuns].
+  CodingRunsProvider call(int projectId) {
+    return CodingRunsProvider(projectId);
+  }
+
+  @override
+  CodingRunsProvider getProviderOverride(
+    covariant CodingRunsProvider provider,
+  ) {
+    return call(provider.projectId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'codingRunsProvider';
+}
+
+/// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+/// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+/// `/api/v1/stream`.
+///
+/// Copied from [CodingRuns].
+class CodingRunsProvider
+    extends AutoDisposeAsyncNotifierProviderImpl<CodingRuns, List<CodingRun>> {
+  /// Histórico de runs de um projeto (mais recentes primeiro, como o servidor
+  /// devolve), mantido ao vivo pelos eventos `coding.run.*` do
+  /// `/api/v1/stream`.
+  ///
+  /// Copied from [CodingRuns].
+  CodingRunsProvider(int projectId)
+    : this._internal(
+        () => CodingRuns()..projectId = projectId,
+        from: codingRunsProvider,
+        name: r'codingRunsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$codingRunsHash,
+        dependencies: CodingRunsFamily._dependencies,
+        allTransitiveDependencies: CodingRunsFamily._allTransitiveDependencies,
+        projectId: projectId,
+      );
+
+  CodingRunsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.projectId,
+  }) : super.internal();
+
+  final int projectId;
+
+  @override
+  FutureOr<List<CodingRun>> runNotifierBuild(covariant CodingRuns notifier) {
+    return notifier.build(projectId);
+  }
+
+  @override
+  Override overrideWith(CodingRuns Function() create) {
+    return ProviderOverride(
+      origin: this,
+      override: CodingRunsProvider._internal(
+        () => create()..projectId = projectId,
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        projectId: projectId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeAsyncNotifierProviderElement<CodingRuns, List<CodingRun>>
+  createElement() {
+    return _CodingRunsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CodingRunsProvider && other.projectId == projectId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, projectId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CodingRunsRef on AutoDisposeAsyncNotifierProviderRef<List<CodingRun>> {
+  /// The parameter `projectId` of this provider.
+  int get projectId;
+}
+
+class _CodingRunsProviderElement
+    extends AutoDisposeAsyncNotifierProviderElement<CodingRuns, List<CodingRun>>
+    with CodingRunsRef {
+  _CodingRunsProviderElement(super.provider);
+
+  @override
+  int get projectId => (origin as CodingRunsProvider).projectId;
 }
 
 String _$codingRunEventsHash() => r'ebd9713a305dd4b1de709585f75aba01ba2701ed';

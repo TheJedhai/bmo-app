@@ -75,7 +75,7 @@ ProviderContainer _container() {
       projectsProvider.overrideWith(FakeProjects.new),
       agentSessionsProvider(4).overrideWith(FakeSessions.new),
       agentConversationProvider(4).overrideWith(FakeConversation.new),
-      codingRunsProvider(4).overrideWith((ref) async => [_run]),
+      codingRunsProvider(4).overrideWith(FakeRuns.new),
       codingRunProvider(42).overrideWith((ref) async => _run),
       codingRunEventsProvider(42).overrideWith(FakeRunEvents.new),
     ],
@@ -96,6 +96,11 @@ Future<void> _pump(
     ),
   );
   await tester.pumpAndSettle();
+}
+
+class FakeRuns extends CodingRuns {
+  @override
+  Future<List<CodingRun>> build(int projectId) async => [_run];
 }
 
 void main() {
