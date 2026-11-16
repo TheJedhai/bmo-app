@@ -151,6 +151,14 @@ class CodingClient {
   }
 
   /// `POST /coding/runs/{id}/kill` — idempotente do lado do servidor.
+  /// `POST /coding/projects/{id}/plan/cancel` → 204. 409 = sem plano ativo.
+  Future<void> cancelPlan(int projectId) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/coding/projects/$projectId/plan/cancel'),
+    );
+    _ensureOk(response);
+  }
+
   Future<void> killRun(int runId) async {
     final response = await _client.post(
       Uri.parse('$_baseUrl/api/v1/coding/runs/$runId/kill'),

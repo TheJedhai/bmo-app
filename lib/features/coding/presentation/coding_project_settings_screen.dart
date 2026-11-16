@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../data/coding_client.dart';
 import '../data/coding_providers.dart';
 import '../data/models/coding_project.dart';
 import 'widgets/permission_modes.dart';
@@ -102,6 +103,49 @@ class _CodingProjectSettingsScreenState
         _denyController.clear();
       }
     });
+  }
+
+  Future<void> _cancelPlan() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: BmoColors.screenBgElevated,
+        title: const Text('Cancelar plano?'),
+        content: const Text(
+          'O plano ativo é encerrado e os runs que faltam não rodam.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: BmoColors.accentRed),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Cancelar plano'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(codingClientProvider).cancelPlan(widget.projectId);
+      if (!mounted) return;
+      // Limpa já; o `coding.plan.updated` do servidor confirma.
+      ref.read(projectsProvider.notifier).applyPlan(widget.projectId, null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('plano cancelado')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      // 409 = sem plano ativo: não é falha do usuário.
+      final message = e is CodingApiException && e.statusCode == 409
+          ? 'não há plano ativo'
+          : 'falha ao cancelar o plano: $e';
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   void _removeRule({required bool allow, required int index}) {
@@ -245,7 +289,7 @@ class _CodingProjectSettingsScreenState
         ),
         _Section(
           title: 'PLANO ATIVO',
-          child: _PlanCard(plan: project.plan),
+          child: _PlanCard(plan: project.plan, onCancel: _cancelPlan),
         ),
         if (_error != null) ...[
           const SizedBox(height: 8),
@@ -434,10 +478,22 @@ class _RuleList extends StatelessWidget {
   }
 }
 
+/// Rótulo e cor de um status de plano. Desconhecido aparece cru.
+({String label, Color color}) planStatusLook(String status) => switch (status) {
+      'active' => (label: 'ativo', color: BmoColors.accentGreen),
+      'exhausted' => (
+          label: 'orçamento esgotado',
+          color: BmoColors.accentRed,
+        ),
+      'cancelled' => (label: 'cancelado', color: BmoColors.textMuted),
+      _ => (label: status, color: BmoColors.textSecondary),
+    };
+
 class _PlanCard extends StatelessWidget {
   final CodingPlan? plan;
+  final VoidCallback? onCancel;
 
-  const _PlanCard({required this.plan});
+  const _PlanCard({required this.plan, this.onCancel});
 
   @override
   Widget build(BuildContext context) {
@@ -449,6 +505,9 @@ class _PlanCard extends StatelessWidget {
         style: theme.textTheme.bodySmall?.copyWith(color: BmoColors.textMuted),
       );
     }
+
+    final statusLook =
+        plan.status.isEmpty ? null : planStatusLook(plan.status);
 
     String budget(int used, int? max) =>
         max == null ? '$used (sem limite)' : '$used / $max';
@@ -484,12 +543,26 @@ class _PlanCard extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: BmoColors.textSecondary),
           ),
-          if (plan.status.isNotEmpty)
+          if (statusLook != null)
             Text(
-              'status: ${plan.status}',
+              'status: ${statusLook.label}',
               style: theme.textTheme.bodySmall
-                  ?.copyWith(color: BmoColors.textMuted),
+                  ?.copyWith(color: statusLook.color),
             ),
+          if (onCancel != null) ...[
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: onCancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: BmoColors.accentRed,
+                side: BorderSide(
+                  color: BmoColors.accentRed.withValues(alpha: 0.6),
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              child: const Text('Cancelar plano'),
+            ),
+          ],
         ],
       ),
     );

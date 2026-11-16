@@ -45,6 +45,16 @@ class FakeCodingClient extends CodingClient {
 
   final CodingProject project;
   Map<String, dynamic>? lastPatch;
+  int cancelCalls = 0;
+  int cancelStatus = 204;
+
+  @override
+  Future<void> cancelPlan(int projectId) async {
+    cancelCalls++;
+    if (cancelStatus != 204) {
+      throw CodingApiException(statusCode: cancelStatus, message: 'sem plano');
+    }
+  }
 
   @override
   Future<List<CodingProject>> listProjects() async => [project];
@@ -159,9 +169,9 @@ void main() {
     expect(find.text('migrar o grid'), findsOneWidget);
     expect(find.text('runs: 2 / 5'), findsOneWidget);
     expect(find.text('custo: US\$ 3.50 / US\$ 10.00'), findsOneWidget);
-    expect(find.text('status: active'), findsOneWidget);
-    // Sem rota de cancelar no servidor: nenhum botão de cancelar plano.
-    expect(find.text('Cancelar plano'), findsNothing);
+    expect(find.text('status: ativo'), findsOneWidget);
+    // Rota POST /coding/projects/{id}/plan/cancel: botão disponível.
+    expect(find.text('Cancelar plano'), findsOneWidget);
   });
 
   testWidgets('modo legado aparece marcado como legado', (tester) async {
@@ -178,5 +188,60 @@ void main() {
         if (route is GoRoute) route.path,
     ];
     expect(paths, contains('/coding/:projectId/settings'));
+  });
+
+  testWidgets('status do plano: exhausted e desconhecido', (tester) async {
+    await _pump(
+      tester,
+      FakeCodingClient(_project(
+        plan: const CodingPlan(text: 'x', maxRuns: 1, runsUsed: 1, status: 'exhausted'),
+      )),
+    );
+    expect(find.text('status: orçamento esgotado'), findsOneWidget);
+
+    await _pump(
+      tester,
+      FakeCodingClient(_project(
+        plan: const CodingPlan(text: 'y', status: 'paused'),
+      )),
+    );
+    expect(find.text('status: paused'), findsOneWidget);
+  });
+
+  testWidgets('cancelar plano pede confirmação, chama o POST e limpa o plano',
+      (tester) async {
+    final client = FakeCodingClient(_project(
+      plan: const CodingPlan(text: 'migrar o grid', maxRuns: 5, status: 'active'),
+    ));
+    await _pump(tester, client);
+
+    // O botão fica dentro do cartão do plano; abre confirmação.
+    await tester.tap(find.text('Cancelar plano'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cancelar plano?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Cancelar plano'));
+    await tester.pumpAndSettle();
+
+    expect(client.cancelCalls, 1);
+    expect(find.text('sem plano ativo'), findsOneWidget);
+    expect(find.text('migrar o grid'), findsNothing);
+  });
+
+  testWidgets('cancelar sem plano ativo mostra 409 amigável', (tester) async {
+    final client = FakeCodingClient(_project(
+      plan: const CodingPlan(text: 'migrar', status: 'active'),
+    ))
+      ..cancelStatus = 409;
+    await _pump(tester, client);
+
+    await tester.tap(find.text('Cancelar plano'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Cancelar plano'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('não há plano ativo'), findsOneWidget);
+    // O plano continua na tela (o servidor não confirmou o cancelamento).
+    expect(find.text('migrar'), findsOneWidget);
   });
 }

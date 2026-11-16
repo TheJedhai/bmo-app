@@ -31,20 +31,28 @@ Map<String, dynamic> _runJson(int id, {String status = 'running'}) => {
 class FakeCodingClient extends CodingClient {
   FakeCodingClient() : super(client: http.Client(), baseUrl: 'http://fake');
 
+  /// Plano que o servidor já tem (o GET devolve).
+  CodingPlan? serverPlan;
+  int listProjectsCalls = 0;
+
   @override
-  Future<List<CodingProject>> listProjects() async => [
-        CodingProject(
-          id: 1,
-          name: 'BMO-APP',
-          primaryPath: '/tmp/bmo-app',
-          extraPaths: const [],
-          permissionMode: 'manual',
-          allowRules: const [],
-          denyRules: const [],
-          createdAt: '',
-          updatedAt: '',
-        ),
-      ];
+  Future<List<CodingProject>> listProjects() async {
+    listProjectsCalls++;
+    return [
+      CodingProject(
+        id: 1,
+        name: 'BMO-APP',
+        primaryPath: '/tmp/bmo-app',
+        extraPaths: const [],
+        permissionMode: 'manual',
+        allowRules: const [],
+        denyRules: const [],
+        plan: serverPlan,
+        createdAt: '',
+        updatedAt: '',
+      ),
+    ];
+  }
 
   @override
   Future<List<CodingRun>> listRuns({
@@ -56,13 +64,15 @@ class FakeCodingClient extends CodingClient {
 }
 
 void main() {
+  late FakeCodingClient client;
   late StreamController<Map<String, dynamic>> events;
   late ProviderContainer container;
 
   setUp(() {
+    client = FakeCodingClient();
     events = StreamController<Map<String, dynamic>>.broadcast();
     container = ProviderContainer(overrides: [
-      codingClientProvider.overrideWithValue(FakeCodingClient()),
+      codingClientProvider.overrideWithValue(client),
       eventsStreamProvider.overrideWith((ref) => events.stream),
     ]);
     addTearDown(() async {
@@ -164,5 +174,23 @@ void main() {
     events.add({'type': 'coding.plan.updated', 'project_id': 1, 'plan': null});
     await settle();
     expect(container.read(projectsProvider).valueOrNull!.single.plan, isNull);
+  });
+
+  test('plano com projeto ainda não carregado busca o projeto', () async {
+    // Ninguém observou projectsProvider ainda: a lista não existe.
+    container.listen(eventsListenerProvider, (_, _) {});
+
+    // O plano já está no servidor (é ele que o GET devolve).
+    client.serverPlan = const CodingPlan(text: 'migrar o grid', status: 'active');
+    events.add({
+      'type': 'coding.plan.updated',
+      'project_id': 1,
+      'plan': {'text': 'migrar o grid', 'status': 'active'},
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final projects = await container.read(projectsProvider.future);
+    expect(projects.single.plan?.text, 'migrar o grid');
+    expect(client.listProjectsCalls, greaterThan(0));
   });
 }
