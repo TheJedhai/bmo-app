@@ -262,6 +262,7 @@ class AgentConversation extends _$AgentConversation {
         sessionId: initial,
         loadingHistory: true,
       );
+      unawaited(_markRead(initial));
       unawaited(_loadHistory(initial));
     }
     return _snapshot;
@@ -280,6 +281,7 @@ class AgentConversation extends _$AgentConversation {
       return;
     }
     _emit(AgentConversationState(sessionId: next, loadingHistory: true));
+    unawaited(_markRead(next));
     unawaited(_loadHistory(next));
   }
 
@@ -303,6 +305,7 @@ class AgentConversation extends _$AgentConversation {
     if (isOwn(completedTurn) || completedTurn == _handledCompletedTurn) return;
     _handledCompletedTurn = completedTurn;
     _setRemoteTurn(false);
+    unawaited(_markRead(sessionId));
     unawaited(_loadHistory(sessionId));
   }
 
@@ -359,6 +362,17 @@ class AgentConversation extends _$AgentConversation {
       knownAssistantMessages: _assistantCount(_snapshot.messages),
       knownText: _lastAssistantText(_snapshot.messages),
     );
+  }
+
+  /// Marca a conversa aberta como lida e revalida a lista (o ponto some).
+  Future<void> _markRead(String sessionId) async {
+    try {
+      await _client.markSessionRead(sessionId);
+      if (_disposed || _sessionId != sessionId) return;
+      ref.invalidate(agentSessionsProvider(_projectId));
+    } catch (_) {
+      // Best-effort: o próximo turno/abertura tenta de novo.
+    }
   }
 
   // ── turno ────────────────────────────────────────────────────────────────

@@ -92,6 +92,17 @@ class AgentChatClient {
     }
   }
 
+  /// `POST /api/v2/sessions/{id}/read` — marca a conversa como lida (204,
+  /// idempotente). O servidor publica `session.read` para os outros clientes.
+  Future<void> markSessionRead(String sessionId) async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v2/sessions/$sessionId/read'),
+    );
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw _exception(response.statusCode, response.body);
+    }
+  }
+
   /// `POST /api/v2/sessions/{id}/cancel` (204, idempotente).
   Future<void> cancel(String sessionId) async {
     final response = await _client.post(

@@ -24,6 +24,7 @@ import 'package:bmo_app/features/agent_chat/data/agent_event.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_message.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_session.dart';
 import 'package:bmo_app/features/agent_chat/providers/agent_chat_providers.dart';
+import 'package:bmo_app/features/agent_chat/widgets/agent_chat_screen.dart';
 import 'package:bmo_app/features/agent_chat/widgets/agent_session_list.dart';
 
 AgentSession _session(String id, String title, {bool unread = false}) =>
@@ -54,6 +55,15 @@ class FakeUnreadClient extends AgentChatClient {
     String channel = 'app',
     int? projectId,
   }) async* {}
+
+  @override
+  Future<void> markSessionRead(String sessionId) async {
+    readCalls.add(sessionId);
+    sessions = [
+      for (final session in sessions)
+        session.id == sessionId ? session.copyWith(unread: false) : session,
+    ];
+  }
 
   @override
   Future<void> cancel(String sessionId) async {}
@@ -167,5 +177,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.circle), findsNothing);
+  });
+
+  testWidgets('abrir a conversa marca como lida e o ponto some',
+      (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: BmoTheme.themeData,
+          home: const AgentChatScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.circle), findsOneWidget);
+
+    await tester.tap(find.text('conversa A'));
+    await tester.pumpAndSettle();
+
+    expect(client.readCalls, ['A']);
+    expect(find.byIcon(Icons.circle), findsNothing);
+  });
+
+  testWidgets('turno concluído na conversa aberta também marca como lida',
+      (tester) async {
+    container.read(selectedAgentSessionProvider(null).notifier).select('B');
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: BmoTheme.themeData,
+          home: const AgentChatScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    client.readCalls.clear();
+
+    events.add({
+      'type': 'session.turn_completed',
+      'session_id': 'B',
+      'turn_id': 'tB',
+      'unread': false,
+    });
+    await tester.pumpAndSettle();
+
+    expect(client.readCalls, ['B']);
   });
 }
