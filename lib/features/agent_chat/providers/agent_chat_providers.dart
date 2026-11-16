@@ -217,6 +217,11 @@ class AgentConversation extends _$AgentConversation {
   /// o turno com 409).
   String? _optimisticUserId;
 
+  /// Há POST nosso em voo nesta sessão. Enquanto isso, `session.turn_*` dela
+  /// é ignorado: o evento pode chegar antes do `turn.start` do próprio POST e
+  /// seria lido como turno remoto (refetch + read no mesmo segundo).
+  bool _postInFlight = false;
+
   late AgentChatClient _client;
   late Duration _pollInterval;
   int? _projectId;
@@ -292,6 +297,9 @@ class AgentConversation extends _$AgentConversation {
   void _onLiveTurns(AgentLiveTurnsState live) {
     final sessionId = _sessionId;
     if (sessionId == null) return;
+    // O turno deste app já está em voo: o stream do POST é a fonte da verdade
+    // (o SSE pode chegar antes e não diz de quem é o turno).
+    if (_postInFlight) return;
 
     bool isOwn(String? turnId) => turnId != null && turnId == _turnId;
 
@@ -408,6 +416,7 @@ class AgentConversation extends _$AgentConversation {
     _assistantId = assistant.id;
     _turnStarted = false;
     _turnEnded = false;
+    _postInFlight = true;
     _emit(_snapshot.copyWith(
       messages: [...messages, assistant],
       status: AgentConversationStatus.streaming,
@@ -492,6 +501,7 @@ class AgentConversation extends _$AgentConversation {
   void _onStreamError(Object error, StackTrace stackTrace) {
     final rollback = _decidingCallId;
     _decidingCallId = null;
+    _postInFlight = false;
 
     // 409 no envio de mensagem: o turno de outro cliente manda. Aprovação
     // em 409 continua caindo no rollback normal abaixo.
@@ -502,14 +512,34 @@ class AgentConversation extends _$AgentConversation {
       return;
     }
 
-    _optimisticUserId = null;
-
-    if (error is AgentChatException && error.errorCode == 'not_found') {
-      final draft = _pendingMessage;
+    // 409 `approval_not_pending`: a decisão já foi aplicada (ou o cartão já
+    // não existe). Refaz o fetch e não mostra erro.
+    if (error is AgentChatException &&
+        error.errorCode == 'approval_not_pending') {
+      _decidingCallId = null;
+      _optimisticUserId = null;
       _pendingMessage = null;
-      _handleMissingSession(draft: draft);
+      _turnStarted = false;
+      _turnEnded = true;
+      final messages = _dropEmptyAssistant(_snapshot.messages);
+      _emit(_snapshot.copyWith(
+        messages: messages,
+        status: AgentConversationStatus.idle,
+        error: null,
+      ));
+      final sessionId = _sessionId;
+      if (sessionId != null) {
+        unawaited(_loadHistory(sessionId, keepLocalDecisions: true));
+      }
       return;
     }
+
+    if (error is AgentChatException && error.errorCode == 'not_found') {
+      unawaited(_handleNotFound(error, rollback: rollback));
+      return;
+    }
+
+    _optimisticUserId = null;
     _pendingMessage = null;
 
     final messages = _dropEmptyAssistant(
@@ -541,10 +571,66 @@ class AgentConversation extends _$AgentConversation {
     ));
   }
 
+  /// 404 numa ação de turno/aprovação não quer dizer sessão apagada: só
+  /// descarta a conversa se o `GET /messages` da própria sessão também 404.
+  Future<void> _handleNotFound(
+    AgentChatException error, {
+    String? rollback,
+  }) async {
+    final sessionId = _sessionId;
+    final draft = _pendingMessage;
+    _pendingMessage = null;
+    _turnStarted = false;
+    _turnEnded = true;
+
+    if (sessionId == null) {
+      _emit(_snapshot.copyWith(
+        status: AgentConversationStatus.idle,
+        error: 'falha ao enviar: ${error.message}',
+      ));
+      return;
+    }
+
+    var sessionAlive = true;
+    try {
+      await _client.fetchMessages(sessionId);
+    } on AgentChatException catch (e) {
+      if (e.errorCode == 'not_found') sessionAlive = false;
+    } catch (_) {
+      // Sem rede: não dá para afirmar que a sessão sumiu.
+    }
+    if (_disposed || _sessionId != sessionId) return;
+
+    if (!sessionAlive) {
+      _handleMissingSession(draft: draft);
+      return;
+    }
+
+    final optimisticId = _optimisticUserId;
+    _optimisticUserId = null;
+    final messages = _dropEmptyAssistant(
+      rollback != null
+          ? _withDecision(
+              _snapshot.messages, rollback, AgentApprovalDecision.pending)
+          : [
+              for (final message in _snapshot.messages)
+                if (message.id != optimisticId) message,
+            ],
+    );
+
+    _emit(_snapshot.copyWith(
+      messages: messages,
+      status: AgentConversationStatus.idle,
+      error: 'falha ao enviar: ${error.message}',
+      restoreDraft: draft,
+    ));
+  }
+
   /// 409 `turn_in_progress`: o servidor já está num turno desta conversa.
   /// Nada de reenvio automático — o texto volta para o campo, o indicador
   /// "BMO respondendo" liga e o `turn_completed` libera o usuário.
   void _handleTurnInProgress() {
+    _postInFlight = false;
     final draft = _pendingMessage;
     final optimisticId = _optimisticUserId;
     _pendingMessage = null;
@@ -567,6 +653,7 @@ class AgentConversation extends _$AgentConversation {
   }
 
   void _onStreamDone() {
+    _postInFlight = false;
     if (_turnEnded) return;
     // Stream fechou sem turn.end: o turno pode continuar no servidor.
     _turnEnded = true;
@@ -579,6 +666,7 @@ class AgentConversation extends _$AgentConversation {
 
   void _finishTurn(String status) {
     _optimisticUserId = null;
+    _postInFlight = false;
     // `_turnId` fica: o `session.turn_completed` do próprio turno ainda pode
     // chegar pelo SSE e precisa ser reconhecido como nosso (e ignorado).
     _pendingMessage = null;
@@ -606,6 +694,7 @@ class AgentConversation extends _$AgentConversation {
   /// [draft] devolve ao campo o texto de um envio que falhou.
   void _handleMissingSession({String? draft}) {
     _stopStream();
+    _postInFlight = false;
     _turnStarted = false;
     _turnEnded = true;
     _pendingMessage = null;
@@ -672,10 +761,15 @@ class AgentConversation extends _$AgentConversation {
 
   // ── histórico ────────────────────────────────────────────────────────────
 
-  Future<void> _loadHistory(String sessionId) async {
+  Future<void> _loadHistory(
+    String sessionId, {
+    bool keepLocalDecisions = false,
+  }) async {
     try {
-      final messages = await _client.fetchMessages(sessionId);
+      final fetched = await _client.fetchMessages(sessionId);
       if (_disposed || _sessionId != sessionId) return;
+      final messages =
+          keepLocalDecisions ? _preserveLocalDecisions(fetched) : fetched;
       _emit(_snapshot.copyWith(messages: messages, loadingHistory: false));
     } on AgentChatException catch (e) {
       if (_disposed || _sessionId != sessionId) return;
@@ -734,6 +828,37 @@ class AgentConversation extends _$AgentConversation {
           message,
     ];
     _emit(_snapshot.copyWith(messages: messages));
+  }
+
+  /// O histórico pode voltar com a aprovação ainda `pending` (o servidor
+  /// persiste a decisão no fim do turno). A decisão já tomada neste app não
+  /// pode ser desfeita por esse refetch.
+  List<AgentMessage> _preserveLocalDecisions(List<AgentMessage> fetched) {
+    final decisions = <String, AgentApprovalDecision>{};
+    for (final message in _snapshot.messages) {
+      for (final part in message.parts) {
+        if (part is AgentApprovalPart &&
+            part.decision != AgentApprovalDecision.pending) {
+          decisions[part.callId] = part.decision;
+        }
+      }
+    }
+    if (decisions.isEmpty) return fetched;
+
+    return [
+      for (final message in fetched)
+        message.copyWith(parts: [
+          for (final part in message.parts)
+            if (part is AgentApprovalPart &&
+                part.decision == AgentApprovalDecision.pending &&
+                decisions.containsKey(part.callId))
+              part.copyWith(decision: decisions[part.callId])
+            else if (part is AgentToolPart && decisions.containsKey(part.callId))
+              part.copyWith(status: _toolStatusFor(decisions[part.callId]!))
+            else
+              part,
+        ]),
+    ];
   }
 
   /// Decisão otimista (e o rollback): o card e o chip do mesmo `call_id`

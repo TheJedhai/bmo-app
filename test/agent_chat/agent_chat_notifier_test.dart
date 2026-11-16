@@ -626,29 +626,50 @@ void main() {
     expect(client.listCalls, before + 1);
   });
 
-  test('404 no envio limpa a seleção e devolve o texto ao campo', () async {
+  test('404 no envio + GET da sessão vivo: mantém a conversa e devolve o texto',
+      () async {
     container.listen(agentSessionsProvider(null), (_, _) {});
     client.historyQueue = [
       [_user('antiga'), _assistant('resposta antiga')],
     ];
     container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
     await pumpEventQueue();
-    final before = client.listCalls;
 
     client.onTurn = (sessionId, message, approvals) async* {
-      throw const AgentChatException(404, 'not_found', 'Session sess-1 not found');
+      throw const AgentChatException(404, 'not_found', 'Turn not found');
     };
     notifier().send('que horas são?');
     await pumpEventQueue();
 
     final state = read();
+    // 404 do turno não é sessão apagada: o GET /messages respondeu normal.
+    expect(container.read(selectedAgentSessionProvider(null)), 'sess-1');
+    expect(state.sessionId, 'sess-1');
+    expect(state.error, isNot('essa conversa não existe mais'));
+    expect(state.restoreDraft, 'que horas são?');
+    expect(state.status, AgentConversationStatus.idle);
+  });
+
+  test('404 no envio e no GET da sessão limpa a seleção', () async {
+    container.listen(agentSessionsProvider(null), (_, _) {});
+    client.historyQueue = [
+      [_user('antiga'), _assistant('resposta antiga')],
+    ];
+    container.read(selectedAgentSessionProvider(null).notifier).select('sess-1');
+    await pumpEventQueue();
+
+    client.onTurn = (sessionId, message, approvals) async* {
+      throw const AgentChatException(404, 'not_found', 'Session not found');
+    };
+    client.fetchError =
+        const AgentChatException(404, 'not_found', 'Session not found');
+    notifier().send('que horas são?');
+    await pumpEventQueue();
+
+    final state = read();
     expect(container.read(selectedAgentSessionProvider(null)), isNull);
-    expect(state.sessionId, isNull);
     expect(state.error, 'essa conversa não existe mais');
     expect(state.restoreDraft, 'que horas são?');
-    expect(state.messages, isEmpty);
-    expect(state.status, AgentConversationStatus.idle);
-    expect(client.listCalls, before + 1);
   });
 
   test('Nova zera o estado e voltar pela lista carrega sem duplicar', () async {
