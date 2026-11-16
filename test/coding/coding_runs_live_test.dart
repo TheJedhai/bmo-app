@@ -18,14 +18,32 @@ import 'package:bmo_app/features/coding/data/coding_run_providers.dart';
 import 'package:bmo_app/features/coding/data/models/coding_project.dart';
 import 'package:bmo_app/features/coding/data/models/coding_run.dart';
 
-Map<String, dynamic> _runJson(int id, {String status = 'running'}) => {
-      'id': id,
+/// Objeto COMPLETO do run como o SSE manda (`run_id`, todas as chaves).
+Map<String, dynamic> _runJson(
+  int id, {
+  String status = 'running',
+  String? lastEvent = 'início',
+  double? costComputed,
+  String? mergedAt,
+}) =>
+    {
+      'run_id': id,
       'project_id': 1,
-      'prompt': 'run $id',
+      'session_id': 'sess-1',
+      'parent_run_id': null,
+      'plan_id': null,
+      'merged_at': mergedAt,
       'status': status,
+      'error_code': null,
+      'error_message': null,
       'branch': 'bmo/run-$id',
-      'last_event': 'início',
-      'created_at': '2026-11-01T10:00:00Z',
+      'commit_sha': null,
+      'files_changed_count': 0,
+      'permission_denials_count': 0,
+      'cost_usd': null,
+      'cost_usd_computed': costComputed,
+      'duration_ms': null,
+      'last_event': lastEvent,
     };
 
 class FakeCodingClient extends CodingClient {
@@ -98,25 +116,28 @@ void main() {
     await settle();
     expect(runs().map((r) => r.id), [2, 1]);
 
-    events.add({'type': 'coding.run.created', 'run': _runJson(3, status: 'queued')});
+    events.add({
+      'type': 'coding.run.created',
+      'patch': _runJson(3, status: 'queued'),
+    });
     await settle();
 
     expect(runs().map((r) => r.id), [3, 2, 1]);
     expect(runs().first.status, CodingRunStatus.queued);
   });
 
-  test('coding.run.updated aplica o patch sem perder campos', () async {
+  test('coding.run.updated substitui o run pelo patch completo', () async {
     await settle();
 
     events.add({
       'type': 'coding.run.updated',
-      'patch': {
-        'id': 2,
-        'status': 'success',
-        'last_event': 'pronto',
-        'cost_usd_computed': 0.87,
-        'merged_at': '2026-11-02T09:00:00Z',
-      },
+      'patch': _runJson(
+        2,
+        status: 'success',
+        lastEvent: 'pronto',
+        costComputed: 0.87,
+        mergedAt: '2026-11-02T09:00:00Z',
+      ),
     });
     await settle();
 
@@ -133,7 +154,7 @@ void main() {
 
     events.add({
       'type': 'coding.run.updated',
-      'patch': {'id': 2, 'project_id': 99, 'last_event': 'de outro projeto'},
+      'patch': {..._runJson(2), 'project_id': 99, 'last_event': 'de outro projeto'},
     });
     await settle();
 

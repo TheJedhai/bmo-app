@@ -1,35 +1,58 @@
 /// Plano de execução ativo do projeto (`plan` do `GET /coding/projects`).
 class CodingPlan {
+  final int id;
+  final int projectId;
   final String text;
   final int? maxRuns;
   final int runsUsed;
   final double? maxCostUsd;
   final double costUsed;
 
-  /// Status cru do servidor (exibido como veio).
+  /// `remaining_runs` do servidor (`null` = campo ausente).
+  final int? remainingRuns;
+
+  /// `active` | `exhausted` | `cancelled`.
   final String status;
 
+  final DateTime? createdAt;
+  final DateTime? endedAt;
+
   const CodingPlan({
+    this.id = 0,
+    this.projectId = 0,
     required this.text,
     this.maxRuns,
     this.runsUsed = 0,
     this.maxCostUsd,
     this.costUsed = 0,
+    this.remainingRuns,
     this.status = '',
+    this.createdAt,
+    this.endedAt,
   });
 
   factory CodingPlan.fromJson(Map<String, dynamic> json) => CodingPlan(
+        id: _int(json['id']),
+        projectId: _int(json['project_id']),
         text: json['text']?.toString() ?? '',
         maxRuns: json['max_runs'] == null ? null : _int(json['max_runs']),
         runsUsed: _int(json['runs_used']),
         maxCostUsd: _double(json['max_cost_usd']),
         costUsed: _double(json['cost_used']) ?? 0,
+        remainingRuns: json['remaining_runs'] == null
+            ? null
+            : _int(json['remaining_runs']),
         status: json['status']?.toString() ?? '',
+        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
+        endedAt: DateTime.tryParse(json['ended_at']?.toString() ?? ''),
       );
 
+  /// Plano ainda aceita runs.
+  bool get isActive => status == 'active';
+
   /// Runs que ainda cabem no plano (`null` = sem limite).
-  int? get runsLeft =>
-      maxRuns == null ? null : (maxRuns! - runsUsed).clamp(0, maxRuns!);
+  int? get runsLeft => remainingRuns ??
+      (maxRuns == null ? null : (maxRuns! - runsUsed).clamp(0, maxRuns!));
 
   /// Orçamento que ainda cabe no plano (`null` = sem limite).
   double? get costLeft => maxCostUsd == null

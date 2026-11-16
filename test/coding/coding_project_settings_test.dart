@@ -190,22 +190,55 @@ void main() {
     expect(paths, contains('/coding/:projectId/settings'));
   });
 
-  testWidgets('status do plano: exhausted e desconhecido', (tester) async {
+  testWidgets('plano esgotado vira "último plano", sem botão de cancelar',
+      (tester) async {
     await _pump(
       tester,
       FakeCodingClient(_project(
-        plan: const CodingPlan(text: 'x', maxRuns: 1, runsUsed: 1, status: 'exhausted'),
+        plan: const CodingPlan(
+          text: 'x',
+          maxRuns: 1,
+          runsUsed: 1,
+          status: 'exhausted',
+        ),
       )),
     );
-    expect(find.text('status: orçamento esgotado'), findsOneWidget);
 
+    expect(find.text('último plano: orçamento esgotado'), findsOneWidget);
+    expect(find.text('Cancelar plano'), findsNothing);
+  });
+
+  testWidgets('plano cancelado mostra consumo congelado', (tester) async {
+    await _pump(
+      tester,
+      FakeCodingClient(_project(
+        plan: const CodingPlan(
+          text: 'plano antigo',
+          maxRuns: 2,
+          runsUsed: 1,
+          maxCostUsd: 5,
+          costUsed: 0.0421,
+          status: 'cancelled',
+          endedAt: null,
+        ),
+      )),
+    );
+
+    expect(find.text('último plano: cancelado'), findsOneWidget);
+    expect(find.text('runs: 1 / 2'), findsOneWidget);
+    expect(find.text('custo: US\$ 0.04 / US\$ 5.00'), findsOneWidget);
+    expect(find.text('Cancelar plano'), findsNothing);
+  });
+
+  testWidgets('status desconhecido aparece cru', (tester) async {
     await _pump(
       tester,
       FakeCodingClient(_project(
         plan: const CodingPlan(text: 'y', status: 'paused'),
       )),
     );
-    expect(find.text('status: paused'), findsOneWidget);
+
+    expect(find.text('último plano: paused'), findsOneWidget);
   });
 
   testWidgets('cancelar plano pede confirmação, chama o POST e limpa o plano',

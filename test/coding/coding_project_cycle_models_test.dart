@@ -58,23 +58,52 @@ void main() {
       expect(run.mergedAt?.day, 2);
     });
 
-    test('mergePatch atualiza só o que veio', () {
-      final run = CodingRun.fromJson(_runJson());
-      final patched = run.mergePatch({
-        'status': 'success',
-        'last_event': 'pronto',
-        'cost_usd_computed': 1.9,
-        'merged_at': '2026-11-02T09:00:00Z',
+    test('aceita o objeto do evento (run_id + files_changed_count)', () {
+      final run = CodingRun.fromJson({
+        'run_id': 42,
+        'project_id': 7,
+        'session_id': 'e00c3dd7',
+        'parent_run_id': null,
+        'plan_id': 3,
+        'merged_at': null,
+        'status': 'running',
+        'error_code': null,
+        'error_message': null,
+        'branch': null,
+        'commit_sha': null,
+        'files_changed_count': 4,
+        'permission_denials_count': 2,
+        'cost_usd': null,
+        'cost_usd_computed': null,
+        'duration_ms': 12345,
+        'last_event': 'rodando testes',
       });
 
-      expect(patched.status, CodingRunStatus.success);
-      expect(patched.lastEvent, 'pronto');
-      expect(patched.costUsdComputed, closeTo(1.9, 1e-9));
-      expect(patched.isMerged, isTrue);
-      // Campos não tocados pelo patch continuam.
-      expect(patched.branch, 'bmo/run-7');
-      expect(patched.parentRunId, 5);
-      expect(patched.prompt, 'conserta o build');
+      expect(run.id, 42);
+      expect(run.projectId, 7);
+      expect(run.sessionId, 'e00c3dd7');
+      expect(run.planId, 3);
+      expect(run.filesChangedCount, 4);
+      expect(run.lastEvent, 'rodando testes');
+      expect(run.branch, isNull);
+      expect(run.costUsdComputed, isNull);
+    });
+
+    test('usage por modelo fica cru no modelo', () {
+      final run = CodingRun.fromJson({
+        ..._runJson(),
+        'usage': {
+          'deepseek-v4-pro': {
+            'inputTokens': 1782,
+            'outputTokens': 1075,
+            'cacheReadInputTokens': 1920,
+            'cacheCreationInputTokens': 0,
+          },
+        },
+      });
+      final model = run.usage!['deepseek-v4-pro'] as Map;
+      expect(model['inputTokens'], 1782);
+      expect(model['cacheReadInputTokens'], 1920);
     });
   });
 
@@ -90,12 +119,17 @@ void main() {
         'base_branch': 'main',
         'approval_mode': 'plan',
         'plan': {
+          'id': 3,
+          'project_id': 1,
           'text': 'migrar o grid',
           'max_runs': 5,
           'runs_used': 2,
+          'remaining_runs': 3,
           'max_cost_usd': 10.0,
           'cost_used': 3.5,
           'status': 'active',
+          'created_at': '2026-11-01T00:00:00Z',
+          'ended_at': null,
         },
         'created_at': '2026-11-01T00:00:00Z',
         'updated_at': '2026-11-01T00:00:00Z',
@@ -108,6 +142,7 @@ void main() {
       expect(plan.runsLeft, 3);
       expect(plan.costLeft, closeTo(6.5, 1e-9));
       expect(plan.status, 'active');
+      expect(plan.isActive, isTrue);
     });
 
     test('projeto sem plano/defaults', () {
@@ -145,5 +180,27 @@ void main() {
       expect(updated.plan?.text, 'novo');
       expect(updated.name, 'x');
     });
+  });
+
+  test('plano cancelado: status e consumo congelado', () {
+    final plan = CodingPlan.fromJson({
+      'id': 3,
+      'project_id': 1,
+      'text': 'plano antigo',
+      'max_runs': 2,
+      'runs_used': 1,
+      'remaining_runs': 1,
+      'max_cost_usd': 5.0,
+      'cost_used': 0.0421,
+      'status': 'cancelled',
+      'created_at': '2026-11-16T14:05:00+00:00',
+      'ended_at': '2026-11-16T14:12:30+00:00',
+    });
+
+    expect(plan.isActive, isFalse);
+    expect(plan.status, 'cancelled');
+    expect(plan.runsLeft, 1);
+    expect(plan.endedAt?.minute, 12);
+    expect(plan.createdAt?.year, 2026);
   });
 }

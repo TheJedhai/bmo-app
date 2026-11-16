@@ -32,6 +32,8 @@ class CodingRuns extends _$CodingRuns {
     return client.listRuns(projectId: projectId);
   }
 
+  /// `coding.run.created` e `coding.run.updated` carregam o objeto COMPLETO do
+  /// run em `patch` (`run_id` dentro dele), nunca um delta.
   void _applyLive(Map<String, dynamic> event) {
     final type = event['type'];
     if (type != 'coding.run.created' && type != 'coding.run.updated') return;
@@ -39,12 +41,12 @@ class CodingRuns extends _$CodingRuns {
     final current = state.valueOrNull;
     if (current == null) return;
 
+    final patch = event['patch'];
+    if (patch is! Map) return;
+    final run = CodingRun.fromJson(Map<String, dynamic>.from(patch));
+    if (run.id <= 0 || run.projectId != projectId) return;
+
     if (type == 'coding.run.created') {
-      final json = event['run'] is Map
-          ? Map<String, dynamic>.from(event['run'] as Map)
-          : event;
-      final run = CodingRun.fromJson(json);
-      if (run.id <= 0 || run.projectId != projectId) return;
       state = AsyncData([
         run,
         for (final existing in current)
@@ -53,27 +55,14 @@ class CodingRuns extends _$CodingRuns {
       return;
     }
 
-    final patch = event['patch'];
-    if (patch is! Map) return;
-    final patchMap = Map<String, dynamic>.from(patch);
-    final runId = patchMap['id'] ?? event['run_id'];
-    final id = runId is num ? runId.toInt() : int.tryParse('$runId');
-    if (id == null) return;
-
-    final patchProject = patchMap['project_id'];
-    if (patchProject != null &&
-        (patchProject is num ? patchProject.toInt() : 0) != projectId) {
-      return;
-    }
-
     var changed = false;
     final next = <CodingRun>[];
-    for (final run in current) {
-      if (run.id == id) {
+    for (final existing in current) {
+      if (existing.id == run.id) {
         changed = true;
-        next.add(run.mergePatch(patchMap));
-      } else {
         next.add(run);
+      } else {
+        next.add(existing);
       }
     }
     if (changed) state = AsyncData(next);

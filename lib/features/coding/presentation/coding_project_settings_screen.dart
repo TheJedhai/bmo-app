@@ -7,6 +7,7 @@ import '../../../core/theme/bmo_theme.dart';
 import '../data/coding_client.dart';
 import '../data/coding_providers.dart';
 import '../data/models/coding_project.dart';
+import 'widgets/coding_plan_look.dart';
 import 'widgets/permission_modes.dart';
 
 /// Configurações do projeto — `/coding/:projectId/settings`.
@@ -288,8 +289,11 @@ class _CodingProjectSettingsScreenState
           ),
         ),
         _Section(
-          title: 'PLANO ATIVO',
-          child: _PlanCard(plan: project.plan, onCancel: _cancelPlan),
+          title: project.plan?.isActive == true ? 'PLANO ATIVO' : 'PLANO',
+          child: _PlanCard(
+            plan: project.plan,
+            onCancel: project.plan?.isActive == true ? _cancelPlan : null,
+          ),
         ),
         if (_error != null) ...[
           const SizedBox(height: 8),
@@ -478,17 +482,6 @@ class _RuleList extends StatelessWidget {
   }
 }
 
-/// Rótulo e cor de um status de plano. Desconhecido aparece cru.
-({String label, Color color}) planStatusLook(String status) => switch (status) {
-      'active' => (label: 'ativo', color: BmoColors.accentGreen),
-      'exhausted' => (
-          label: 'orçamento esgotado',
-          color: BmoColors.accentRed,
-        ),
-      'cancelled' => (label: 'cancelado', color: BmoColors.textMuted),
-      _ => (label: status, color: BmoColors.textSecondary),
-    };
-
 class _PlanCard extends StatelessWidget {
   final CodingPlan? plan;
   final VoidCallback? onCancel;
@@ -508,6 +501,9 @@ class _PlanCard extends StatelessWidget {
 
     final statusLook =
         plan.status.isEmpty ? null : planStatusLook(plan.status);
+    final header = plan.isActive
+        ? null
+        : 'último plano: ${statusLook?.label ?? plan.status}';
 
     String budget(int used, int? max) =>
         max == null ? '$used (sem limite)' : '$used / $max';
@@ -526,6 +522,17 @@ class _PlanCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (header != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                header,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: statusLook?.color ?? BmoColors.textMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           if (plan.text.isNotEmpty)
             Text(
               plan.text,
@@ -543,7 +550,7 @@ class _PlanCard extends StatelessWidget {
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: BmoColors.textSecondary),
           ),
-          if (statusLook != null)
+          if (statusLook != null && plan.isActive)
             Text(
               'status: ${statusLook.label}',
               style: theme.textTheme.bodySmall
@@ -569,5 +576,3 @@ class _PlanCard extends StatelessWidget {
   }
 }
 
-/// "US$ 1.25" — custo do plano em dólar com 2 casas.
-String formatMoney(double usd) => 'US\$ ${usd.toStringAsFixed(2)}';

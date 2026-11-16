@@ -57,9 +57,10 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
     ref.invalidate(codingRunProvider(_runId));
   }
 
+  /// O patch do evento é o objeto completo do run — substitui, não acumula.
   void _applyLive(Map<String, dynamic> patch) {
     if (!mounted) return;
-    setState(() => _live = {..._live, ...patch});
+    setState(() => _live = Map<String, dynamic>.from(patch));
   }
 
   Future<void> _kill() async {
@@ -169,10 +170,11 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
     final look = codingRunLook(status);
     final durationMs = _asInt(_live['duration_ms']) ?? run?.durationMs;
     final filesChanged =
-        _asInt(_live['files_changed_count']) ?? run?.filesChanged.length;
+        _asInt(_live['files_changed_count']) ?? run?.filesChangedCount;
     final branch = _live['branch']?.toString() ?? run?.branch;
     final commit = _live['commit_sha']?.toString() ?? run?.commitSha;
     // Custo real do servidor; o `cost_usd` do Claude Code não aparece aqui.
+    // O patch do evento é o objeto completo do run (`run_id` dentro).
     final cost =
         _asDouble(_live['cost_usd_computed']) ?? run?.costUsdComputed;
     final mergedAt = _live['merged_at']?.toString() ?? run?.mergedAt?.toIso8601String();

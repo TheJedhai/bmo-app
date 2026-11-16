@@ -35,7 +35,9 @@ class CodingRun {
   /// Custo real medido pelo servidor. `null` = custo não configurado.
   final double? costUsdComputed;
 
-  /// Uso de tokens (`{input_tokens, output_tokens, cache_*}`), quando houver.
+  /// Uso de tokens por modelo, cru do stream-json (`{modelo: {inputTokens,
+  /// cacheReadInputTokens, cacheCreationInputTokens, outputTokens, ...}}`).
+  /// Só vem em `GET /coding/runs/{id}`.
   final Map<String, dynamic>? usage;
 
   /// Sessão de chat que originou o run (`/coding/:id/chat`).
@@ -50,9 +52,9 @@ class CodingRun {
   /// Quando o run foi juntado na base (`null` = não juntado).
   final DateTime? mergedAt;
 
-  /// JSON recebido do servidor — base para aplicar patches de
-  /// `coding.run.updated` sem perder campos.
-  final Map<String, dynamic> _raw;
+  /// Arquivos alterados. O patch do SSE só manda a contagem
+  /// (`files_changed_count`); o REST manda a lista.
+  final int? _filesChangedCount;
 
   const CodingRun({
     required this.id,
@@ -76,8 +78,8 @@ class CodingRun {
     this.parentRunId,
     this.planId,
     this.mergedAt,
-    Map<String, dynamic> raw = const {},
-  }) : _raw = raw;
+    int? filesChangedCount,
+  }) : _filesChangedCount = filesChangedCount;
 
   /// Run ainda pode ser parado.
   bool get isActive =>
@@ -87,15 +89,15 @@ class CodingRun {
   bool get isFailure =>
       status == CodingRunStatus.failed || status == CodingRunStatus.timeout;
 
+  /// Quantos arquivos o run alterou (contagem do patch ou tamanho da lista).
+  int get filesChangedCount => _filesChangedCount ?? filesChanged.length;
+
   /// Já foi juntado na branch base.
   bool get isMerged => mergedAt != null;
 
-  /// Aplica um `patch` de `coding.run.updated` sobre o último JSON conhecido.
-  CodingRun mergePatch(Map<String, dynamic> patch) =>
-      CodingRun.fromJson({..._raw, ...patch});
-
+  /// Aceita o run do REST (`id`) e o objeto do evento/patch (`run_id`).
   factory CodingRun.fromJson(Map<String, dynamic> json) => CodingRun(
-    id: _int(json['id']),
+    id: _int(json['run_id'] ?? json['id']),
     projectId: _int(json['project_id']),
     prompt: json['prompt']?.toString() ?? '',
     status: codingRunStatusFrom(json['status']?.toString()),
@@ -124,7 +126,9 @@ class CodingRun {
         : _int(json['parent_run_id']),
     planId: json['plan_id'] == null ? null : _int(json['plan_id']),
     mergedAt: DateTime.tryParse(json['merged_at']?.toString() ?? ''),
-    raw: json,
+    filesChangedCount: json['files_changed_count'] == null
+        ? null
+        : _int(json['files_changed_count']),
   );
 
   static int _int(dynamic value) {

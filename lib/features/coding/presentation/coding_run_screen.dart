@@ -229,7 +229,19 @@ class _Summary extends StatelessWidget {
             ),
             if (run.lastEvent != null && run.lastEvent!.isNotEmpty)
               _Field(label: 'último sinal', value: run.lastEvent!),
-            if (run.usage != null) _Field(label: 'tokens', value: _usage(run.usage!)),
+            if (run.usage != null && run.usage!.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              const Text(
+                'tokens',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  color: BmoColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 2),
+              _UsageBlock(usage: run.usage!),
+            ],
             _Field(
               label: 'juntado na base',
               value: run.isMerged
@@ -279,17 +291,88 @@ class _Summary extends StatelessWidget {
     );
   }
 
-  static String _usage(Map<String, dynamic> usage) {
-    final input = usage['input_tokens'];
-    final output = usage['output_tokens'];
-    if (input == null && output == null) {
-      return usage.entries.map((e) => '${e.key}: ${e.value}').join(' · ');
-    }
-    return '${input ?? 0} entrada · ${output ?? 0} saída';
-  }
-
   static String _shortSha(String? sha) =>
       sha == null ? '—' : (sha.length <= 7 ? sha : sha.substring(0, 7));
+}
+
+/// Uso de tokens por modelo (`usage` cru do stream-json, chaves camelCase).
+/// Formato plano antigo (snake_case) cai numa linha só.
+class _UsageBlock extends StatelessWidget {
+  final Map<String, dynamic> usage;
+
+  const _UsageBlock({required this.usage});
+
+  static int _int(dynamic value) {
+    if (value is num) return value.toInt();
+    return int.tryParse('$value') ?? 0;
+  }
+
+  /// 1782 → "1.782" (pt-BR).
+  static String _fmt(int value) {
+    final digits = value.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(digits[i]);
+    }
+    return buffer.toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const style = TextStyle(
+      fontFamily: 'Inter',
+      fontSize: 12,
+      color: BmoColors.textSecondary,
+    );
+
+    final perModel = usage.values.every((value) => value is Map);
+    if (!perModel) {
+      // Fallback plano: soma do que estiver em snake_case.
+      final input = _int(usage['input_tokens']);
+      final cache = _int(usage['cache_read_input_tokens']) +
+          _int(usage['cache_creation_input_tokens']);
+      final output = _int(usage['output_tokens']);
+      return Text(
+        'total · entrada ${_fmt(input)} · cache ${_fmt(cache)} · '
+        'saída ${_fmt(output)}',
+        style: style,
+      );
+    }
+
+    var totalInput = 0;
+    var totalCache = 0;
+    var totalOutput = 0;
+    final rows = <Widget>[];
+    usage.forEach((model, value) {
+      final entry = Map<String, dynamic>.from(value as Map);
+      final input = _int(entry['inputTokens']);
+      final cache = _int(entry['cacheReadInputTokens']) +
+          _int(entry['cacheCreationInputTokens']);
+      final output = _int(entry['outputTokens']);
+      totalInput += input;
+      totalCache += cache;
+      totalOutput += output;
+      rows.add(
+        Text(
+          '$model · entrada ${_fmt(input)} · cache ${_fmt(cache)} · '
+          'saída ${_fmt(output)}',
+          style: style,
+        ),
+      );
+    });
+    rows.add(
+      Text(
+        'total · entrada ${_fmt(totalInput)} · cache ${_fmt(totalCache)} · '
+        'saída ${_fmt(totalOutput)}',
+        style: style.copyWith(color: BmoColors.textMuted),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: rows,
+    );
+  }
 }
 
 class _Field extends StatelessWidget {
