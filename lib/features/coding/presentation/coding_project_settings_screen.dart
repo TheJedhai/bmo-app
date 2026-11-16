@@ -265,7 +265,9 @@ class _CodingProjectSettingsScreenState
           child: _RuleList(
             rules: _allowRules,
             controller: _allowController,
-            hint: 'ex.: ext: .py',
+            hint: 'Bash(npm test:*) ou Edit',
+            help: 'Ferramentas desta versão: Bash, Read e Edit '
+                '(Write não existe).',
             onAdd: () => _addRule(allow: true),
             onRemove: (index) => _removeRule(allow: true, index: index),
           ),
@@ -275,7 +277,8 @@ class _CodingProjectSettingsScreenState
           child: _RuleList(
             rules: _denyRules,
             controller: _denyController,
-            hint: 'ex.: path: secrets/',
+            hint: 'Read(./secrets/**)',
+            help: 'Deny bloqueia sem aviso, mesmo em bypassPermissions.',
             onAdd: () => _addRule(allow: false),
             onRemove: (index) => _removeRule(allow: false, index: index),
           ),
@@ -283,7 +286,8 @@ class _CodingProjectSettingsScreenState
         _Section(
           title: 'BRANCH BASE',
           child: Text(
-            project.baseBranch ?? 'não informada',
+            project.baseBranch ??
+                'definida no próximo run (branch atual do repositório)',
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: BmoColors.textSecondary),
           ),
@@ -394,10 +398,11 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _RuleList extends StatelessWidget {
+class _RuleList extends StatefulWidget {
   final List<String> rules;
   final TextEditingController controller;
   final String hint;
+  final String help;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
 
@@ -405,9 +410,37 @@ class _RuleList extends StatelessWidget {
     required this.rules,
     required this.controller,
     required this.hint,
+    required this.help,
     required this.onAdd,
     required this.onRemove,
   });
+
+  @override
+  State<_RuleList> createState() => _RuleListState();
+}
+
+class _RuleListState extends State<_RuleList> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_syncText);
+    _syncText();
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncText);
+    super.dispose();
+  }
+
+  /// Botão "adicionar" só habilita com algo digitado — campo vazio é no-op.
+  void _syncText() {
+    final hasText = widget.controller.text.trim().isNotEmpty;
+    if (hasText == _hasText) return;
+    setState(() => _hasText = hasText);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -415,7 +448,7 @@ class _RuleList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (rules.isEmpty)
+        if (widget.rules.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 6),
             child: Text(
@@ -424,7 +457,7 @@ class _RuleList extends StatelessWidget {
                   theme.textTheme.bodySmall?.copyWith(color: BmoColors.textMuted),
             ),
           ),
-        for (var i = 0; i < rules.length; i++)
+        for (var i = 0; i < widget.rules.length; i++)
           Container(
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -436,7 +469,7 @@ class _RuleList extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    rules[i],
+                    widget.rules[i],
                     style: theme.textTheme.bodySmall
                         ?.copyWith(color: BmoColors.textPrimary),
                   ),
@@ -445,7 +478,7 @@ class _RuleList extends StatelessWidget {
                   tooltip: 'remover',
                   iconSize: 16,
                   color: BmoColors.textMuted,
-                  onPressed: () => onRemove(i),
+                  onPressed: () => widget.onRemove(i),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -455,13 +488,16 @@ class _RuleList extends StatelessWidget {
           children: [
             Expanded(
               child: TextField(
-                controller: controller,
-                onSubmitted: (_) => onAdd(),
+                controller: widget.controller,
+                // Enter no campo também adiciona.
+                onSubmitted: (_) {
+                  if (_hasText) widget.onAdd();
+                },
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: BmoColors.textPrimary),
                 decoration: InputDecoration(
                   isDense: true,
-                  hintText: hint,
+                  hintText: widget.hint,
                   hintStyle: theme.textTheme.bodySmall
                       ?.copyWith(color: BmoColors.textMuted),
                   filled: true,
@@ -474,8 +510,19 @@ class _RuleList extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(onPressed: onAdd, child: const Text('adicionar')),
+            TextButton(
+              onPressed: _hasText ? widget.onAdd : null,
+              child: const Text('adicionar'),
+            ),
           ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          widget.help,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: BmoColors.textMuted,
+            fontSize: 11,
+          ),
         ),
       ],
     );

@@ -14,36 +14,39 @@ class PermissionModeInfo {
 /// Modos válidos no servidor. Valores legados (`default`, `allow_all`,
 /// `deny_all`) ainda podem aparecer em projetos antigos — a UI mostra o
 /// valor cru nesse caso em vez de mentir.
+/// Comportamento abaixo é o do run real: não é interativo, nada é perguntado
+/// no meio da execução — o que não é permitido é negado.
 const kPermissionModes = <PermissionModeInfo>[
   PermissionModeInfo(
     'manual',
     'Manual',
-    'Pede aprovação para cada ação do agente.',
+    'Só o que estiver em allow roda; todo o resto é negado.',
   ),
   PermissionModeInfo(
     'acceptEdits',
     'Aceitar edições',
-    'Edita arquivos sozinho; pede aprovação para o resto.',
+    'Edita arquivos sozinho; Bash e o resto só se estiverem em allow — o '
+        'que não estiver é negado.',
   ),
   PermissionModeInfo(
     'plan',
     'Planejar',
-    'Só lê e monta um plano; não altera nada.',
+    'Comportamento não verificado no servidor.',
   ),
   PermissionModeInfo(
     'auto',
     'Automático',
-    'Decide sozinho o que é seguro e pergunta no resto.',
+    'Comportamento não verificado no servidor.',
   ),
   PermissionModeInfo(
     'dontAsk',
     'Não perguntar',
-    'Segue em frente sem perguntar; nega o que as regras barram.',
+    'Só o que estiver em allow roda; todo o resto é negado.',
   ),
   PermissionModeInfo(
     'bypassPermissions',
     'Sem permissões',
-    'Não faz nenhuma checagem de permissão. Use com cuidado.',
+    'Tudo liberado, exceto o que estiver em deny — deny bloqueia sem aviso.',
   ),
 ];
 

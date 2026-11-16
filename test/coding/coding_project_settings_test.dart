@@ -98,7 +98,7 @@ void main() {
 
     expect(find.text('Manual'), findsOneWidget);
     expect(
-      find.text('Pede aprovação para cada ação do agente.'),
+      find.text('Só o que estiver em allow roda; todo o resto é negado.'),
       findsOneWidget,
     );
     expect(find.text('ext: .py'), findsOneWidget);
@@ -118,7 +118,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Edita arquivos sozinho; pede aprovação para o resto.'),
+      find.text(
+        'Edita arquivos sozinho; Bash e o resto só se estiverem em allow — '
+        'o que não estiver é negado.',
+      ),
       findsOneWidget,
     );
 
@@ -134,12 +137,23 @@ void main() {
     final client = FakeCodingClient(_project());
     await _pump(tester, client);
 
-    // Duas listas de regra, cada uma com um campo de texto.
+    // Duas listas de regra, cada uma com um campo de texto. Campo vazio
+    // desabilita o "adicionar".
+    List<TextButton> addButtons() => tester
+        .widgetList<TextButton>(find.widgetWithText(TextButton, 'adicionar'))
+        .toList();
+    expect(addButtons().every((b) => b.onPressed == null), isTrue);
+
     final allowField = find.byType(TextField).first;
     await tester.enterText(allowField, 'ext: .ts');
+    await tester.pump();
+    expect(addButtons().first.onPressed, isNotNull);
+
     await tester.tap(find.text('adicionar').first);
     await tester.pumpAndSettle();
     expect(find.text('ext: .ts'), findsOneWidget);
+    // Campo limpo volta a desabilitar.
+    expect(addButtons().first.onPressed, isNull);
 
     // Remove a regra original (primeiro X da lista allow).
     await tester.tap(find.byTooltip('remover').first);
@@ -276,5 +290,91 @@ void main() {
     expect(find.text('não há plano ativo'), findsOneWidget);
     // O plano continua na tela (o servidor não confirmou o cancelamento).
     expect(find.text('migrar'), findsOneWidget);
+  });
+
+  testWidgets('Enter no campo também adiciona', (tester) async {
+    final client = FakeCodingClient(_project());
+    await _pump(tester, client);
+
+    final allowField = find.byType(TextField).first;
+    await tester.enterText(allowField, 'Bash(npm test:*)');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bash(npm test:*)'), findsOneWidget);
+  });
+
+  testWidgets('campo vazio não adiciona nada', (tester) async {
+    final client = FakeCodingClient(_project());
+    await _pump(tester, client);
+
+    final before = find.byTooltip('remover').evaluate().length;
+    // Botão desabilitado: tocar não muda nada.
+    await tester.tap(find.text('adicionar').first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('remover').evaluate().length, before);
+    expect(find.text('nenhuma regra'), findsNothing);
+  });
+
+  testWidgets('allow e deny usam o próprio campo', (tester) async {
+    final client = FakeCodingClient(_project());
+    await _pump(tester, client);
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(1), 'Read(./secrets/**)');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('adicionar').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    // A regra entrou em deny, não em allow.
+    expect(client.lastPatch?['deny_rules'], ['path: secrets/', 'Read(./secrets/**)']);
+    expect(client.lastPatch?['allow_rules'], ['ext: .py']);
+  });
+
+  testWidgets('exemplos e ajuda das regras', (tester) async {
+    await _pump(tester, FakeCodingClient(_project()));
+
+    expect(find.text('Bash(npm test:*) ou Edit'), findsOneWidget);
+    expect(find.text('Read(./secrets/**)'), findsOneWidget);
+    expect(
+      find.text('Ferramentas desta versão: Bash, Read e Edit (Write não existe).'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Deny bloqueia sem aviso, mesmo em bypassPermissions.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('base_branch nula explica que vem do próximo run',
+      (tester) async {
+    final project = CodingProject(
+      id: 1,
+      name: 'BMO-APP',
+      primaryPath: '/tmp/bmo-app',
+      extraPaths: const [],
+      permissionMode: 'acceptEdits',
+      allowRules: const [],
+      denyRules: const [],
+      createdAt: '',
+      updatedAt: '',
+    );
+    await _pump(tester, FakeCodingClient(project));
+
+    expect(
+      find.text('definida no próximo run (branch atual do repositório)'),
+      findsOneWidget,
+    );
+    expect(find.text('não informada'), findsNothing);
+  });
+
+  testWidgets('modos documentados têm descrição verificada', (tester) async {
+    await _pump(tester, FakeCodingClient(_project(permissionMode: 'auto')));
+
+    expect(find.text('Comportamento não verificado no servidor.'), findsOneWidget);
   });
 }
