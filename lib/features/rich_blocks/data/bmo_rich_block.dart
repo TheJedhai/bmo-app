@@ -5,6 +5,9 @@
 /// {"v":1,"type":"image","block_id":"image-20","payload":{"image_id":20},"mutable":true}
 /// ```
 ///
+/// `speech` (opcional) é o resumo falável do bloco. O app só guarda — não
+/// renderiza.
+///
 /// [fromJson] is lenient — missing or mistyped fields get safe defaults so a
 /// malformed block never crashes the parser or the UI.
 class BmoRichBlock {
@@ -14,12 +17,16 @@ class BmoRichBlock {
   final Map<String, dynamic> payload;
   final bool mutable;
 
+  /// Resumo falável do bloco (opcional, nunca renderizado).
+  final String? speech;
+
   const BmoRichBlock({
     required this.v,
     required this.type,
     required this.blockId,
     required this.payload,
     required this.mutable,
+    this.speech,
   });
 
   factory BmoRichBlock.fromJson(Map<String, dynamic> json) {
@@ -31,6 +38,7 @@ class BmoRichBlock {
           ? json['payload'] as Map<String, dynamic>
           : const {},
       mutable: json['mutable'] is bool ? json['mutable'] as bool : false,
+      speech: json['speech'] is String ? json['speech'] as String : null,
     );
   }
 

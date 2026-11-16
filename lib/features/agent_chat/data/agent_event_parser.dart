@@ -83,6 +83,7 @@ AgentEvent parseAgentEvent(Map<String, dynamic> json) {
         richType: richType,
         payload: Map<String, dynamic>.from(payload),
         mutable: json['mutable'] == true,
+        speech: json['speech'] is String ? json['speech'] as String : null,
         sessionId: sessionId,
         turnId: turnId,
         seq: seq,

@@ -355,6 +355,7 @@ class AgentConversation extends _$AgentConversation {
                 richType: event.richType,
                 payload: event.payload,
                 mutable: event.mutable,
+                speech: event.speech,
               ),
             ]);
       case ApprovalRequested():

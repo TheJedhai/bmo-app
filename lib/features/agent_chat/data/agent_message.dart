@@ -52,11 +52,15 @@ class AgentRichPart extends AgentPart {
   final Map<String, dynamic> payload;
   final bool mutable;
 
+  /// Resumo falável do bloco (opcional, guardado e nunca renderizado).
+  final String? speech;
+
   const AgentRichPart({
     required this.blockId,
     required this.richType,
     required this.payload,
     required this.mutable,
+    this.speech,
   });
 }
 
@@ -207,6 +211,7 @@ AgentPart? parseAgentPart(Map<String, dynamic> json) {
             ? Map<String, dynamic>.from(payload)
             : const <String, dynamic>{},
         mutable: json['mutable'] == true,
+        speech: json['speech'] is String ? json['speech'] as String : null,
       );
     case 'approval':
       final callId = json['call_id'];

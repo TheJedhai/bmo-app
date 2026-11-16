@@ -124,7 +124,8 @@ class AgentToolChip extends StatelessWidget {
   }
 }
 
-/// Bloco rico: usa o registry global (image e question já registrados).
+/// Bloco rico: usa o registry global (image, question, coding_run,
+/// memory_saved).
 class AgentRichBlockView extends StatelessWidget {
   final AgentRichPart part;
 
@@ -139,6 +140,7 @@ class AgentRichBlockView extends StatelessWidget {
         blockId: part.blockId,
         payload: part.payload,
         mutable: part.mutable,
+        speech: part.speech,
       ),
     );
   }

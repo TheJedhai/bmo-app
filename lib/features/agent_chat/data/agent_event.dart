@@ -78,11 +78,15 @@ class RichBlockReceived extends AgentEvent {
   final Map<String, dynamic> payload;
   final bool mutable;
 
+  /// Resumo falável do bloco (opcional).
+  final String? speech;
+
   const RichBlockReceived({
     required this.blockId,
     required this.richType,
     required this.payload,
     required this.mutable,
+    this.speech,
     super.sessionId,
     super.turnId,
     super.seq,
