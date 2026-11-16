@@ -34,6 +34,7 @@ class FakeCodingClient extends CodingClient {
     commitSha: 'abcdef1234567890',
     durationMs: 125000,
     costUsd: 0.5,
+    costUsdComputed: 1.25,
   );
 
   @override
@@ -114,7 +115,7 @@ void main() {
         'status': 'success',
         'commit_sha': '1234567890abcdef',
         'files_changed_count': 4,
-        'cost_usd': 1.25,
+        'cost_usd_computed': 1.25,
         'last_event': 'commit criado',
       }),
     );

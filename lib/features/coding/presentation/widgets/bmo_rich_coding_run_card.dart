@@ -172,8 +172,15 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
         _asInt(_live['files_changed_count']) ?? run?.filesChanged.length;
     final branch = _live['branch']?.toString() ?? run?.branch;
     final commit = _live['commit_sha']?.toString() ?? run?.commitSha;
-    final cost = _asDouble(_live['cost_usd']) ?? run?.costUsd;
-    final lastEvent = _live['last_event']?.toString();
+    // Custo real do servidor; o `cost_usd` do Claude Code não aparece aqui.
+    final cost =
+        _asDouble(_live['cost_usd_computed']) ?? run?.costUsdComputed;
+    final mergedAt = _live['merged_at']?.toString() ?? run?.mergedAt?.toIso8601String();
+    final isMerged = mergedAt != null && mergedAt.isNotEmpty;
+    final parentRunId =
+        _asInt(_live['parent_run_id']) ?? run?.parentRunId;
+    final lastEvent =
+        _live['last_event']?.toString() ?? run?.lastEvent;
     final failure = status == CodingRunStatus.failed ||
         status == CodingRunStatus.timeout;
     final errorMessage = failure
@@ -249,7 +256,12 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
                   icon: Icons.description_outlined,
                   text: '${filesChanged ?? 0} arquivo(s)',
                 ),
-                _Meta(icon: Icons.payments_outlined, text: formatRunCost(cost)),
+                _Meta(
+                  icon: Icons.payments_outlined,
+                  text: formatComputedCost(cost),
+                ),
+                if (isMerged)
+                  const _Meta(icon: Icons.merge_type, text: 'juntado na base'),
               ],
             ),
             if (_error != null) ...[
@@ -282,6 +294,11 @@ class _BmoRichCodingRunCardState extends ConsumerState<BmoRichCodingRunCard> {
                   onPressed: () => appRouter.go('/coding/runs/$runId'),
                   child: const Text('Detalhes'),
                 ),
+                if (parentRunId != null && parentRunId > 0)
+                  TextButton(
+                    onPressed: () => appRouter.go('/coding/runs/$parentRunId'),
+                    child: Text('run pai #$parentRunId'),
+                  ),
               ],
             ),
           ],

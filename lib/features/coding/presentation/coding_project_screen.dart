@@ -260,13 +260,26 @@ class _RunCard extends StatelessWidget {
                         color: BmoColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
+                    if (run.lastEvent != null && run.lastEvent!.isNotEmpty)
+                      Text(
+                        run.lastEvent!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 11,
+                          color: BmoColors.textSecondary,
+                        ),
+                      ),
+                    const SizedBox(height: 2),
                     Text(
                       [
                         look.label,
                         formatRunTimestamp(run.startedAt ?? run.createdAt),
                         'duração ${formatRunDuration(run.durationMs)}',
-                        formatRunCost(run.costUsd),
+                        formatComputedCost(run.costUsdComputed),
+                        if (run.isMerged) 'juntado na base',
                       ].where((part) => part.isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

@@ -211,12 +211,45 @@ class _Summary extends StatelessWidget {
                   : '${run.filesChanged.length} (${run.filesChanged.take(3).join(', ')}'
                         '${run.filesChanged.length > 3 ? '…' : ''})',
             ),
-            _Field(label: 'custo', value: formatRunCost(run.costUsd)),
+            // Custo real do servidor. O `cost_usd` do Claude Code é só
+            // estimativa e fica rotulado como tal.
+            _Field(
+              label: 'custo',
+              value: formatComputedCost(run.costUsdComputed),
+            ),
+            if (run.costUsd != null)
+              _Field(
+                label: 'estimativa Claude Code',
+                value: formatRunCost(run.costUsd),
+              ),
             _Field(label: 'duração', value: formatRunDuration(run.durationMs)),
             _Field(
               label: 'quando',
               value: formatRunTimestamp(run.startedAt ?? run.createdAt),
             ),
+            if (run.lastEvent != null && run.lastEvent!.isNotEmpty)
+              _Field(label: 'último sinal', value: run.lastEvent!),
+            if (run.usage != null) _Field(label: 'tokens', value: _usage(run.usage!)),
+            _Field(
+              label: 'juntado na base',
+              value: run.isMerged
+                  ? formatRunTimestamp(run.mergedAt)
+                  : 'não',
+            ),
+            if (run.parentRunId != null && run.parentRunId! > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () =>
+                      GoRouter.of(context).go('/coding/runs/${run.parentRunId}'),
+                  child: Text('run pai #${run.parentRunId}'),
+                ),
+              ),
             // Motivo da falha (ausente em servidor antigo ou run sem erro).
             if (run.isFailure &&
                 run.errorMessage != null &&
@@ -244,6 +277,15 @@ class _Summary extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _usage(Map<String, dynamic> usage) {
+    final input = usage['input_tokens'];
+    final output = usage['output_tokens'];
+    if (input == null && output == null) {
+      return usage.entries.map((e) => '${e.key}: ${e.value}').join(' · ');
+    }
+    return '${input ?? 0} entrada · ${output ?? 0} saída';
   }
 
   static String _shortSha(String? sha) =>

@@ -49,7 +49,7 @@ final _run = CodingRun(
   prompt: 'adiciona testes do card',
   status: CodingRunStatus.success,
   filesChanged: const ['lib/a.dart', 'lib/b.dart'],
-  costUsd: 0.42,
+  costUsdComputed: 0.42,
   durationMs: 65000,
 );
 
