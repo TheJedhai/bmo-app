@@ -13,6 +13,7 @@ import '../../features/coding/presentation/coding_project_screen.dart';
 import '../../features/coding/presentation/coding_run_screen.dart';
 import '../../features/coding/presentation/coding_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
+import '../../features/memories/presentation/memories_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
 import '../events/events_provider.dart';
 import '../identity/identity_provider.dart';
@@ -158,6 +159,7 @@ String? redirectLegacyProjectChat(BuildContext context, GoRouterState state) {
 /// /calendario            CalendarScreen
 /// /calendarios           CalendarsScreen
 /// /financas              FinancesScreen
+/// /memorias              MemoriesScreen
 /// /coding                CodingScreen
 /// /coding/runs/:runId    CodingRunScreen
 /// /coding/:projectId/chat  AgentChatScreen do projeto
@@ -215,6 +217,11 @@ final List<RouteBase> appRoutes = [
     path: '/financas',
     pageBuilder: (context, state) =>
         _buildFeaturePage(const FinancesScreen(), state),
+  ),
+  GoRoute(
+    path: '/memorias',
+    pageBuilder: (context, state) =>
+        _buildFeaturePage(const MemoriesScreen(), state),
   ),
   GoRoute(
     path: '/coding',

@@ -1,43 +1,49 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
+import '../../../core/widgets/bmo_back_button.dart';
 import '../data/memory_model.dart';
 import '../providers/memories_provider.dart';
-import '../../../core/widgets/bmo_frame.dart';
 
-void showMemoriesModal(BuildContext context) {
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (_) => const _MemoriesModal(),
-  );
-}
-
-class _MemoriesModal extends ConsumerStatefulWidget {
-  const _MemoriesModal();
+/// Tela de Memórias (`/memorias`).
+///
+/// Lista o que o BMO sabe (casa + pessoal), com busca no servidor
+/// (`/memories/search`), filtro de escopo, criação/edição com escopo e
+/// apagar. Os eventos SSE `memory.*` invalidam [memoriesProvider], então a
+/// lista se atualiza sozinha quando outro cliente mexe.
+class MemoriesScreen extends ConsumerStatefulWidget {
+  const MemoriesScreen({super.key});
 
   @override
-  ConsumerState<_MemoriesModal> createState() => _MemoriesModalState();
+  ConsumerState<MemoriesScreen> createState() => _MemoriesScreenState();
 }
 
-class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
+class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
+  static const _kDebounce = Duration(milliseconds: 300);
+
   final _searchController = TextEditingController();
   String _query = '';
+  Timer? _debounce;
 
   final _createController = TextEditingController();
+  bool _createPersonal = false;
   bool _creating = false;
   String? _createError;
 
   int? _editingId;
   TextEditingController? _editController;
   FocusNode? _editFocusNode;
+  bool _editPersonal = false;
   int? _savingId;
   String? _editError;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     _createController.dispose();
     _editController?.dispose();
@@ -45,21 +51,28 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
     super.dispose();
   }
 
-  List<Memory> _filter(List<Memory> all) {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return all;
-    return all
-        .where((m) => m.content.toLowerCase().contains(q))
-        .toList(growable: false);
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(_kDebounce, () {
+      if (mounted) setState(() => _query = value.trim());
+    });
+  }
+
+  void _clearSearch() {
+    _debounce?.cancel();
+    _searchController.clear();
+    setState(() => _query = '');
   }
 
   void _startEditing(Memory memory) {
     _cancelEditing();
-    _editingId = memory.id;
-    _editController = TextEditingController(text: memory.content);
-    _editFocusNode = FocusNode();
-    _editError = null;
-    setState(() {});
+    setState(() {
+      _editingId = memory.id;
+      _editController = TextEditingController(text: memory.content);
+      _editFocusNode = FocusNode();
+      _editPersonal = memory.isPersonal;
+      _editError = null;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _editFocusNode?.requestFocus();
     });
@@ -69,34 +82,41 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
     if (_editingId == null) return;
     _editController?.dispose();
     _editFocusNode?.dispose();
-    _editingId = null;
-    _editController = null;
-    _editFocusNode = null;
-    _editError = null;
-    _savingId = null;
-    setState(() {});
+    setState(() {
+      _editingId = null;
+      _editController = null;
+      _editFocusNode = null;
+      _editError = null;
+      _savingId = null;
+    });
   }
 
   Future<void> _saveEditing() async {
-    if (_editingId == null || _editController == null) return;
-    final content = _editController!.text.trim();
+    final id = _editingId;
+    final controller = _editController;
+    if (id == null || controller == null) return;
+    final content = controller.text.trim();
     if (content.isEmpty) return;
 
     setState(() {
-      _savingId = _editingId;
+      _savingId = id;
       _editError = null;
     });
 
     try {
-      await ref
-          .read(memoriesProvider.notifier)
-          .updateMemory(_editingId!, content: content);
+      await ref.read(memoriesProvider.notifier).updateMemory(
+            id,
+            content: content,
+            personal: _editPersonal,
+          );
       _cancelEditing();
     } catch (e) {
-      setState(() {
-        _editError = e.toString();
-        _savingId = null;
-      });
+      if (mounted) {
+        setState(() {
+          _editError = e.toString();
+          _savingId = null;
+        });
+      }
     }
   }
 
@@ -110,14 +130,20 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
     });
 
     try {
-      await ref.read(memoriesProvider.notifier).createMemory(content);
-      _createController.clear();
-      setState(() => _creating = false);
+      await ref
+          .read(memoriesProvider.notifier)
+          .createMemory(content, personal: _createPersonal);
+      if (mounted) {
+        _createController.clear();
+        setState(() => _creating = false);
+      }
     } catch (e) {
-      setState(() {
-        _createError = e.toString();
-        _creating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _createError = e.toString();
+          _creating = false;
+        });
+      }
     }
   }
 
@@ -148,7 +174,7 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
     try {
       await ref.read(memoriesProvider.notifier).deleteMemory(memory.id);
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('falha ao apagar: $e')),
         );
@@ -159,106 +185,262 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isMobile = MediaQuery.of(context).size.width < kMobileBreakpoint;
-    final memoriesAsync = ref.watch(memoriesProvider);
+    final scope = ref.watch(memoriesScopeModeProvider);
 
-    return Dialog(
-      backgroundColor: BmoColors.screenBgElevated,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: BmoColors.bodyGreen, width: 2),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: BmoColors.screenBg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: const BmoBackButton(),
+        title: Text('Memórias', style: theme.textTheme.headlineSmall),
       ),
-      insetPadding: isMobile
-          ? const EdgeInsets.all(8)
-          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: isMobile ? double.infinity : 650,
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _Header(onClose: () => Navigator.of(context).pop()),
-            _SearchField(
-              controller: _searchController,
-              hasText: _query.isNotEmpty,
-              onChanged: (v) => setState(() => _query = v),
-            ),
-            _CreateInput(
-              controller: _createController,
-              creating: _creating,
-              error: _createError,
-              onSubmit: _createMemory,
-            ),
-            Flexible(
-              child: memoriesAsync.when(
-                loading: () =>
-                    const Center(child: CircularProgressIndicator()),
-                error: (e, _) => _ErrorState(
-                  error: e,
-                  onRetry: () => ref.invalidate(memoriesProvider),
-                ),
-                data: (memories) {
-                  final filtered = _filter(memories);
-                  if (filtered.isEmpty) {
-                    return _EmptyState(
-                      hasSearch: _query.isNotEmpty,
-                      theme: theme,
-                    );
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) => _MemoryListItem(
-                      memory: filtered[i],
-                      isEditing: _editingId == filtered[i].id,
-                      saving: _savingId == filtered[i].id,
-                      editError: _editingId == filtered[i].id
-                          ? _editError
-                          : null,
-                      editController:
-                          _editingId == filtered[i].id ? _editController : null,
-                      editFocusNode:
-                          _editingId == filtered[i].id ? _editFocusNode : null,
-                      onTap: () => _startEditing(filtered[i]),
-                      onSave: _saveEditing,
-                      onCancelEdit: _cancelEditing,
-                      onEdit: () => _startEditing(filtered[i]),
-                      onDelete: () => _confirmAndDelete(filtered[i]),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
+      body: Column(
+        children: [
+          _SearchField(
+            controller: _searchController,
+            hasText: _query.isNotEmpty,
+            onChanged: _onSearchChanged,
+            onClear: _clearSearch,
+          ),
+          _CreateInput(
+            controller: _createController,
+            personal: _createPersonal,
+            creating: _creating,
+            error: _createError,
+            onScopeChanged: (v) => setState(() => _createPersonal = v),
+            onSubmit: _createMemory,
+          ),
+          _ScopeFilter(
+            selected: scope,
+            onChanged: (s) =>
+                ref.read(memoriesScopeModeProvider.notifier).set(s),
+          ),
+          Expanded(
+            child: _query.isEmpty
+                ? _MemoryList(
+                    memoriesAsync: ref.watch(memoriesProvider),
+                    onRetry: () => ref.invalidate(memoriesProvider),
+                    editingId: _editingId,
+                    savingId: _savingId,
+                    editError: _editError,
+                    editController: _editController,
+                    editFocusNode: _editFocusNode,
+                    editPersonal: _editPersonal,
+                    onEditPersonalChanged: (v) =>
+                        setState(() => _editPersonal = v),
+                    onStartEdit: _startEditing,
+                    onSave: _saveEditing,
+                    onCancelEdit: _cancelEditing,
+                    onDelete: _confirmAndDelete,
+                    emptyMessage: 'Nenhuma memória ainda',
+                  )
+                : _MemoryList(
+                    memoriesAsync: ref.watch(memorySearchProvider(_query)),
+                    onRetry: () => ref.invalidate(memorySearchProvider(_query)),
+                    editingId: _editingId,
+                    savingId: _savingId,
+                    editError: _editError,
+                    editController: _editController,
+                    editFocusNode: _editFocusNode,
+                    editPersonal: _editPersonal,
+                    onEditPersonalChanged: (v) =>
+                        setState(() => _editPersonal = v),
+                    onStartEdit: _startEditing,
+                    onSave: _saveEditing,
+                    onCancelEdit: _cancelEditing,
+                    onDelete: _confirmAndDelete,
+                    emptyMessage: 'Nenhuma memória encontrada',
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lista pronta para os dois estados (normal e busca).
+class _MemoryList extends StatelessWidget {
+  final AsyncValue<List<Memory>> memoriesAsync;
+  final VoidCallback onRetry;
+  final int? editingId;
+  final int? savingId;
+  final String? editError;
+  final TextEditingController? editController;
+  final FocusNode? editFocusNode;
+  final bool editPersonal;
+  final ValueChanged<bool> onEditPersonalChanged;
+  final ValueChanged<Memory> onStartEdit;
+  final VoidCallback onSave;
+  final VoidCallback onCancelEdit;
+  final ValueChanged<Memory> onDelete;
+  final String emptyMessage;
+
+  const _MemoryList({
+    required this.memoriesAsync,
+    required this.onRetry,
+    required this.editingId,
+    required this.savingId,
+    required this.editError,
+    required this.editController,
+    required this.editFocusNode,
+    required this.editPersonal,
+    required this.onEditPersonalChanged,
+    required this.onStartEdit,
+    required this.onSave,
+    required this.onCancelEdit,
+    required this.onDelete,
+    required this.emptyMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return memoriesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => _ErrorState(error: e, onRetry: onRetry),
+      data: (memories) {
+        if (memories.isEmpty) return _EmptyState(message: emptyMessage);
+        return ListView.builder(
+          padding: const EdgeInsets.only(bottom: 16),
+          itemCount: memories.length,
+          itemBuilder: (_, i) {
+            final memory = memories[i];
+            return MemoryListItem(
+              memory: memory,
+              isEditing: editingId == memory.id,
+              saving: savingId == memory.id,
+              editError: editingId == memory.id ? editError : null,
+              editController: editingId == memory.id ? editController : null,
+              editFocusNode: editingId == memory.id ? editFocusNode : null,
+              editPersonal: editPersonal,
+              onEditPersonalChanged: onEditPersonalChanged,
+              onTap: () => onStartEdit(memory),
+              onSave: onSave,
+              onCancelEdit: onCancelEdit,
+              onEdit: () => onStartEdit(memory),
+              onDelete: () => onDelete(memory),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Chip de escopo (leitura): `Pessoal` ou `Da casa`.
+class MemoryScopeChip extends StatelessWidget {
+  final bool personal;
+  const MemoryScopeChip({super.key, required this.personal});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = personal ? BmoColors.accentYellow : BmoColors.accentBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        personal ? 'Pessoal' : 'Da casa',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: BmoColors.textSecondary,
+          height: 1.2,
         ),
       ),
     );
   }
 }
 
-class _Header extends StatelessWidget {
-  final VoidCallback onClose;
+/// Seletor de escopo de duas opções (criação/edição).
+class MemoryScopeToggle extends StatelessWidget {
+  final bool personal;
+  final ValueChanged<bool> onChanged;
 
-  const _Header({required this.onClose});
+  const MemoryScopeToggle({required this.personal, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _option('Pessoal', true),
+        const SizedBox(width: 4),
+        _option('Da casa', false),
+      ],
+    );
+  }
+
+  Widget _option(String label, bool value) {
+    final selected = personal == value;
+    return InkWell(
+      onTap: () => onChanged(value),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: selected
+              ? BmoColors.accentGreen.withValues(alpha: 0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? BmoColors.accentGreen
+                : BmoColors.textMuted.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            color: BmoColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScopeFilter extends StatelessWidget {
+  final MemoryScope selected;
+  final ValueChanged<MemoryScope> onChanged;
+
+  const _ScopeFilter({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Row(
         children: [
-          Text(
-            'Memórias',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const Spacer(),
-          IconButton(
-            icon: Icon(Icons.close, color: BmoColors.textSecondary),
-            tooltip: 'Fechar',
-            onPressed: onClose,
-          ),
+          for (final scope in MemoryScope.values) ...[
+            ChoiceChip(
+              label: Text(scope.label),
+              selected: selected == scope,
+              onSelected: (_) => onChanged(scope),
+              labelStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                color: BmoColors.textPrimary,
+              ),
+              backgroundColor: BmoColors.screenBg,
+              selectedColor: BmoColors.accentGreen.withValues(alpha: 0.2),
+              side: BorderSide(
+                color: selected == scope
+                    ? BmoColors.accentGreen
+                    : BmoColors.textMuted.withValues(alpha: 0.3),
+              ),
+              visualDensity: VisualDensity.compact,
+              showCheckmark: false,
+            ),
+            const SizedBox(width: 8),
+          ],
         ],
       ),
     );
@@ -269,11 +451,13 @@ class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final bool hasText;
   final ValueChanged<String> onChanged;
+  final VoidCallback onClear;
 
   const _SearchField({
     required this.controller,
     required this.hasText,
     required this.onChanged,
+    required this.onClear,
   });
 
   @override
@@ -292,11 +476,7 @@ class _SearchField extends StatelessWidget {
           hintStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: BmoColors.textMuted,
               ),
-          prefixIcon: Icon(
-            Icons.search,
-            size: 16,
-            color: BmoColors.textMuted,
-          ),
+          prefixIcon: const Icon(Icons.search, size: 16, color: BmoColors.textMuted),
           prefixIconConstraints: const BoxConstraints(
             minWidth: 32,
             minHeight: 32,
@@ -312,14 +492,8 @@ class _SearchField extends StatelessWidget {
                     minHeight: 28,
                   ),
                   tooltip: 'limpar',
-                  onPressed: () {
-                    controller.clear();
-                    onChanged('');
-                  },
-                  icon: Icon(
-                    Icons.close,
-                    color: BmoColors.textMuted,
-                  ),
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close, color: BmoColors.textMuted),
                 ),
           filled: true,
           fillColor: BmoColors.screenBg,
@@ -351,14 +525,18 @@ class _SearchField extends StatelessWidget {
 
 class _CreateInput extends StatelessWidget {
   final TextEditingController controller;
+  final bool personal;
   final bool creating;
   final String? error;
+  final ValueChanged<bool> onScopeChanged;
   final VoidCallback onSubmit;
 
   const _CreateInput({
     required this.controller,
+    required this.personal,
     required this.creating,
     required this.error,
+    required this.onScopeChanged,
     required this.onSubmit,
   });
 
@@ -441,6 +619,8 @@ class _CreateInput extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          MemoryScopeToggle(personal: personal, onChanged: onScopeChanged),
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -457,26 +637,31 @@ class _CreateInput extends StatelessWidget {
   }
 }
 
-class _MemoryListItem extends StatelessWidget {
+class MemoryListItem extends StatelessWidget {
   final Memory memory;
   final bool isEditing;
   final bool saving;
   final String? editError;
   final TextEditingController? editController;
   final FocusNode? editFocusNode;
+  final bool editPersonal;
+  final ValueChanged<bool> onEditPersonalChanged;
   final VoidCallback onTap;
   final VoidCallback onSave;
   final VoidCallback onCancelEdit;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const _MemoryListItem({
+  const MemoryListItem({
+    super.key,
     required this.memory,
     required this.isEditing,
     required this.saving,
     required this.editError,
     required this.editController,
     required this.editFocusNode,
+    required this.editPersonal,
+    required this.onEditPersonalChanged,
     required this.onTap,
     required this.onSave,
     required this.onCancelEdit,
@@ -487,9 +672,6 @@ class _MemoryListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sourceIcon = memory.source == 'agent'
-        ? Icons.smart_toy_outlined
-        : Icons.person_outline;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -501,7 +683,7 @@ class _MemoryListItem extends StatelessWidget {
               color: BmoColors.screenBg,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: isEditing ? _buildEditing(theme) : _buildDisplay(theme, sourceIcon),
+            child: isEditing ? _buildEditing(theme) : _buildDisplay(theme),
           ),
           if (isEditing && editError != null)
             Padding(
@@ -518,7 +700,14 @@ class _MemoryListItem extends StatelessWidget {
     );
   }
 
-  Widget _buildDisplay(ThemeData theme, IconData sourceIcon) {
+  IconData get _sourceIcon =>
+      memory.source == 'agent' ? Icons.smart_toy_outlined : Icons.person_outline;
+
+  Color get _sourceColor => memory.source == 'agent'
+      ? BmoColors.accentYellow
+      : BmoColors.textSecondary;
+
+  Widget _buildDisplay(ThemeData theme) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -529,35 +718,33 @@ class _MemoryListItem extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Icon(
-                sourceIcon,
-                size: 18,
-                color: memory.source == 'agent'
-                    ? BmoColors.accentYellow
-                    : BmoColors.textSecondary,
-              ),
+              child: Icon(_sourceIcon, size: 18, color: _sourceColor),
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                memory.content,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: BmoColors.textPrimary,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    memory.content,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: BmoColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  MemoryScopeChip(personal: memory.isPersonal),
+                ],
               ),
             ),
             PopupMenuButton<String>(
-              icon: Icon(
+              icon: const Icon(
                 Icons.more_vert,
                 size: 18,
                 color: BmoColors.textMuted,
               ),
               color: BmoColors.screenBgElevated,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(
-                minWidth: 28,
-                minHeight: 28,
-              ),
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               onSelected: (value) {
                 if (value == 'edit') {
                   onEdit();
@@ -565,15 +752,9 @@ class _MemoryListItem extends StatelessWidget {
                   onDelete();
                 }
               },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Text('Editar'),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Apagar'),
-                ),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'edit', child: Text('Editar')),
+                PopupMenuItem(value: 'delete', child: Text('Apagar')),
               ],
             ),
           ],
@@ -595,15 +776,7 @@ class _MemoryListItem extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Icon(
-                    memory.source == 'agent'
-                        ? Icons.smart_toy_outlined
-                        : Icons.person_outline,
-                    size: 18,
-                    color: memory.source == 'agent'
-                        ? BmoColors.accentYellow
-                        : BmoColors.textSecondary,
-                  ),
+                  child: Icon(_sourceIcon, size: 18, color: _sourceColor),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -611,8 +784,8 @@ class _MemoryListItem extends StatelessWidget {
                     onKeyEvent: (node, event) {
                       if (event is KeyDownEvent) {
                         if (event.logicalKey == LogicalKeyboardKey.enter) {
-                          final shiftPressed = HardwareKeyboard.instance
-                              .logicalKeysPressed
+                          final shiftPressed = HardwareKeyboard
+                              .instance.logicalKeysPressed
                               .any((k) =>
                                   k == LogicalKeyboardKey.shiftLeft ||
                                   k == LogicalKeyboardKey.shiftRight);
@@ -664,8 +837,12 @@ class _MemoryListItem extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                MemoryScopeToggle(
+                  personal: editPersonal,
+                  onChanged: onEditPersonalChanged,
+                ),
+                const Spacer(),
                 IconButton(
                   iconSize: 18,
                   visualDensity: VisualDensity.compact,
@@ -676,7 +853,7 @@ class _MemoryListItem extends StatelessWidget {
                   ),
                   tooltip: 'Cancelar',
                   onPressed: onCancelEdit,
-                  icon: Icon(Icons.close, color: BmoColors.textSecondary),
+                  icon: const Icon(Icons.close, color: BmoColors.textSecondary),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
@@ -695,7 +872,7 @@ class _MemoryListItem extends StatelessWidget {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Icon(Icons.check, color: BmoColors.accentGreen),
+                      : const Icon(Icons.check, color: BmoColors.accentGreen),
                 ),
               ],
             ),
@@ -707,10 +884,8 @@ class _MemoryListItem extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  final bool hasSearch;
-  final ThemeData theme;
-
-  const _EmptyState({required this.hasSearch, required this.theme});
+  final String message;
+  const _EmptyState({required this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -718,11 +893,11 @@ class _EmptyState extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Center(
         child: Text(
-          hasSearch ? 'Nenhuma memória encontrada' : 'Nenhuma memória ainda',
+          message,
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: BmoColors.textMuted,
-          ),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: BmoColors.textMuted,
+              ),
         ),
       ),
     );
@@ -744,7 +919,7 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, color: Colors.redAccent, size: 32),
+            const Icon(Icons.error_outline, color: Colors.redAccent, size: 32),
             const SizedBox(height: 8),
             Text(
               'falha ao carregar',
