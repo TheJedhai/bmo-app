@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:bmo_app/core/events/events_provider.dart';
 import 'package:bmo_app/core/theme/bmo_theme.dart';
 import 'package:bmo_app/features/memories/data/memories_client.dart';
+import 'package:bmo_app/features/memories/presentation/memories_modal.dart';
 import 'package:bmo_app/features/memories/providers/memories_provider.dart';
 import 'package:bmo_app/features/memories/widgets/memory_scope_chip.dart';
 import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
@@ -183,10 +184,10 @@ class _BmoRichMemoryCardState extends ConsumerState<BmoRichMemoryCard> {
                     ?.copyWith(color: BmoColors.accentRed),
               ),
             ],
-            if (!_undone && widget.block.mutable && _memoryId > 0) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (!_undone && widget.block.mutable && _memoryId > 0)
                   TextButton(
                     onPressed: _busy ? null : _undo,
                     style: TextButton.styleFrom(
@@ -195,9 +196,12 @@ class _BmoRichMemoryCardState extends ConsumerState<BmoRichMemoryCard> {
                     ),
                     child: const Text('Desfazer'),
                   ),
-                ],
-              ),
-            ],
+                TextButton(
+                  onPressed: () => showMemoriesModal(context),
+                  child: const Text('Ver memórias'),
+                ),
+              ],
+            ),
           ],
         ),
       ),

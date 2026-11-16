@@ -175,6 +175,15 @@ void main() {
     expect(find.text('Desfeita'), findsOneWidget);
   });
 
+  testWidgets('link Ver memórias abre o modal', (tester) async {
+    await pump(tester);
+
+    await tester.tap(find.text('Ver memórias'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nova memória...'), findsOneWidget);
+  });
+
   testWidgets('re-sync atualiza conteúdo vindo do REST', (tester) async {
     await pump(tester);
 

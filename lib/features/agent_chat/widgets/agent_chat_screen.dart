@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
+import 'package:bmo_app/features/memories/presentation/memories_modal.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
@@ -72,15 +73,21 @@ class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
           projectId == null ? 'Chat' : _projectTitle(ref, projectId),
           style: Theme.of(context).textTheme.headlineSmall,
         ),
-        actions: isMobile
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.menu, color: BmoColors.textPrimary),
-                  onPressed: () =>
-                      _scaffoldKey.currentState?.openDrawer(),
-                ),
-              ]
-            : null,
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.psychology_outlined,
+              color: BmoColors.textPrimary,
+            ),
+            tooltip: 'Memórias',
+            onPressed: () => showMemoriesModal(context),
+          ),
+          if (isMobile)
+            IconButton(
+              icon: const Icon(Icons.menu, color: BmoColors.textPrimary),
+              onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+            ),
+        ],
       ),
       body: isMobile
           ? _AgentChatBody(projectId: projectId)
