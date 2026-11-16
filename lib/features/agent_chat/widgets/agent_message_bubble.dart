@@ -111,6 +111,30 @@ class _SystemMessage extends StatelessWidget {
   }
 }
 
+/// Numa mensagem, o cartão de aprovação vem antes do bloco rico que a
+/// ferramenta aprovada gerou. O servidor manda na ordem `tool → rich →
+/// approval`; aqui as peças ricas ficam num buffer e são despejadas depois
+/// das aprovações contíguas.
+List<AgentPart> _orderCards(List<AgentPart> parts) {
+  final out = <AgentPart>[];
+  final pendingRich = <AgentPart>[];
+  for (final part in parts) {
+    if (part is AgentRichPart) {
+      pendingRich.add(part);
+      continue;
+    }
+    if (part is AgentApprovalPart) {
+      out.add(part);
+      continue;
+    }
+    out.addAll(pendingRich);
+    pendingRich.clear();
+    out.add(part);
+  }
+  out.addAll(pendingRich);
+  return out;
+}
+
 class _AssistantParts extends StatelessWidget {
   final AgentMessage message;
   final bool streaming;
@@ -140,10 +164,11 @@ class _AssistantParts extends StatelessWidget {
       );
     }
 
+    final parts = _orderCards(message.parts);
     final children = <Widget>[];
-    for (var index = 0; index < message.parts.length; index++) {
-      final part = message.parts[index];
-      final isLast = index == message.parts.length - 1;
+    for (var index = 0; index < parts.length; index++) {
+      final part = parts[index];
+      final isLast = index == parts.length - 1;
       switch (part) {
         case AgentTextPart():
           children.add(AgentTextBlock(text: part.text));
