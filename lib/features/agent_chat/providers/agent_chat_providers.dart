@@ -176,6 +176,10 @@ class AgentConversation extends _$AgentConversation {
   /// Texto do envio em andamento — devolvido ao campo se a sessão sumiu.
   String? _pendingMessage;
 
+  /// Mensagem otimista do envio em andamento (removida se o servidor recusar
+  /// o turno com 409).
+  String? _optimisticUserId;
+
   late AgentChatClient _client;
   late Duration _pollInterval;
   int? _projectId;
@@ -288,6 +292,7 @@ class AgentConversation extends _$AgentConversation {
       parts: [AgentTextPart(trimmed)],
     );
     _pendingMessage = trimmed;
+    _optimisticUserId = userMessage.id;
     // O servidor nega as pendências ao receber mensagem nova; o card responde
     // na hora, antes do POST.
     _startTurn(_denyPending([..._snapshot.messages, userMessage]));
@@ -440,6 +445,17 @@ class AgentConversation extends _$AgentConversation {
     final rollback = _decidingCallId;
     _decidingCallId = null;
 
+    // 409 no envio de mensagem: o turno de outro cliente manda. Aprovação
+    // em 409 continua caindo no rollback normal abaixo.
+    if (error is AgentChatException &&
+        error.errorCode == 'turn_in_progress' &&
+        rollback == null) {
+      _handleTurnInProgress();
+      return;
+    }
+
+    _optimisticUserId = null;
+
     if (error is AgentChatException && error.errorCode == 'not_found') {
       final draft = _pendingMessage;
       _pendingMessage = null;
@@ -477,6 +493,31 @@ class AgentConversation extends _$AgentConversation {
     ));
   }
 
+  /// 409 `turn_in_progress`: o servidor já está num turno desta conversa.
+  /// Nada de reenvio automático — o texto volta para o campo, o indicador
+  /// "BMO respondendo" liga e o `turn_completed` libera o usuário.
+  void _handleTurnInProgress() {
+    final draft = _pendingMessage;
+    final optimisticId = _optimisticUserId;
+    _pendingMessage = null;
+    _optimisticUserId = null;
+    _turnStarted = false;
+    _turnEnded = true;
+
+    final messages = _dropEmptyAssistant([
+      for (final message in _snapshot.messages)
+        if (message.id != optimisticId) message,
+    ]);
+
+    _emit(_snapshot.copyWith(
+      messages: messages,
+      status: AgentConversationStatus.idle,
+      error: null,
+      remoteTurn: true,
+      restoreDraft: draft,
+    ));
+  }
+
   void _onStreamDone() {
     if (_turnEnded) return;
     // Stream fechou sem turn.end: o turno pode continuar no servidor.
@@ -489,6 +530,7 @@ class AgentConversation extends _$AgentConversation {
   }
 
   void _finishTurn(String status) {
+    _optimisticUserId = null;
     // `_turnId` fica: o `session.turn_completed` do próprio turno ainda pode
     // chegar pelo SSE e precisa ser reconhecido como nosso (e ignorado).
     _pendingMessage = null;
