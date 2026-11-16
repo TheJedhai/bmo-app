@@ -143,6 +143,7 @@ List<String> _signatureOf(List<AgentMessage> messages) => [
 String _partSignature(AgentPart part) => switch (part) {
       AgentTextPart() => 'text',
       AgentReasoningPart() => 'reasoning',
+      AgentEventPart() => 'event',
       AgentRichPart() => 'rich',
       AgentToolPart(:final callId, :final status) => 'tool($callId,${status.name})',
       AgentApprovalPart(:final callId, :final decision) =>

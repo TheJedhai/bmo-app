@@ -5,7 +5,7 @@ import 'dart:developer' as developer;
 ///
 /// O histórico (REST) e o streaming ao vivo produzem o mesmo modelo: o
 /// notifier só vai anexando/substituindo partes.
-enum AgentRole { user, assistant }
+enum AgentRole { user, assistant, system }
 
 sealed class AgentPart {
   const AgentPart();
@@ -44,6 +44,17 @@ class AgentToolPart extends AgentPart {
         label: label,
         status: status ?? this.status,
       );
+}
+
+/// `{"type":"event","text","source","ref"}` — linha de histórico gerada pelo
+/// servidor (ex.: run de coding que terminou). `ref` opcional, hoje só
+/// `run:N`.
+class AgentEventPart extends AgentPart {
+  final String text;
+  final String? source;
+  final String? ref;
+
+  const AgentEventPart({required this.text, this.source, this.ref});
 }
 
 class AgentRichPart extends AgentPart {
@@ -113,6 +124,7 @@ class AgentMessage {
   });
 
   bool get isAssistant => role == AgentRole.assistant;
+  bool get isSystem => role == AgentRole.system;
 
   String get plainText => parts
       .whereType<AgentTextPart>()
@@ -140,7 +152,11 @@ class AgentMessage {
 
   /// Lê uma mensagem do formato de exibição do contrato.
   static AgentMessage fromJson(Map<String, dynamic> json) {
-    final role = json['role'] == 'user' ? AgentRole.user : AgentRole.assistant;
+    final role = switch (json['role']) {
+      'user' => AgentRole.user,
+      'system' => AgentRole.system,
+      _ => AgentRole.assistant,
+    };
     final rawParts = json['parts'];
     final parts = <AgentPart>[];
     if (rawParts is List) {
@@ -198,6 +214,14 @@ AgentPart? parseAgentPart(Map<String, dynamic> json) {
         name: name,
         label: json['label'] is String ? json['label'] as String : name,
         status: json['ok'] == true ? AgentToolStatus.ok : AgentToolStatus.failed,
+      );
+    case 'event':
+      final text = json['text'];
+      if (text is! String) return null;
+      return AgentEventPart(
+        text: text,
+        source: json['source'] is String ? json['source'] as String : null,
+        ref: json['ref'] is String ? json['ref'] as String : null,
       );
     case 'rich':
       final blockId = json['block_id'];

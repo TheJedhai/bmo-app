@@ -23,6 +23,10 @@ class AgentMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.role == AgentRole.system) {
+      return _SystemMessage(message: message);
+    }
+
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < kMobileBreakpoint;
     final isUser = message.role == AgentRole.user;
@@ -81,6 +85,32 @@ class AgentMessageBubble extends StatelessWidget {
   }
 }
 
+/// Mensagem do servidor (`role: "system"`): linhas de evento, sem bolha.
+class _SystemMessage extends StatelessWidget {
+  final AgentMessage message;
+
+  const _SystemMessage({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        children: [
+          for (final part in message.parts)
+            switch (part) {
+              AgentEventPart() => AgentEventLine(part: part),
+              AgentTextPart() => AgentEventLine(
+                  part: AgentEventPart(text: part.text),
+                ),
+              _ => const SizedBox.shrink(),
+            },
+        ],
+      ),
+    );
+  }
+}
+
 class _AssistantParts extends StatelessWidget {
   final AgentMessage message;
   final bool streaming;
@@ -117,6 +147,8 @@ class _AssistantParts extends StatelessWidget {
       switch (part) {
         case AgentTextPart():
           children.add(AgentTextBlock(text: part.text));
+        case AgentEventPart():
+          children.add(AgentEventLine(part: part));
         case AgentReasoningPart():
           children.add(
             AgentReasoningBlock(text: part.text, isStreaming: streaming && isLast),

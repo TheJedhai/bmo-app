@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/bmo_theme.dart';
 import '../../rich_blocks/data/bmo_rich_block.dart';
@@ -119,6 +120,53 @@ class AgentToolChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Linha de evento do histórico (role `system`): discreta, centralizada,
+/// sem bolha nem avatar. `ref: "run:N"` abre o run em `/coding/runs/N`.
+class AgentEventLine extends StatelessWidget {
+  final AgentEventPart part;
+
+  const AgentEventLine({super.key, required this.part});
+
+  /// Destino do toque, se o `ref` for reconhecido.
+  static String? locationOf(String? ref) {
+    if (ref == null || !ref.startsWith('run:')) return null;
+    final id = int.tryParse(ref.substring(4));
+    return id == null ? null : '/coding/runs/$id';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final location = locationOf(part.ref);
+    final text = Text(
+      part.text,
+      textAlign: TextAlign.center,
+      style: Theme.of(context)
+          .textTheme
+          .bodySmall
+          ?.copyWith(color: BmoColors.textMuted),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Center(
+        child: location == null
+            ? text
+            : InkWell(
+                onTap: () => GoRouter.maybeOf(context)?.go(location),
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: text,
+                ),
+              ),
       ),
     );
   }
