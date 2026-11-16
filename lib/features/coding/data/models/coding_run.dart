@@ -29,6 +29,31 @@ class CodingRun {
   final String? errorCode;
   final String? errorMessage;
 
+  /// Último sinal do run (resumo legível vindo do servidor).
+  final String? lastEvent;
+
+  /// Custo real medido pelo servidor. `null` = custo não configurado.
+  final double? costUsdComputed;
+
+  /// Uso de tokens (`{input_tokens, output_tokens, cache_*}`), quando houver.
+  final Map<String, dynamic>? usage;
+
+  /// Sessão de chat que originou o run (`/coding/:id/chat`).
+  final String? sessionId;
+
+  /// Run que originou este (plano/continuação).
+  final int? parentRunId;
+
+  /// Plano de execução em que este run está inserido.
+  final int? planId;
+
+  /// Quando o run foi juntado na base (`null` = não juntado).
+  final DateTime? mergedAt;
+
+  /// JSON recebido do servidor — base para aplicar patches de
+  /// `coding.run.updated` sem perder campos.
+  final Map<String, dynamic> _raw;
+
   const CodingRun({
     required this.id,
     required this.projectId,
@@ -44,7 +69,15 @@ class CodingRun {
     this.createdAt,
     this.errorCode,
     this.errorMessage,
-  });
+    this.lastEvent,
+    this.costUsdComputed,
+    this.usage,
+    this.sessionId,
+    this.parentRunId,
+    this.planId,
+    this.mergedAt,
+    Map<String, dynamic> raw = const {},
+  }) : _raw = raw;
 
   /// Run ainda pode ser parado.
   bool get isActive =>
@@ -53,6 +86,13 @@ class CodingRun {
   /// Status de falha, onde `error_message` faz sentido mostrar.
   bool get isFailure =>
       status == CodingRunStatus.failed || status == CodingRunStatus.timeout;
+
+  /// Já foi juntado na branch base.
+  bool get isMerged => mergedAt != null;
+
+  /// Aplica um `patch` de `coding.run.updated` sobre o último JSON conhecido.
+  CodingRun mergePatch(Map<String, dynamic> patch) =>
+      CodingRun.fromJson({..._raw, ...patch});
 
   factory CodingRun.fromJson(Map<String, dynamic> json) => CodingRun(
     id: _int(json['id']),
@@ -73,6 +113,18 @@ class CodingRun {
     createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
     errorCode: json['error_code']?.toString(),
     errorMessage: json['error_message']?.toString(),
+    lastEvent: json['last_event']?.toString(),
+    costUsdComputed: _double(json['cost_usd_computed']),
+    usage: json['usage'] is Map
+        ? Map<String, dynamic>.from(json['usage'] as Map)
+        : null,
+    sessionId: json['session_id']?.toString(),
+    parentRunId: json['parent_run_id'] == null
+        ? null
+        : _int(json['parent_run_id']),
+    planId: json['plan_id'] == null ? null : _int(json['plan_id']),
+    mergedAt: DateTime.tryParse(json['merged_at']?.toString() ?? ''),
+    raw: json,
   );
 
   static int _int(dynamic value) {
@@ -124,3 +176,8 @@ String formatRunDuration(int? ms) {
 /// "—" quando não há custo; senão "US$ 0.42".
 String formatRunCost(double? usd) =>
     usd == null ? '—' : 'US\$ ${usd.toStringAsFixed(2)}';
+
+/// Custo real do run: `cost_usd_computed`; sem ele, o valor não está
+/// configurado no servidor.
+String formatComputedCost(double? usd) =>
+    usd == null ? 'custo não configurado' : formatRunCost(usd);
