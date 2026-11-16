@@ -6,7 +6,7 @@ part of 'agent_live_turns.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$agentLiveTurnsHash() => r'63f34f047e24e4692f0a2d41d5378905d6d11be5';
+String _$agentLiveTurnsHash() => r'30dc2b5117f057e790eb4cef985e05b6f6eda87a';
 
 /// See also [AgentLiveTurns].
 @ProviderFor(AgentLiveTurns)

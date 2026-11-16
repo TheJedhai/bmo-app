@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/identity/identity_provider.dart';
 import '../../../core/navigation/app_router.dart';
 
 import 'bmo_density.dart';
@@ -22,6 +23,8 @@ class ChatCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(agentSessionsProvider(null));
+    final unread =
+        ref.watch(unreadBadgesProvider).valueOrNull?.chat ?? 0;
 
     return sessionsAsync.when(
       loading: () => const _LoadingState(),
@@ -29,6 +32,7 @@ class ChatCard extends ConsumerWidget {
       data: (sessions) => _ChatContent(
         sessions: sessions,
         accent: accent,
+        unread: unread,
         onNewChat: () {
           ref.read(selectedAgentSessionProvider(null).notifier).select(null);
           appRouter.push('/chat');
@@ -42,11 +46,13 @@ class _ChatContent extends StatelessWidget {
   const _ChatContent({
     required this.sessions,
     required this.accent,
+    required this.unread,
     required this.onNewChat,
   });
 
   final List<AgentSession> sessions;
   final Color accent;
+  final int unread;
   final VoidCallback onNewChat;
 
   @override
@@ -91,13 +97,52 @@ class _ChatContent extends StatelessWidget {
           )
         else ...[
           const SizedBox(height: 12),
-          Icon(Icons.chat_bubble_outline, size: 28, color: accent),
+          Row(
+            children: [
+              Icon(Icons.chat_bubble_outline, size: 28, color: accent),
+              if (unread > 0) ...[
+                const SizedBox(width: 8),
+                UnreadBadge(count: unread),
+              ],
+            ],
+          ),
           const SizedBox(height: 12),
           ...sessions.take(BmoDensity.of(context).isCompact ? 2 : 3).map(
                 (session) => _SessionRow(session: session),
               ),
         ],
       ],
+    );
+  }
+}
+
+/// Ponto/contagem de não lidos nos cards da dashboard.
+class UnreadBadge extends StatelessWidget {
+  final int count;
+  const UnreadBadge({super.key, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    if (count <= 0) return const SizedBox.shrink();
+    return Container(
+      constraints: const BoxConstraints(minWidth: 18),
+      height: 18,
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      decoration: BoxDecoration(
+        color: BmoColors.accentRed,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        count > 99 ? '99+' : '$count',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: BmoColors.textPrimary,
+          height: 1,
+        ),
+      ),
     );
   }
 }

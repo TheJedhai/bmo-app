@@ -14,6 +14,7 @@ import '../../features/gallery/providers/images_provider.dart';
 import '../../features/rss/data/rss_providers.dart';
 import '../config/env.dart';
 import '../http/client_factory.dart';
+import '../identity/identity_provider.dart';
 import '../identity/identity_state.dart';
 import '../utils/provider_utils.dart';
 import 'events_client.dart';
@@ -178,6 +179,11 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'alarm.updated':
     case 'alarm.deleted':
       ref.invalidate(alarmsProvider);
+
+    // ---- Chat / Coding: não lidos (`unread` do /me) ----
+    case 'session.turn_completed':
+    case 'session.read':
+      ref.invalidate(unreadBadgesProvider);
 
     // ---- Rich blocks (in-place patch, not invalidate) ----
     case 'rich.update':

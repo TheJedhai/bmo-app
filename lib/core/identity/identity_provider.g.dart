@@ -6,6 +6,28 @@ part of 'identity_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+String _$unreadBadgesHash() => r'693e3988c4d54f5446adde05540856b01353ced5';
+
+/// Badges de não lidos por área, direto do `/api/v1/me`.
+///
+/// Provider separado do [CurrentUser] de propósito: atualizar o badge não
+/// pode rebuildar o gate de identidade (spinner de tela cheia).
+///
+/// Copied from [unreadBadges].
+@ProviderFor(unreadBadges)
+final unreadBadgesProvider = AutoDisposeFutureProvider<UnreadCounts>.internal(
+  unreadBadges,
+  name: r'unreadBadgesProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$unreadBadgesHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef UnreadBadgesRef = AutoDisposeFutureProviderRef<UnreadCounts>;
 String _$currentUserHash() => r'36e11f4fbd5c02a8e78d5a3654dbe74b6f407eca';
 
 /// See also [CurrentUser].

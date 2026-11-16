@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/identity/identity_provider.dart';
 import '../../../../core/theme/bmo_theme.dart';
+import '../../../dashboard/widgets/chat_card.dart' show UnreadBadge;
 import '../../data/coding_providers.dart';
 
 /// Card da dashboard para a feature Coding.
@@ -15,6 +17,8 @@ class CodingDashCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectsAsync = ref.watch(projectsProvider);
+    final codingUnread =
+        ref.watch(unreadBadgesProvider).valueOrNull?.coding ?? 0;
 
     return projectsAsync.when(
       loading: () => const Padding(
@@ -54,6 +58,13 @@ class CodingDashCard extends ConsumerWidget {
                       ],
                     ),
                   ),
+                  if (codingUnread > 0) ...[
+                    const SizedBox(width: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: UnreadBadge(count: codingUnread),
+                    ),
+                  ],
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(bottom: 6),

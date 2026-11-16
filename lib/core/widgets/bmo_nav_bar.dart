@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/dashboard/dashboard_registry.dart';
 import '../../features/rss/data/rss_providers.dart';
+import '../identity/identity_provider.dart';
 import '../identity/identity_state.dart';
 import '../theme/bmo_theme.dart';
 
@@ -21,6 +22,9 @@ bool navRouteIsActive(String route, String location) {
 ///
 /// Flutua acima da borda inferior da tela, centralizada horizontalmente.
 /// Itera [dashboardWidgets] com [DashWidgetSpec.showInNavBar] == true.
+///
+/// Badge de não lidos: RSS vem de [unreadCountProvider]; Chat e Coding do
+/// `unread` do `/api/v1/me` ([unreadBadgesProvider]).
 /// O ícone da rota atual fica em [BmoColors.accentGreen]; os demais em
 /// [BmoColors.textMuted]. Tap usa [GoRouter.go] para substituir em vez
 /// de empilhar.
@@ -36,6 +40,9 @@ class BmoNavBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final features = ref.watch(enabledFeaturesProvider);
+    final rssUnread = ref.watch(unreadCountProvider).valueOrNull ?? 0;
+    final unread = ref.watch(unreadBadgesProvider).valueOrNull ??
+        UnreadCounts.none;
 
     final navSpecs = dashboardWidgets.where((s) {
       if (!s.showInNavBar) return false;
@@ -76,6 +83,7 @@ class BmoNavBar extends ConsumerWidget {
               for (final spec in navSpecs) ...[
                 _NavBarItem(
                   spec: spec,
+                  badgeCount: _badgeCount(spec.id, rssUnread, unread),
                   isActive: navRouteIsActive(spec.route!, currentLocation),
                   onTap: () {
                     // Sempre vai para a raiz do item quando a rota atual é
@@ -96,19 +104,30 @@ class BmoNavBar extends ConsumerWidget {
   }
 }
 
-class _NavBarItem extends ConsumerWidget {
+/// Quantos não lidos mostrar no item: RSS, Chat (`unread.chat`) ou Coding
+/// (`unread.coding`).
+int _badgeCount(String id, int rssUnread, UnreadCounts unread) => switch (id) {
+      'noticias' => rssUnread,
+      'chat' => unread.chat,
+      'coding' => unread.coding,
+      _ => 0,
+    };
+
+class _NavBarItem extends StatelessWidget {
   const _NavBarItem({
     required this.spec,
     required this.isActive,
+    required this.badgeCount,
     required this.onTap,
   });
 
   final DashWidgetSpec spec;
   final bool isActive;
+  final int badgeCount;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     assert(
       spec.navIcon != null && spec.route != null,
       'DashWidgetSpec "${spec.id}" has showInNavBar=true but navIcon or route is null',
@@ -127,46 +146,37 @@ class _NavBarItem extends ConsumerWidget {
       ),
     );
 
-    // Badge discreto de não lidos no canto superior direito do ícone
-    if (spec.id == 'noticias') {
-      final unreadAsync = ref.watch(unreadCountProvider);
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          icon,
-          unreadAsync.whenOrNull(
-            data: (count) {
-              if (count <= 0) return const SizedBox.shrink();
-              return Positioned(
-                top: -2,
-                right: -4,
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 15),
-                  height: 15,
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  decoration: BoxDecoration(
-                    color: BmoColors.accentRed,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    count > 99 ? '99+' : '$count',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 9,
-                      fontWeight: FontWeight.w700,
-                      color: BmoColors.textPrimary,
-                      height: 1,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ) ?? const SizedBox.shrink(),
-        ],
-      );
-    }
-
-    return icon;
+    // Badge discreto de não lidos no canto superior direito do ícone.
+    if (badgeCount <= 0) return icon;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        icon,
+        Positioned(
+          top: -2,
+          right: -4,
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 15),
+            height: 15,
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: BmoColors.accentRed,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              badgeCount > 99 ? '99+' : '$badgeCount',
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: BmoColors.textPrimary,
+                height: 1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

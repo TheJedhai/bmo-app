@@ -275,7 +275,7 @@ class _SelectedAgentSessionProviderElement
   int? get projectId => (origin as SelectedAgentSessionProvider).projectId;
 }
 
-String _$agentSessionsHash() => r'519cd4e54360e843583ec91948c3e55077a43798';
+String _$agentSessionsHash() => r'2a8b29cfb1efecac17554298b196a297f55582a9';
 
 abstract class _$AgentSessions
     extends BuildlessAutoDisposeAsyncNotifier<List<AgentSession>> {
@@ -418,7 +418,7 @@ class _AgentSessionsProviderElement
   int? get projectId => (origin as AgentSessionsProvider).projectId;
 }
 
-String _$agentConversationHash() => r'249ab1a3ed43d011e9a3047564f05815bd125118';
+String _$agentConversationHash() => r'a95465408f8a0ff618959abe1d023b9d734975b5';
 
 abstract class _$AgentConversation
     extends BuildlessAutoDisposeNotifier<AgentConversationState> {

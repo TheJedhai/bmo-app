@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/config/env.dart';
 import '../../../core/events/events_provider.dart';
 import '../../../core/http/client_factory.dart';
+import '../../../core/identity/identity_provider.dart';
 import '../../../core/identity/identity_state.dart';
 import '../data/agent_chat_client.dart';
 import '../data/agent_event.dart';
@@ -370,6 +371,7 @@ class AgentConversation extends _$AgentConversation {
       await _client.markSessionRead(sessionId);
       if (_disposed || _sessionId != sessionId) return;
       ref.invalidate(agentSessionsProvider(_projectId));
+      ref.invalidate(unreadBadgesProvider);
     } catch (_) {
       // Best-effort: o próximo turno/abertura tenta de novo.
     }

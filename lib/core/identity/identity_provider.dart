@@ -69,11 +69,18 @@ class MeClient {
             .toList() ??
         const <String>[];
 
+    final unread = decoded['unread'];
+    final unreadMap = unread is Map ? unread : const {};
+
     return MeResponse(
       user: UserProfile.fromJson(userJson),
       features: features,
+      chatUnread: _count(unreadMap['chat']),
+      codingUnread: _count(unreadMap['coding']),
     );
   }
+
+  int _count(dynamic value) => value is num ? value.toInt() : 0;
 
   dynamic _tryDecode(String body) {
     try {
@@ -88,7 +95,28 @@ class MeResponse {
   final UserProfile user;
   final List<String> features;
 
-  const MeResponse({required this.user, required this.features});
+  /// Badges de não lidos por área (`/api/v1/me` → `unread`).
+  final int chatUnread;
+  final int codingUnread;
+
+  const MeResponse({
+    required this.user,
+    required this.features,
+    this.chatUnread = 0,
+    this.codingUnread = 0,
+  });
+}
+
+/// Contadores de não lidos do `/api/v1/me` (`unread: {chat, coding}`).
+class UnreadCounts {
+  final int chat;
+  final int coding;
+
+  const UnreadCounts({this.chat = 0, this.coding = 0});
+
+  static const none = UnreadCounts();
+
+  bool get isEmpty => chat == 0 && coding == 0;
 }
 
 class MeException implements Exception {
@@ -130,6 +158,18 @@ final meClientProvider = Provider<MeClient>((ref) {
 final sharedPreferencesProvider = Provider<SharedPreferences?>((ref) {
   return null;
 });
+
+/// Badges de não lidos por área, direto do `/api/v1/me`.
+///
+/// Provider separado do [CurrentUser] de propósito: atualizar o badge não
+/// pode rebuildar o gate de identidade (spinner de tela cheia).
+@riverpod
+Future<UnreadCounts> unreadBadges(UnreadBadgesRef ref) async {
+  final userId = ref.watch(currentUserIdProvider);
+  if (userId == null) return UnreadCounts.none;
+  final me = await ref.read(meClientProvider).getMe(userId.toString());
+  return UnreadCounts(chat: me.chatUnread, coding: me.codingUnread);
+}
 
 // ============================================================
 // CurrentUser — @riverpod notifier
