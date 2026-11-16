@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/bmo_theme.dart';
 import '../../data/models/coding_project.dart';
 import 'folder_picker_dialog.dart';
+import 'permission_modes.dart';
 
 /// Resultado do formulário de projeto.
 class ProjectFormResult {
@@ -86,7 +87,7 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
     _denyRulesCtrl =
         TextEditingController(text: p?.denyRules.join('\n') ?? '');
     _knowledgeCtrl = TextEditingController(text: p?.knowledge ?? '');
-    _permissionMode = p?.permissionMode ?? 'default';
+    _permissionMode = p?.permissionMode ?? 'manual';
   }
 
   @override
@@ -189,32 +190,9 @@ class _ProjectFormDialogState extends State<ProjectFormDialog> {
                 // Modo de permissão
                 _sectionLabel('Modo de permissão'),
                 const SizedBox(height: 4),
-                DropdownButtonFormField<String>(
-                  initialValue: _permissionMode,
-                  decoration: _inputDecoration(),
-                  dropdownColor: BmoColors.screenBgElevated,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    color: BmoColors.textPrimary,
-                  ),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'default',
-                      child: Text('Default (allow + deny)'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'allow_all',
-                      child: Text('Permitir tudo'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'deny_all',
-                      child: Text('Negar tudo'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v != null) setState(() => _permissionMode = v);
-                  },
+                PermissionModeSelector(
+                  value: _permissionMode,
+                  onChanged: (v) => setState(() => _permissionMode = v),
                 ),
                 const SizedBox(height: 12),
                 _field(

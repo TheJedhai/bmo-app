@@ -15,6 +15,7 @@ import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/features/coding/data/coding_client.dart';
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
 import 'package:bmo_app/features/coding/data/coding_run_providers.dart';
+import 'package:bmo_app/features/coding/data/models/coding_project.dart';
 import 'package:bmo_app/features/coding/data/models/coding_run.dart';
 
 Map<String, dynamic> _runJson(int id, {String status = 'running'}) => {
@@ -29,6 +30,21 @@ Map<String, dynamic> _runJson(int id, {String status = 'running'}) => {
 
 class FakeCodingClient extends CodingClient {
   FakeCodingClient() : super(client: http.Client(), baseUrl: 'http://fake');
+
+  @override
+  Future<List<CodingProject>> listProjects() async => [
+        CodingProject(
+          id: 1,
+          name: 'BMO-APP',
+          primaryPath: '/tmp/bmo-app',
+          extraPaths: const [],
+          permissionMode: 'manual',
+          allowRules: const [],
+          denyRules: const [],
+          createdAt: '',
+          updatedAt: '',
+        ),
+      ];
 
   @override
   Future<List<CodingRun>> listRuns({
@@ -121,5 +137,32 @@ void main() {
     await settle();
 
     expect(runs().map((r) => r.id), [2, 1]);
+  });
+
+  test('coding.plan.updated troca o plano do projeto', () async {
+    // O plano é roteado pelo listener global do SSE (o shell prime ele).
+    container.listen(eventsListenerProvider, (_, _) {});
+    container.listen(projectsProvider, (_, _) {});
+    await settle();
+
+    events.add({
+      'type': 'coding.plan.updated',
+      'project_id': 1,
+      'plan': {
+        'text': 'migrar o grid',
+        'max_runs': 4,
+        'runs_used': 1,
+        'status': 'active',
+      },
+    });
+    await settle();
+
+    final project = container.read(projectsProvider).valueOrNull!.single;
+    expect(project.plan?.text, 'migrar o grid');
+    expect(project.plan?.runsLeft, 3);
+
+    events.add({'type': 'coding.plan.updated', 'project_id': 1, 'plan': null});
+    await settle();
+    expect(container.read(projectsProvider).valueOrNull!.single.plan, isNull);
   });
 }

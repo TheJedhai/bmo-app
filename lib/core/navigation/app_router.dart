@@ -10,6 +10,7 @@ import '../../features/rss/presentation/rss_screen.dart';
 import '../../features/calendar/presentation/calendar_screen.dart';
 import '../../features/calendar/presentation/calendars_screen.dart';
 import '../../features/coding/presentation/coding_project_screen.dart';
+import '../../features/coding/presentation/coding_project_settings_screen.dart';
 import '../../features/coding/presentation/coding_run_screen.dart';
 import '../../features/coding/presentation/coding_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
@@ -169,6 +170,7 @@ String? redirectLegacyMemories(BuildContext context, GoRouterState state) {
 /// /coding/runs/:runId    CodingRunScreen
 /// /coding/:projectId/chat  AgentChatScreen do projeto
 /// /coding/:projectId     CodingProjectScreen
+/// /coding/:projectId/settings  CodingProjectSettingsScreen
 /// ```
 final List<RouteBase> appRoutes = [
   GoRoute(
@@ -236,6 +238,21 @@ final List<RouteBase> appRoutes = [
       final runId = int.tryParse(state.pathParameters['runId'] ?? '');
       return _buildFeaturePage(
         runId == null ? const CodingScreen() : CodingRunScreen(runId: runId),
+        state,
+      );
+    },
+  ),
+  // Configurações do projeto: antes de `/coding/:projectId` para "settings"
+  // nunca ser lido como id.
+  GoRoute(
+    path: '/coding/:projectId/settings',
+    pageBuilder: (context, state) {
+      final projectId =
+          int.tryParse(state.pathParameters['projectId'] ?? '');
+      return _buildFeaturePage(
+        projectId == null
+            ? const CodingScreen()
+            : CodingProjectSettingsScreen(projectId: projectId),
         state,
       );
     },

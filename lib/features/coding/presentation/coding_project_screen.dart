@@ -134,6 +134,13 @@ class _Header extends ConsumerWidget {
               ),
             ),
           ),
+          IconButton(
+            tooltip: 'configurações',
+            onPressed: () =>
+                GoRouter.of(context).go('/coding/$projectId/settings'),
+            icon: const Icon(Icons.settings_outlined, size: 18),
+            color: BmoColors.textSecondary,
+          ),
         ],
       ),
     );
