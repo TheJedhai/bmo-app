@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:bmo_app/core/events/events_provider.dart';
 import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_session.dart';
 import 'package:bmo_app/features/agent_chat/providers/agent_chat_providers.dart';
@@ -81,6 +82,7 @@ void main() {
         agentSessionsProvider(1).overrideWith(FakeAgentSessions.new),
         codingRunsProvider(1).overrideWith((ref) async => [_run]),
         projectsProvider.overrideWith(FakeProjects.new),
+        eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
       ],
     );
     addTearDown(container.dispose);

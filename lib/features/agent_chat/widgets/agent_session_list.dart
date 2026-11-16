@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/agent_session.dart';
 import '../providers/agent_chat_providers.dart';
+import '../providers/agent_live_turns.dart';
 
 /// Sidebar de sessões do chat v2: nova, renomear, apagar e buscar.
 ///
@@ -103,6 +104,7 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     final sessionsAsync =
         ref.watch(agentSessionsProvider(widget.projectId));
     final selected = ref.watch(selectedAgentSessionProvider(widget.projectId));
+    final live = ref.watch(agentLiveTurnsProvider);
 
     return Container(
       color: BmoColors.screenBg,
@@ -195,7 +197,12 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                     return _SessionItem(
                       session: session,
                       selected: session.id == selected,
+                      hasNovelty: session.id != selected &&
+                          live.hasNovelty(session.id),
                       onTap: () {
+                        ref
+                            .read(agentLiveTurnsProvider.notifier)
+                            .markSeen(session.id);
                         ref
                             .read(selectedAgentSessionProvider(widget.projectId)
                                 .notifier)
@@ -219,6 +226,9 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
 class _SessionItem extends StatefulWidget {
   final AgentSession session;
   final bool selected;
+
+  /// Turno concluído que o usuário ainda não viu (ponto na lista).
+  final bool hasNovelty;
   final VoidCallback onTap;
   final VoidCallback onRename;
   final VoidCallback onDelete;
@@ -226,6 +236,7 @@ class _SessionItem extends StatefulWidget {
   const _SessionItem({
     required this.session,
     required this.selected,
+    required this.hasNovelty,
     required this.onTap,
     required this.onRename,
     required this.onDelete,
@@ -265,6 +276,15 @@ class _SessionItemState extends State<_SessionItem> {
                   ),
                 ),
               ),
+              if (widget.hasNovelty)
+                const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Icon(
+                    Icons.circle,
+                    size: 7,
+                    color: BmoColors.accentGreen,
+                  ),
+                ),
               if (showActions) ...[
                 IconButton(
                   tooltip: 'renomear',

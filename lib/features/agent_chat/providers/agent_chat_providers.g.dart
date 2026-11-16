@@ -418,7 +418,7 @@ class _AgentSessionsProviderElement
   int? get projectId => (origin as AgentSessionsProvider).projectId;
 }
 
-String _$agentConversationHash() => r'4add320fb1d03a0957b7edb27c617ff457ae2e68';
+String _$agentConversationHash() => r'249ab1a3ed43d011e9a3047564f05815bd125118';
 
 abstract class _$AgentConversation
     extends BuildlessAutoDisposeNotifier<AgentConversationState> {

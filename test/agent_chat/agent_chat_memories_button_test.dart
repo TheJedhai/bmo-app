@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:bmo_app/core/events/events_provider.dart';
 import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/core/theme/bmo_theme.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_chat_client.dart';
@@ -72,6 +73,7 @@ Future<void> _pumpChat(WidgetTester tester, {int? projectId}) async {
       agentChatClientProvider.overrideWithValue(FakeAgentChatClient()),
       agentChatPollIntervalProvider.overrideWithValue(Duration.zero),
       memoriesClientProvider.overrideWithValue(FakeMemoriesClient()),
+      eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
     ],
   );
   addTearDown(container.dispose);

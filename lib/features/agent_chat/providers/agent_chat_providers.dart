@@ -9,6 +9,7 @@ import '../data/agent_chat_client.dart';
 import '../data/agent_event.dart';
 import '../data/agent_message.dart';
 import '../data/agent_session.dart';
+import 'agent_live_turns.dart';
 
 part 'agent_chat_providers.g.dart';
 
@@ -115,6 +116,9 @@ class AgentConversationState {
   /// Texto que precisa voltar para o campo de digitação (envio que falhou).
   final String? restoreDraft;
 
+  /// Turno de outro cliente rodando nesta conversa ("BMO respondendo").
+  final bool remoteTurn;
+
   const AgentConversationState({
     this.sessionId,
     this.messages = const [],
@@ -123,6 +127,7 @@ class AgentConversationState {
     this.loadingHistory = false,
     this.refreshFailed = false,
     this.restoreDraft,
+    this.remoteTurn = false,
   });
 
   bool get isBusy => status == AgentConversationStatus.streaming;
@@ -135,6 +140,7 @@ class AgentConversationState {
     bool? loadingHistory,
     bool? refreshFailed,
     String? restoreDraft,
+    bool? remoteTurn,
   }) =>
       AgentConversationState(
         sessionId: sessionId ?? this.sessionId,
@@ -144,6 +150,7 @@ class AgentConversationState {
         loadingHistory: loadingHistory ?? this.loadingHistory,
         refreshFailed: refreshFailed ?? this.refreshFailed,
         restoreDraft: restoreDraft,
+        remoteTurn: remoteTurn ?? this.remoteTurn,
       );
 }
 
@@ -158,6 +165,13 @@ class AgentConversation extends _$AgentConversation {
   bool _turnEnded = true;
   bool _disposed = false;
   String? _decidingCallId;
+
+  /// `turn_id` do turno que este app iniciou (POST) — os eventos SSE do
+  /// mesmo turno são ignorados aqui.
+  String? _turnId;
+
+  /// Último `turn_completed` já atendido nesta conversa (dedupe do refetch).
+  String? _handledCompletedTurn;
 
   /// Texto do envio em andamento — devolvido ao campo se a sessão sumiu.
   String? _pendingMessage;
@@ -184,6 +198,12 @@ class AgentConversation extends _$AgentConversation {
       _stopStream();
     });
 
+    // Turnos de outros clientes chegam pelo SSE global, com `listen` pelo
+    // mesmo motivo da seleção: rebuild mataria o stream em andamento.
+    ref.listen<AgentLiveTurnsState>(agentLiveTurnsProvider, (previous, next) {
+      _onLiveTurns(next);
+    });
+
     // Troca de seleção vem por `listen` (não por `watch`): rebuild no meio de
     // um turno mataria o stream em andamento.
     ref.listen<String?>(selectedAgentSessionProvider(projectId),
@@ -202,6 +222,7 @@ class AgentConversation extends _$AgentConversation {
         sessionId: initial,
         loadingHistory: true,
       );
+      ref.read(agentLiveTurnsProvider.notifier).markSeen(initial);
       unawaited(_loadHistory(initial));
     }
     return _snapshot;
@@ -212,13 +233,46 @@ class AgentConversation extends _$AgentConversation {
   void _handleSelection(String? next) {
     if (next == _sessionId) return;
     _stopStream();
+    _handledCompletedTurn = null;
+    _turnId = null;
     _sessionId = next;
     if (next == null) {
       _emit(const AgentConversationState());
       return;
     }
     _emit(AgentConversationState(sessionId: next, loadingHistory: true));
+    ref.read(agentLiveTurnsProvider.notifier).markSeen(next);
     unawaited(_loadHistory(next));
+  }
+
+  /// Turno de outro cliente nesta conversa: indicador "BMO respondendo" e,
+  /// no fim, refetch das mensagens. Eventos do turno que este app iniciou são
+  /// ignorados — o stream do POST já entrega tudo.
+  void _onLiveTurns(AgentLiveTurnsState live) {
+    final sessionId = _sessionId;
+    if (sessionId == null) return;
+
+    bool isOwn(String? turnId) => turnId != null && turnId == _turnId;
+
+    final activeTurn = live.activeTurnOf(sessionId);
+    // Com o POST deste app no ar, o indicador é o do stream local.
+    _setRemoteTurn(
+      !_snapshot.isBusy && activeTurn != null && !isOwn(activeTurn),
+    );
+
+    final completedTurn = live.completed[sessionId];
+    if (completedTurn == null) return;
+    // Abrir/atualizar a conversa consome o ponto de novidade da lista.
+    ref.read(agentLiveTurnsProvider.notifier).markSeen(sessionId);
+    if (isOwn(completedTurn) || completedTurn == _handledCompletedTurn) return;
+    _handledCompletedTurn = completedTurn;
+    _setRemoteTurn(false);
+    unawaited(_loadHistory(sessionId));
+  }
+
+  void _setRemoteTurn(bool value) {
+    if (_snapshot.remoteTurn == value) return;
+    _emit(_snapshot.copyWith(remoteTurn: value));
   }
 
   // ── ações ────────────────────────────────────────────────────────────────
@@ -323,6 +377,7 @@ class AgentConversation extends _$AgentConversation {
     switch (event) {
       case TurnStarted():
         _turnStarted = true;
+        _turnId = event.turnId;
         _adoptSession(event.sessionId);
       case TextDelta():
         _appendText(event.text);
@@ -434,6 +489,8 @@ class AgentConversation extends _$AgentConversation {
   }
 
   void _finishTurn(String status) {
+    // `_turnId` fica: o `session.turn_completed` do próprio turno ainda pode
+    // chegar pelo SSE e precisa ser reconhecido como nosso (e ignorado).
     _pendingMessage = null;
     // `awaiting_approval` também é idle: o input continua liberado e o card
     // pendente é só uma mensagem a mais na conversa.

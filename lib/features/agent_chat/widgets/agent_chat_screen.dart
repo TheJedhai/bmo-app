@@ -142,6 +142,11 @@ class _AgentChatBody extends ConsumerWidget {
                       notifier.deny(callId, note: note),
                 ),
         ),
+        if (state.remoteTurn)
+          _Banner(
+            text: 'BMO respondendo',
+            color: BmoColors.accentGreen,
+          ),
         if (connectionLost)
           _Banner(
             text: 'conexão perdida, atualizando...',

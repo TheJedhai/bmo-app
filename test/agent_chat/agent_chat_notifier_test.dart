@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:bmo_app/core/events/events_provider.dart';
 import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_chat_client.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_event.dart';
@@ -182,6 +183,7 @@ void main() {
     container = ProviderContainer(overrides: [
       agentChatClientProvider.overrideWithValue(client),
       agentChatPollIntervalProvider.overrideWithValue(Duration.zero),
+      eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
     ]);
     addTearDown(container.dispose);
     container.read(currentUserIdProvider.notifier).state = 1;
