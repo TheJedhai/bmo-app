@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../data/agent_session.dart';
 import '../providers/agent_chat_providers.dart';
-import '../providers/agent_live_turns.dart';
 
 /// Sidebar de sessões do chat v2: nova, renomear, apagar e buscar.
 ///
@@ -104,7 +103,6 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     final sessionsAsync =
         ref.watch(agentSessionsProvider(widget.projectId));
     final selected = ref.watch(selectedAgentSessionProvider(widget.projectId));
-    final live = ref.watch(agentLiveTurnsProvider);
 
     return Container(
       color: BmoColors.screenBg,
@@ -197,12 +195,8 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                     return _SessionItem(
                       session: session,
                       selected: session.id == selected,
-                      hasNovelty: session.id != selected &&
-                          live.hasNovelty(session.id),
+                      hasNovelty: session.unread,
                       onTap: () {
-                        ref
-                            .read(agentLiveTurnsProvider.notifier)
-                            .markSeen(session.id);
                         ref
                             .read(selectedAgentSessionProvider(widget.projectId)
                                 .notifier)
@@ -227,7 +221,7 @@ class _SessionItem extends StatefulWidget {
   final AgentSession session;
   final bool selected;
 
-  /// Turno concluído que o usuário ainda não viu (ponto na lista).
+  /// Convite ao ponto de novidade (`unread` do servidor).
   final bool hasNovelty;
   final VoidCallback onTap;
   final VoidCallback onRename;

@@ -7,7 +7,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -19,8 +18,6 @@ import 'package:bmo_app/features/agent_chat/data/agent_event.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_message.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_session.dart';
 import 'package:bmo_app/features/agent_chat/providers/agent_chat_providers.dart';
-import 'package:bmo_app/features/agent_chat/providers/agent_live_turns.dart';
-import 'package:bmo_app/features/agent_chat/widgets/agent_session_list.dart';
 
 class FakeAgentChatClient extends AgentChatClient {
   FakeAgentChatClient() : super(client: http.Client(), baseUrl: 'http://fake');
@@ -148,36 +145,6 @@ void main() {
 
     expect(state().remoteTurn, isFalse);
     expect(client.fetchCalls, fetchesBefore);
-    expect(
-      container.read(agentLiveTurnsProvider).hasNovelty('sess-2'),
-      isTrue,
-    );
   });
 
-  testWidgets('lista marca novidade e some ao abrir a conversa',
-      (tester) async {
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: Scaffold(body: AgentSessionList()),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.circle), findsNothing);
-
-    emit('session.turn_completed', sessionId: 'sess-2', turnId: 'other-2');
-    await tester.pumpAndSettle();
-
-    // Um ponto, na conversa que não está aberta.
-    expect(find.byIcon(Icons.circle), findsOneWidget);
-
-    await tester.tap(find.text('conversa fechada'));
-    await tester.pumpAndSettle();
-
-    expect(find.byIcon(Icons.circle), findsNothing);
-    expect(container.read(selectedAgentSessionProvider(null)), 'sess-2');
-  });
 }

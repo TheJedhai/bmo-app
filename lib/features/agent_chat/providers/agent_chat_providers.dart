@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/config/env.dart';
+import '../../../core/events/events_provider.dart';
 import '../../../core/http/client_factory.dart';
 import '../../../core/identity/identity_state.dart';
 import '../data/agent_chat_client.dart';
@@ -64,6 +65,16 @@ class AgentSessions extends _$AgentSessions {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
 
+    // O ponto de novidade é do servidor (`unread`); os eventos só ajustam a
+    // sessão correspondente sem esperar um reload da lista.
+    ref.listen<AsyncValue<Map<String, dynamic>>>(eventsStreamProvider, (
+      previous,
+      next,
+    ) {
+      final event = next.valueOrNull;
+      if (event != null) _applyLiveUnread(event);
+    });
+
     final client = ref.watch(agentChatClientProvider);
     final sessions = await client.listSessions(projectId: projectId);
     sessions.sort((a, b) {
@@ -74,8 +85,33 @@ class AgentSessions extends _$AgentSessions {
     return sessions;
   }
 
-  Future<void> rename(String sessionId, String title) async {
-    final client = ref.read(agentChatClientProvider);
+  /// `session.turn_completed` traz `unread`; `session.read` zera.
+  void _applyLiveUnread(Map<String, dynamic> event) {
+    final type = event['type'];
+    final isCompleted = type == 'session.turn_completed';
+    if (!isCompleted && type != 'session.read') return;
+
+    final sessionId = event['session_id'];
+    if (sessionId is! String) return;
+
+    final current = state.valueOrNull;
+    if (current == null) return;
+
+    final unread = isCompleted && event['unread'] == true;
+    var changed = false;
+    final next = <AgentSession>[];
+    for (final session in current) {
+      if (session.id == sessionId && session.unread != unread) {
+        changed = true;
+        next.add(session.copyWith(unread: unread));
+      } else {
+        next.add(session);
+      }
+    }
+    if (changed) state = AsyncData(next);
+  }
+
+  Future<void> rename(String sessionId, String title) async {    final client = ref.read(agentChatClientProvider);
     final renamed = await client.renameSession(sessionId, title);
     final current = state.valueOrNull;
     if (current == null) {
@@ -226,7 +262,6 @@ class AgentConversation extends _$AgentConversation {
         sessionId: initial,
         loadingHistory: true,
       );
-      ref.read(agentLiveTurnsProvider.notifier).markSeen(initial);
       unawaited(_loadHistory(initial));
     }
     return _snapshot;
@@ -245,7 +280,6 @@ class AgentConversation extends _$AgentConversation {
       return;
     }
     _emit(AgentConversationState(sessionId: next, loadingHistory: true));
-    ref.read(agentLiveTurnsProvider.notifier).markSeen(next);
     unawaited(_loadHistory(next));
   }
 
@@ -266,8 +300,6 @@ class AgentConversation extends _$AgentConversation {
 
     final completedTurn = live.completed[sessionId];
     if (completedTurn == null) return;
-    // Abrir/atualizar a conversa consome o ponto de novidade da lista.
-    ref.read(agentLiveTurnsProvider.notifier).markSeen(sessionId);
     if (isOwn(completedTurn) || completedTurn == _handledCompletedTurn) return;
     _handledCompletedTurn = completedTurn;
     _setRemoteTurn(false);

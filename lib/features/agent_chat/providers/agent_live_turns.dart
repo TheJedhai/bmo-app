@@ -7,16 +7,14 @@ part 'agent_live_turns.g.dart';
 /// Turnos de chat vistos no SSE global (`/api/v1/stream`), targeted ao
 /// usuário: `session.turn_started` e `session.turn_completed`.
 ///
-/// Serve as duas pontas do chat:
-/// - conversa aberta: turno de outro cliente vira "BMO respondendo" e o
-///   `turn_completed` dispara o refetch;
-/// - lista de conversas: `completed` mantém o ponto de novidade até a sessão
-///   ser aberta ([markSeen]).
+/// Serve a conversa aberta: turno de outro cliente vira "BMO respondendo" e o
+/// `turn_completed` dispara o refetch. A novidade da lista é do servidor
+/// (`unread` em `GET /api/v2/sessions`), não daqui.
 class AgentLiveTurnsState {
   /// Sessões com turno em andamento: `session_id -> turn_id`.
   final Map<String, String?> active;
 
-  /// Último turno concluído por sessão, ainda não visto pelo usuário.
+  /// Último turno concluído por sessão (pulso para o refetch da conversa).
   final Map<String, String> completed;
 
   const AgentLiveTurnsState({this.active = const {}, this.completed = const {}});
@@ -24,8 +22,6 @@ class AgentLiveTurnsState {
   /// Turno rodando nesta sessão (`null` = nenhum).
   String? activeTurnOf(String sessionId) => active[sessionId];
 
-  /// O ponto de novidade da conversa.
-  bool hasNovelty(String sessionId) => completed.containsKey(sessionId);
 }
 
 @riverpod
@@ -66,14 +62,5 @@ class AgentLiveTurns extends _$AgentLiveTurns {
           },
         );
     }
-  }
-
-  /// Sessão aberta: apaga o ponto de novidade.
-  void markSeen(String sessionId) {
-    if (!state.completed.containsKey(sessionId)) return;
-    state = AgentLiveTurnsState(
-      active: state.active,
-      completed: {...state.completed}..remove(sessionId),
-    );
   }
 }
