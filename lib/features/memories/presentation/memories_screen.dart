@@ -8,6 +8,7 @@ import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../data/memory_model.dart';
 import '../providers/memories_provider.dart';
+import '../widgets/memory_scope_chip.dart';
 
 /// Tela de Memórias (`/memorias`).
 ///
@@ -328,41 +329,16 @@ class _MemoryList extends StatelessWidget {
   }
 }
 
-/// Chip de escopo (leitura): `Pessoal` ou `Da casa`.
-class MemoryScopeChip extends StatelessWidget {
-  final bool personal;
-  const MemoryScopeChip({super.key, required this.personal});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = personal ? BmoColors.accentYellow : BmoColors.accentBlue;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        personal ? 'Pessoal' : 'Da casa',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: BmoColors.textSecondary,
-          height: 1.2,
-        ),
-      ),
-    );
-  }
-}
-
 /// Seletor de escopo de duas opções (criação/edição).
 class MemoryScopeToggle extends StatelessWidget {
   final bool personal;
   final ValueChanged<bool> onChanged;
 
-  const MemoryScopeToggle({required this.personal, required this.onChanged});
+  const MemoryScopeToggle({
+    super.key,
+    required this.personal,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {

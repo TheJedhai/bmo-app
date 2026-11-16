@@ -14,6 +14,7 @@ import 'package:bmo_app/features/memories/data/memories_client.dart';
 import 'package:bmo_app/features/memories/data/memory_model.dart';
 import 'package:bmo_app/features/memories/presentation/memories_screen.dart';
 import 'package:bmo_app/features/memories/providers/memories_provider.dart';
+import 'package:bmo_app/features/memories/widgets/memory_scope_chip.dart';
 
 Memory _memory(int id, String content, {int? userId}) => Memory(
       id: id,

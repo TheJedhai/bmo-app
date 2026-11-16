@@ -10,6 +10,7 @@ import 'widgets/chat_card.dart';
 import 'widgets/clock_card.dart';
 import 'widgets/gallery_card.dart';
 import 'widgets/lights_card.dart';
+import 'widgets/memories_card.dart';
 import 'widgets/missions_card.dart';
 import 'widgets/rss_card.dart';
 import 'widgets/vault_card.dart';
@@ -189,6 +190,15 @@ final List<DashWidgetSpec> dashboardWidgets = [
     route: '/financas',
     builder: _financesCardBuilder,
   ),
+  const DashWidgetSpec(
+    id: 'memorias',
+    title: 'Memórias',
+    accent: BmoColors.accentBlue,
+    mobileSpan: 2,
+    pulseDelay: Duration(milliseconds: 4000),
+    onTap: _goToMemories,
+    builder: _memoriesCardBuilder,
+  ),
 ];
 
 void _goToMissions(BuildContext _) {
@@ -221,6 +231,10 @@ void _goToCoding(BuildContext _) {
 
 void _goToCalendar(BuildContext _) {
   appRouter.push('/calendario');
+}
+
+void _goToMemories(BuildContext _) {
+  appRouter.push('/memorias');
 }
 
 Widget _clockCardBuilder(BuildContext context, Color accent) {
@@ -261,4 +275,8 @@ Widget _codingCardBuilder(BuildContext context, Color accent) {
 
 Widget _calendarCardBuilder(BuildContext context, Color accent) {
   return CalendarDashCard(accent: accent);
+}
+
+Widget _memoriesCardBuilder(BuildContext context, Color accent) {
+  return MemoriesCard(accent: accent);
 }
