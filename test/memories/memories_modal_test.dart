@@ -1,8 +1,8 @@
-// Tela de memórias: lista, filtro de escopo, busca no servidor, criar/editar
-// com escopo e apagar. Cliente fake — sem rede.
+// Modal de memórias: lista, filtro de escopo, busca no servidor,
+// criar/editar com escopo e apagar. Cliente fake — sem rede.
 //
 // Run:
-//   flutter test test/memories/memories_screen_test.dart
+//   flutter test test/memories/memories_modal_test.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/features/memories/data/memories_client.dart';
 import 'package:bmo_app/features/memories/data/memory_model.dart';
-import 'package:bmo_app/features/memories/presentation/memories_screen.dart';
+import 'package:bmo_app/features/memories/presentation/memories_modal.dart';
 import 'package:bmo_app/features/memories/providers/memories_provider.dart';
 import 'package:bmo_app/features/memories/widgets/memory_scope_chip.dart';
 
@@ -95,7 +95,7 @@ Widget _app(FakeMemoriesClient client) {
       currentUserIdProvider.overrideWith((ref) => 2),
       memoriesClientProvider.overrideWithValue(client),
     ],
-    child: const MaterialApp(home: MemoriesScreen()),
+    child: const MaterialApp(home: Scaffold(body: MemoriesModal())),
   );
 }
 

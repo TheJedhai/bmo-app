@@ -5,25 +5,39 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/bmo_theme.dart';
-import '../../../core/widgets/bmo_back_button.dart';
+import '../../../core/widgets/bmo_frame.dart';
 import '../data/memory_model.dart';
 import '../providers/memories_provider.dart';
 import '../widgets/memory_scope_chip.dart';
 
-/// Tela de Memórias (`/memorias`).
+/// Abre o modal de memórias (chat e card rico `memory_saved` usam este).
+///
+/// Vai pelo navigator raiz: o diálogo fica acima do chassis BMO.
+void showMemoriesModal(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => const MemoriesModal(),
+  );
+}
+
+/// Modal de Memórias.
 ///
 /// Lista o que o BMO sabe (casa + pessoal), com busca no servidor
 /// (`/memories/search`), filtro de escopo, criação/edição com escopo e
 /// apagar. Os eventos SSE `memory.*` invalidam [memoriesProvider], então a
 /// lista se atualiza sozinha quando outro cliente mexe.
-class MemoriesScreen extends ConsumerStatefulWidget {
-  const MemoriesScreen({super.key});
+///
+/// Largo: diálogo centrado de até 720 px. Estreito: tela cheia — mesmo
+/// breakpoint que o chat usa para esconder a sidebar ([kMobileBreakpoint]).
+class MemoriesModal extends ConsumerStatefulWidget {
+  const MemoriesModal({super.key});
 
   @override
-  ConsumerState<MemoriesScreen> createState() => _MemoriesScreenState();
+  ConsumerState<MemoriesModal> createState() => _MemoriesModalState();
 }
 
-class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
+class _MemoriesModalState extends ConsumerState<MemoriesModal> {
   static const _kDebounce = Duration(milliseconds: 300);
 
   final _searchController = TextEditingController();
@@ -187,75 +201,88 @@ class _MemoriesScreenState extends ConsumerState<MemoriesScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scope = ref.watch(memoriesScopeModeProvider);
+    final isMobile = MediaQuery.sizeOf(context).width < kMobileBreakpoint;
+    final memoriesAsync = _query.isEmpty
+        ? ref.watch(memoriesProvider)
+        : ref.watch(memorySearchProvider(_query));
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: BmoColors.screenBg,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        leading: const BmoBackButton(),
-        title: Text('Memórias', style: theme.textTheme.headlineSmall),
+    return Dialog(
+      backgroundColor: BmoColors.screenBgElevated,
+      insetPadding: isMobile
+          ? EdgeInsets.zero
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isMobile ? 0 : 12),
+        side: const BorderSide(color: BmoColors.bodyGreen, width: 2),
       ),
-      body: Column(
-        children: [
-          _SearchField(
-            controller: _searchController,
-            hasText: _query.isNotEmpty,
-            onChanged: _onSearchChanged,
-            onClear: _clearSearch,
-          ),
-          _CreateInput(
-            controller: _createController,
-            personal: _createPersonal,
-            creating: _creating,
-            error: _createError,
-            onScopeChanged: (v) => setState(() => _createPersonal = v),
-            onSubmit: _createMemory,
-          ),
-          _ScopeFilter(
-            selected: scope,
-            onChanged: (s) =>
-                ref.read(memoriesScopeModeProvider.notifier).set(s),
-          ),
-          Expanded(
-            child: _query.isEmpty
-                ? _MemoryList(
-                    memoriesAsync: ref.watch(memoriesProvider),
-                    onRetry: () => ref.invalidate(memoriesProvider),
-                    editingId: _editingId,
-                    savingId: _savingId,
-                    editError: _editError,
-                    editController: _editController,
-                    editFocusNode: _editFocusNode,
-                    editPersonal: _editPersonal,
-                    onEditPersonalChanged: (v) =>
-                        setState(() => _editPersonal = v),
-                    onStartEdit: _startEditing,
-                    onSave: _saveEditing,
-                    onCancelEdit: _cancelEditing,
-                    onDelete: _confirmAndDelete,
-                    emptyMessage: 'Nenhuma memória ainda',
-                  )
-                : _MemoryList(
-                    memoriesAsync: ref.watch(memorySearchProvider(_query)),
-                    onRetry: () => ref.invalidate(memorySearchProvider(_query)),
-                    editingId: _editingId,
-                    savingId: _savingId,
-                    editError: _editError,
-                    editController: _editController,
-                    editFocusNode: _editFocusNode,
-                    editPersonal: _editPersonal,
-                    onEditPersonalChanged: (v) =>
-                        setState(() => _editPersonal = v),
-                    onStartEdit: _startEditing,
-                    onSave: _saveEditing,
-                    onCancelEdit: _cancelEditing,
-                    onDelete: _confirmAndDelete,
-                    emptyMessage: 'Nenhuma memória encontrada',
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isMobile ? double.infinity : 720,
+          maxHeight: isMobile
+              ? double.infinity
+              : MediaQuery.sizeOf(context).height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+              child: Row(
+                children: [
+                  Text('Memórias', style: theme.textTheme.headlineSmall),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: BmoColors.textSecondary),
+                    tooltip: 'Fechar',
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-          ),
-        ],
+                ],
+              ),
+            ),
+            _SearchField(
+              controller: _searchController,
+              hasText: _query.isNotEmpty,
+              onChanged: _onSearchChanged,
+              onClear: _clearSearch,
+            ),
+            _CreateInput(
+              controller: _createController,
+              personal: _createPersonal,
+              creating: _creating,
+              error: _createError,
+              onScopeChanged: (v) => setState(() => _createPersonal = v),
+              onSubmit: _createMemory,
+            ),
+            _ScopeFilter(
+              selected: scope,
+              onChanged: (s) =>
+                  ref.read(memoriesScopeModeProvider.notifier).set(s),
+            ),
+            Flexible(
+              child: _MemoryList(
+                memoriesAsync: memoriesAsync,
+                onRetry: () => _query.isEmpty
+                    ? ref.invalidate(memoriesProvider)
+                    : ref.invalidate(memorySearchProvider(_query)),
+                editingId: _editingId,
+                savingId: _savingId,
+                editError: _editError,
+                editController: _editController,
+                editFocusNode: _editFocusNode,
+                editPersonal: _editPersonal,
+                onEditPersonalChanged: (v) =>
+                    setState(() => _editPersonal = v),
+                onStartEdit: _startEditing,
+                onSave: _saveEditing,
+                onCancelEdit: _cancelEditing,
+                onDelete: _confirmAndDelete,
+                emptyMessage: _query.isEmpty
+                    ? 'Nenhuma memória ainda'
+                    : 'Nenhuma memória encontrada',
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
