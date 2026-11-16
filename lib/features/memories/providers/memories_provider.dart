@@ -25,6 +25,18 @@ final memoriesRepositoryProvider = Provider<MemoriesRepository>((ref) {
 });
 
 // ============================================================
+// Filtro de escopo (compartilhado entre a lista e a busca)
+// ============================================================
+
+@riverpod
+class MemoriesScopeMode extends _$MemoriesScopeMode {
+  @override
+  MemoryScope build() => MemoryScope.all;
+
+  void set(MemoryScope scope) => state = scope;
+}
+
+// ============================================================
 // Memories
 // ============================================================
 
@@ -34,20 +46,25 @@ class Memories extends _$Memories {
   Future<List<Memory>> build() async {
     final userId = ref.watch(currentUserIdProvider);
     if (userId == null) return const [];
+    final scope = ref.watch(memoriesScopeModeProvider);
     final repo = ref.watch(memoriesRepositoryProvider);
-    return repo.list();
+    return repo.list(scope: scope);
   }
 
-  Future<void> createMemory(String content) async {
+  Future<void> createMemory(String content, {bool personal = false}) async {
     final repo = ref.read(memoriesRepositoryProvider);
-    final memory = await repo.create(content);
+    final memory = await repo.create(content, personal: personal);
     final current = state.valueOrNull ?? const <Memory>[];
     state = AsyncData([memory, ...current]);
   }
 
-  Future<void> updateMemory(int id, String content) async {
+  Future<void> updateMemory(
+    int id, {
+    String? content,
+    bool? personal,
+  }) async {
     final repo = ref.read(memoriesRepositoryProvider);
-    final updated = await repo.update(id, content);
+    final updated = await repo.update(id, content: content, personal: personal);
     final current = state.valueOrNull ?? const <Memory>[];
     state = AsyncData([
       for (final m in current)
@@ -61,4 +78,17 @@ class Memories extends _$Memories {
     final current = state.valueOrNull ?? const <Memory>[];
     state = AsyncData(current.where((m) => m.id != id).toList());
   }
+}
+
+/// Busca no servidor (`/memories/search`). Query vazia não bate na rede.
+///
+/// É `family` por query: cada termo digitado gera uma instância, e o
+/// `autoDispose` (default) descarta as antigas quando o campo muda.
+@riverpod
+Future<List<Memory>> memorySearch(MemorySearchRef ref, String query) async {
+  final q = query.trim();
+  if (q.isEmpty) return const [];
+  final scope = ref.watch(memoriesScopeModeProvider);
+  final repo = ref.watch(memoriesRepositoryProvider);
+  return repo.search(query: q, scope: scope);
 }

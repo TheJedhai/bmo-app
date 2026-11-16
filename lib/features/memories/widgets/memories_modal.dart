@@ -90,7 +90,7 @@ class _MemoriesModalState extends ConsumerState<_MemoriesModal> {
     try {
       await ref
           .read(memoriesProvider.notifier)
-          .updateMemory(_editingId!, content);
+          .updateMemory(_editingId!, content: content);
       _cancelEditing();
     } catch (e) {
       setState(() {
