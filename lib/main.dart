@@ -10,7 +10,7 @@ import 'core/identity/identity_provider.dart';
 import 'core/platform/temp_orphan_sweep.dart';
 import 'core/platform/url_strategy.dart';
 import 'features/coding/presentation/widgets/bmo_rich_coding_run_card.dart';
-import 'features/coding/presentation/widgets/bmo_rich_plan_card.dart';
+import 'features/coding/presentation/widgets/bmo_rich_coding_task_card.dart';
 import 'features/rich_blocks/data/bmo_rich_registry.dart';
 import 'features/rich_blocks/widgets/bmo_rich_image_card.dart';
 import 'features/rich_blocks/widgets/bmo_rich_memory_card.dart';
@@ -55,8 +55,8 @@ void main() async {
     (block) => BmoRichMemoryCard(block: block),
   );
   BmoRichRegistry.register(
-    'coding_plan',
-    (block) => BmoRichPlanCard(block: block),
+    'coding_task',
+    (block) => BmoRichCodingTaskCard(block: block),
   );
   runApp(
     ProviderScope(
