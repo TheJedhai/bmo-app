@@ -193,6 +193,9 @@ class AgentConversationState {
   final bool loadingHistory;
   final bool refreshFailed;
 
+  /// A carga das mensagens falhou (banner com ação de recarregar).
+  final bool historyFailed;
+
   /// Texto que precisa voltar para o campo de digitação (envio que falhou).
   final String? restoreDraft;
 
@@ -206,6 +209,7 @@ class AgentConversationState {
     this.error,
     this.loadingHistory = false,
     this.refreshFailed = false,
+    this.historyFailed = false,
     this.restoreDraft,
     this.remoteTurn = false,
   });
@@ -219,6 +223,7 @@ class AgentConversationState {
     String? error,
     bool? loadingHistory,
     bool? refreshFailed,
+    bool? historyFailed,
     String? restoreDraft,
     bool? remoteTurn,
   }) =>
@@ -229,6 +234,7 @@ class AgentConversationState {
         error: error,
         loadingHistory: loadingHistory ?? this.loadingHistory,
         refreshFailed: refreshFailed ?? this.refreshFailed,
+        historyFailed: historyFailed ?? this.historyFailed,
         restoreDraft: restoreDraft,
         remoteTurn: remoteTurn ?? this.remoteTurn,
       );
@@ -813,7 +819,11 @@ class AgentConversation extends _$AgentConversation {
       if (_disposed || _sessionId != sessionId) return;
       final messages =
           keepLocalDecisions ? _preserveLocalDecisions(fetched) : fetched;
-      _emit(_snapshot.copyWith(messages: messages, loadingHistory: false));
+      _emit(_snapshot.copyWith(
+        messages: messages,
+        loadingHistory: false,
+        historyFailed: false,
+      ));
     } on AgentChatException catch (e) {
       if (_disposed || _sessionId != sessionId) return;
       if (e.errorCode == 'not_found') {
@@ -822,15 +832,31 @@ class AgentConversation extends _$AgentConversation {
       }
       _emit(_snapshot.copyWith(
         loadingHistory: false,
-        error: _friendlyError(e),
+        historyFailed: true,
+        error: null,
       ));
-    } catch (e) {
+    } catch (_) {
       if (_disposed || _sessionId != sessionId) return;
+      // Mensagem de erro do transporte vem em inglês ("An unexpected error
+      // occurred"); a interface é em pt-BR.
       _emit(_snapshot.copyWith(
         loadingHistory: false,
-        error: 'falha ao carregar a conversa: $e',
+        historyFailed: true,
+        error: null,
       ));
     }
+  }
+
+  /// Recarrega o histórico depois de [AgentConversationState.historyFailed].
+  void retryLoad() {
+    final sessionId = _sessionId;
+    if (sessionId == null) return;
+    _emit(_snapshot.copyWith(
+      historyFailed: false,
+      loadingHistory: true,
+      error: null,
+    ));
+    unawaited(_loadHistory(sessionId));
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────

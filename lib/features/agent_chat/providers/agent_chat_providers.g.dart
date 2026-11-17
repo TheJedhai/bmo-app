@@ -441,7 +441,7 @@ final dailyAgentSessionsProvider =
     );
 
 typedef _$DailyAgentSessions = AutoDisposeAsyncNotifier<List<AgentSession>>;
-String _$agentConversationHash() => r'163badae2d3378146999c8304926d077e3485234';
+String _$agentConversationHash() => r'14793817f9b1b676ebe1bb9827495629f5813074';
 
 abstract class _$AgentConversation
     extends BuildlessAutoDisposeNotifier<AgentConversationState> {

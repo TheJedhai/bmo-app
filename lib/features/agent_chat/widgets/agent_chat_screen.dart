@@ -184,6 +184,15 @@ class _AgentChatBody extends ConsumerWidget {
               child: const Text('tentar de novo'),
             ),
           ),
+        if (state.historyFailed)
+          _Banner(
+            text: 'Não consegui carregar a conversa. Tentar de novo?',
+            color: BmoColors.accentRed,
+            action: TextButton(
+              onPressed: notifier.retryLoad,
+              child: const Text('Recarregar'),
+            ),
+          ),
         if (state.error != null)
           _Banner(text: state.error!, color: BmoColors.accentRed),
         Divider(
