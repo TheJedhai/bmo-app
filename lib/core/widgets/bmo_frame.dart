@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/routines/widgets/notifications_bell.dart';
+import '../../features/routines/widgets/presence_button.dart';
 import '../../features/settings/widgets/settings_modal.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_avatar.dart';
@@ -105,6 +107,36 @@ class BmoFrame extends ConsumerWidget {
                 ),
               ),
             ),
+
+            // ---- Presença + sino (top-right, à esquerda da engrenagem) ----
+            if (!isMobile) ...[
+              Positioned(
+                top: controlOffset,
+                right: controlOffset + 2 * (touchSize + 4),
+                child: _ControlHitbox(
+                  size: touchSize,
+                  alignment: Alignment.topRight,
+                  onTap: () => showPresenceDialog(context),
+                  child: PresenceButton(
+                    size: visualDiameter,
+                    iconSize: 16,
+                  ),
+                ),
+              ),
+              Positioned(
+                top: controlOffset,
+                right: controlOffset + touchSize + 4,
+                child: _ControlHitbox(
+                  size: touchSize,
+                  alignment: Alignment.topRight,
+                  onTap: () => showNotificationsDialog(context),
+                  child: NotificationsBell(
+                    size: visualDiameter,
+                    iconSize: 16,
+                  ),
+                ),
+              ),
+            ],
 
             // ---- Settings gear (top-right, on green band) ----
             // Hidden on mobile — moves to the dashboard header.

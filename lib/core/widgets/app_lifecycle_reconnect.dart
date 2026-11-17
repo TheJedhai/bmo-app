@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/home_devices/providers/devices_providers.dart';
+import '../../features/routines/providers/routines_providers.dart';
 import '../events/events_provider.dart';
 import '../platform/widget_refresh.dart';
 
@@ -51,6 +52,8 @@ class _AppLifecycleReconnectState extends ConsumerState<AppLifecycleReconnect> {
         // X-User-Id lido a cada send), nunca de valor capturado.
         ref.invalidate(eventsStreamProvider);
         ref.invalidate(devicesWsStreamProvider);
+        // Presença/vigências não têm evento no stream: relê no foco.
+        ref.invalidate(presenceControllerProvider);
       },
     );
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/routines/widgets/notifications_bell.dart';
+import '../../features/routines/widgets/presence_button.dart';
 import '../../features/settings/widgets/settings_modal.dart';
 import '../identity/identity_provider.dart';
 import '../identity/widgets/profile_avatar.dart';
@@ -34,6 +36,12 @@ class BmoTopBar extends ConsumerWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
+            // Presença (rotinas)
+            const PresenceButton(),
+            const SizedBox(width: 4),
+            // Sino de avisos
+            const NotificationsBell(),
+            const SizedBox(width: 4),
             // Engrenagem
             SizedBox(
               width: 48,

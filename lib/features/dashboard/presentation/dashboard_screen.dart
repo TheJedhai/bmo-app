@@ -17,8 +17,8 @@ const _kPadding = 28.0;
 const _kMobilePadding = 16.0;
 
 /// Largura reservada na linha da hora para os controles da BmoTopBar
-/// (engrenagem 48 + gap 4 + avatar 48 + padding direito 12).
-const _kTopBarControlReserve = 112.0;
+/// (presença 48 + sino 48 + engrenagem 48 + avatar 48, gaps 4, padding 12).
+const _kTopBarControlReserve = 216.0;
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
