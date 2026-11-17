@@ -42,6 +42,9 @@ class FakeDailyClient extends AgentChatClient {
     }),
   ];
 
+  /// Dias antigos extras, para o recolhimento de "Mais dias (N)".
+  List<AgentSession> extraDaily = const [];
+
   final readCalls = <String>[];
   final listedKinds = <String>[];
   int ensureCalls = 0;
@@ -60,7 +63,7 @@ class FakeDailyClient extends AgentChatClient {
   }) async {
     listedKinds.add(kind);
     lastProjectId = projectId;
-    if (kind == 'daily') return [today, ...daily];
+    if (kind == 'daily') return [today, ...daily, ...extraDaily];
     return [
       AgentSession.fromJson({'id': 'C1', 'title': 'conversa normal'}),
     ];
@@ -150,6 +153,42 @@ void main() {
     final daysY = tester.getTopLeft(find.text('Dias')).dy;
     final normalY = tester.getTopLeft(find.text('conversa normal')).dy;
     expect(daysY, lessThan(normalY));
+  });
+
+  testWidgets('só 3 dias visíveis; o selecionado antigo fica e "Mais dias" '
+      'expande', (tester) async {
+    AgentSession aged(String id, String title, String day) =>
+        AgentSession.fromJson({
+          'id': id,
+          'title': title,
+          'kind': 'daily',
+          'day': day,
+        });
+    client.extraDaily = [
+      aged('D2', '16/11/2026', '2026-11-16'),
+      aged('D3', '15/11/2026', '2026-11-15'),
+      aged('D4', '14/11/2026', '2026-11-14'),
+      aged('D5', '13/11/2026', '2026-11-13'),
+    ];
+    // Conversa antiga aberta: continua visível mesmo recolhida.
+    container.read(selectedAgentSessionProvider(null).notifier).select('D5');
+
+    await tester.pumpWidget(_screen(container));
+    await tester.pumpAndSettle();
+
+    expect(find.text('hoje'), findsOneWidget);
+    expect(find.text('17/11/2026'), findsOneWidget);
+    expect(find.text('16/11/2026'), findsOneWidget);
+    expect(find.text('15/11/2026'), findsNothing);
+    expect(find.text('13/11/2026'), findsOneWidget);
+    expect(find.text('Mais dias (2)'), findsOneWidget);
+
+    await tester.tap(find.text('Mais dias (2)'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('15/11/2026'), findsOneWidget);
+    expect(find.text('14/11/2026'), findsOneWidget);
+    expect(find.text('Menos dias'), findsOneWidget);
   });
 
   testWidgets('chat de projeto não abre conversa do dia', (tester) async {

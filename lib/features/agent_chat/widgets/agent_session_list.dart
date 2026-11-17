@@ -23,6 +23,11 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
   final _searchController = TextEditingController();
   String _query = '';
 
+  /// Quantos dias ficam sempre visíveis; o resto entra em "Mais dias (N)".
+  static const _kCollapsedDays = 3;
+
+  bool _daysExpanded = false;
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -203,10 +208,30 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                   widget.onItemTap?.call();
                 }
 
+                // Dias: os 3 mais recentes; o resto recolhe. A sessão
+                // selecionada fica visível mesmo sendo antiga.
+                var visibleDaily = filteredDaily;
+                var hiddenDays = 0;
+                if (_query.isEmpty &&
+                    filteredDaily.length > _kCollapsedDays) {
+                  final rest = filteredDaily.skip(_kCollapsedDays).toList();
+                  AgentSession? selectedDaily;
+                  for (final session in rest) {
+                    if (session.id == selected) selectedDaily = session;
+                  }
+                  hiddenDays = rest.length - (selectedDaily == null ? 0 : 1);
+                  if (!_daysExpanded) {
+                    visibleDaily = [
+                      ...filteredDaily.take(_kCollapsedDays),
+                      if (selectedDaily != null) selectedDaily,
+                    ];
+                  }
+                }
+
                 final rows = <Widget>[
-                  if (filteredDaily.isNotEmpty) ...[
+                  if (visibleDaily.isNotEmpty) ...[
                     const _SectionHeader('Dias'),
-                    for (final session in filteredDaily)
+                    for (final session in visibleDaily)
                       _SessionItem(
                         session: session,
                         selected: session.id == selected,
@@ -214,6 +239,13 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                         onTap: () => select(session.id),
                         onRename: null,
                         onDelete: null,
+                      ),
+                    if (hiddenDays > 0 || _daysExpanded)
+                      _DaysToggle(
+                        expanded: _daysExpanded,
+                        hidden: hiddenDays,
+                        onTap: () =>
+                            setState(() => _daysExpanded = !_daysExpanded),
                       ),
                   ],
                   if (filtered.isNotEmpty) ...[
@@ -404,6 +436,45 @@ class _SectionHeader extends StatelessWidget {
               color: BmoColors.textMuted,
               letterSpacing: 1,
             ),
+      ),
+    );
+  }
+}
+
+/// "Mais dias (N)" / "Menos dias": recolhe a cauda da seção Dias.
+class _DaysToggle extends StatelessWidget {
+  final bool expanded;
+  final int hidden;
+  final VoidCallback onTap;
+
+  const _DaysToggle({
+    required this.expanded,
+    required this.hidden,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              expanded ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: BmoColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              expanded ? 'Menos dias' : 'Mais dias ($hidden)',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: BmoColors.textSecondary,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
