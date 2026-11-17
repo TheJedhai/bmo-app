@@ -23,7 +23,7 @@ class FakeAgentChatClient extends AgentChatClient {
   final List<int?> sentProjects = [];
 
   @override
-  Future<List<AgentSession>> listSessions({int? projectId}) async {
+  Future<List<AgentSession>> listSessions({int? projectId, String kind = 'chat'}) async {
     listedProjects.add(projectId);
     return [
       AgentSession(

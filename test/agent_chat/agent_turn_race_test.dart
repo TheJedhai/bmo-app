@@ -86,7 +86,7 @@ class RaceClient extends AgentChatClient {
   }
 
   @override
-  Future<List<AgentSession>> listSessions({int? projectId}) async =>
+  Future<List<AgentSession>> listSessions({int? projectId, String kind = 'chat'}) async =>
       [const AgentSession(id: 'sess-1', title: 'conversa')];
 
   @override

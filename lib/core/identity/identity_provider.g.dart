@@ -6,7 +6,7 @@ part of 'identity_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$unreadBadgesHash() => r'693e3988c4d54f5446adde05540856b01353ced5';
+String _$unreadBadgesHash() => r'2de3c20b5e68a02a33150283f049953c72e85cb7';
 
 /// Badges de não lidos por área, direto do `/api/v1/me`.
 ///

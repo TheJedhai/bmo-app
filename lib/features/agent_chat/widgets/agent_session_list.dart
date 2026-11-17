@@ -97,12 +97,22 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  List<AgentSession> _filter(List<AgentSession> sessions) => _query.isEmpty
+      ? sessions
+      : sessions
+          .where((s) => s.title.toLowerCase().contains(_query.toLowerCase()))
+          .toList();
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final sessionsAsync =
         ref.watch(agentSessionsProvider(widget.projectId));
     final selected = ref.watch(selectedAgentSessionProvider(widget.projectId));
+    // Seção "Dias" só no chat principal.
+    final dailyAsync = widget.projectId == null
+        ? ref.watch(dailyAgentSessionsProvider)
+        : null;
 
     return Container(
       color: BmoColors.screenBg,
@@ -174,39 +184,54 @@ class _AgentSessionListState extends ConsumerState<AgentSessionList> {
                 onRetry: () => ref.invalidate(agentSessionsProvider(widget.projectId)),
               ),
               data: (sessions) {
-                final filtered = _query.isEmpty
-                    ? sessions
-                    : sessions
-                        .where((s) =>
-                            s.title.toLowerCase().contains(_query.toLowerCase()))
-                        .toList();
-                if (sessions.isEmpty) {
+                final daily = dailyAsync?.valueOrNull ?? const <AgentSession>[];
+                final filtered = _filter(sessions);
+                final filteredDaily = _filter(daily);
+                if (sessions.isEmpty && daily.isEmpty) {
                   return const _SessionsEmpty(
                     text: 'nenhuma conversa ainda',
                   );
                 }
-                if (filtered.isEmpty) {
+                if (filtered.isEmpty && filteredDaily.isEmpty) {
                   return const _SessionsEmpty(text: 'nada encontrado');
                 }
+                void select(String? id) {
+                  ref
+                      .read(selectedAgentSessionProvider(widget.projectId)
+                          .notifier)
+                      .select(id);
+                  widget.onItemTap?.call();
+                }
+
+                final rows = <Widget>[
+                  if (filteredDaily.isNotEmpty) ...[
+                    const _SectionHeader('Dias'),
+                    for (final session in filteredDaily)
+                      _SessionItem(
+                        session: session,
+                        selected: session.id == selected,
+                        hasNovelty: session.unread,
+                        onTap: () => select(session.id),
+                        onRename: null,
+                        onDelete: null,
+                      ),
+                  ],
+                  if (filtered.isNotEmpty) ...[
+                    if (daily.isNotEmpty) const _SectionHeader('Conversas'),
+                    for (final session in filtered)
+                      _SessionItem(
+                        session: session,
+                        selected: session.id == selected,
+                        hasNovelty: session.unread,
+                        onTap: () => select(session.id),
+                        onRename: () => _rename(session),
+                        onDelete: () => _delete(session),
+                      ),
+                  ],
+                ];
                 return ListView.builder(
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final session = filtered[index];
-                    return _SessionItem(
-                      session: session,
-                      selected: session.id == selected,
-                      hasNovelty: session.unread,
-                      onTap: () {
-                        ref
-                            .read(selectedAgentSessionProvider(widget.projectId)
-                                .notifier)
-                            .select(session.id);
-                        widget.onItemTap?.call();
-                      },
-                      onRename: () => _rename(session),
-                      onDelete: () => _delete(session),
-                    );
-                  },
+                  itemCount: rows.length,
+                  itemBuilder: (context, index) => rows[index],
                 );
               },
             ),
@@ -224,16 +249,18 @@ class _SessionItem extends StatefulWidget {
   /// Convite ao ponto de novidade (`unread` do servidor).
   final bool hasNovelty;
   final VoidCallback onTap;
-  final VoidCallback onRename;
-  final VoidCallback onDelete;
+
+  /// Nulas na conversa do dia (não se renomeia nem apaga).
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
 
   const _SessionItem({
     required this.session,
     required this.selected,
     required this.hasNovelty,
     required this.onTap,
-    required this.onRename,
-    required this.onDelete,
+    this.onRename,
+    this.onDelete,
   });
 
   @override
@@ -246,7 +273,8 @@ class _SessionItemState extends State<_SessionItem> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final showActions = _hovering || widget.selected;
+    final showActions =
+        (_hovering || widget.selected) && widget.onRename != null;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -356,6 +384,27 @@ class _RenameSessionDialogState extends State<_RenameSessionDialog> {
           child: const Text('Salvar'),
         ),
       ],
+    );
+  }
+}
+
+/// Cabeçalho de seção da lista ("Dias" / "Conversas").
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: BmoColors.textMuted,
+              letterSpacing: 1,
+            ),
+      ),
     );
   }
 }

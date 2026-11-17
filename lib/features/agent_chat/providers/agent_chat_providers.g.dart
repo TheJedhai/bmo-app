@@ -275,7 +275,7 @@ class _SelectedAgentSessionProviderElement
   int? get projectId => (origin as SelectedAgentSessionProvider).projectId;
 }
 
-String _$agentSessionsHash() => r'2a8b29cfb1efecac17554298b196a297f55582a9';
+String _$agentSessionsHash() => r'e8bda4c91369deb1daf57d3f2272a459085f5c1d';
 
 abstract class _$AgentSessions
     extends BuildlessAutoDisposeAsyncNotifier<List<AgentSession>> {
@@ -418,6 +418,29 @@ class _AgentSessionsProviderElement
   int? get projectId => (origin as AgentSessionsProvider).projectId;
 }
 
+String _$dailyAgentSessionsHash() =>
+    r'90f82dd4db4e9cea69a8e3e9fc298fb3309db322';
+
+/// Conversas do dia (`GET /api/v2/sessions?kind=daily`), mais recente
+/// primeiro por data. O servidor cria a do dia sob demanda.
+///
+/// Copied from [DailyAgentSessions].
+@ProviderFor(DailyAgentSessions)
+final dailyAgentSessionsProvider =
+    AutoDisposeAsyncNotifierProvider<
+      DailyAgentSessions,
+      List<AgentSession>
+    >.internal(
+      DailyAgentSessions.new,
+      name: r'dailyAgentSessionsProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$dailyAgentSessionsHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+typedef _$DailyAgentSessions = AutoDisposeAsyncNotifier<List<AgentSession>>;
 String _$agentConversationHash() => r'163badae2d3378146999c8304926d077e3485234';
 
 abstract class _$AgentConversation

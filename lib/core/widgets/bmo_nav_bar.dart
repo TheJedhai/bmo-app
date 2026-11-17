@@ -108,7 +108,7 @@ class BmoNavBar extends ConsumerWidget {
 /// (`unread.coding`).
 int _badgeCount(String id, int rssUnread, UnreadCounts unread) => switch (id) {
       'noticias' => rssUnread,
-      'chat' => unread.chat,
+      'chat' => unread.chatAndDaily,
       'coding' => unread.coding,
       _ => 0,
     };

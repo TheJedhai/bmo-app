@@ -41,8 +41,11 @@ class FakeUnreadClient extends AgentChatClient {
   final List<String> readCalls = [];
 
   @override
-  Future<List<AgentSession>> listSessions({int? projectId}) async =>
-      sessions.map((s) => s).toList();
+  Future<List<AgentSession>> listSessions({
+    int? projectId,
+    String kind = 'chat',
+  }) async =>
+      kind == 'daily' ? const [] : sessions.map((s) => s).toList();
 
   @override
   Future<List<AgentMessage>> fetchMessages(String sessionId) async => const [];

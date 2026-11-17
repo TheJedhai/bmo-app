@@ -7,6 +7,7 @@ import 'package:bmo_app/features/memories/presentation/memories_modal.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_back_button.dart';
 import '../../../core/widgets/bmo_frame.dart';
+import '../data/agent_session.dart';
 import '../providers/agent_chat_providers.dart';
 import 'agent_input.dart';
 import 'agent_message_list.dart';
@@ -43,11 +44,33 @@ class AgentChatScreen extends ConsumerStatefulWidget {
 class _AgentChatScreenState extends ConsumerState<AgentChatScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Abrir direto na conversa do dia: uma tentativa por montagem da tela.
+  /// Depois disso, "Nova" (seleção nula) manda.
+  bool _autoOpenTried = false;
+
+  void _autoOpenDaily(List<AgentSession>? sessions) {
+    if (_autoOpenTried || sessions == null) return;
+    _autoOpenTried = true;
+    if (ref.read(selectedAgentSessionProvider(null)) != null) return;
+    if (sessions.isEmpty) return; // servidor ainda não criou a do dia
+    final id = sessions.first.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(selectedAgentSessionProvider(null)) == null) {
+        ref.read(selectedAgentSessionProvider(null).notifier).select(id);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMobile =
         MediaQuery.of(context).size.width < kMobileBreakpoint;
     final projectId = widget.projectId;
+
+    if (projectId == null) {
+      _autoOpenDaily(ref.watch(dailyAgentSessionsProvider).valueOrNull);
+    }
 
     return Scaffold(
       key: _scaffoldKey,

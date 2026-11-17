@@ -48,6 +48,7 @@ Widget _app(
   Widget child, {
   required int chat,
   required int coding,
+  int daily = 0,
 }) {
   return ProviderScope(
     overrides: [
@@ -55,7 +56,7 @@ Widget _app(
       enabledFeaturesProvider.overrideWith((ref) => {'coding'}),
       unreadCountProvider.overrideWith((ref) async => 0),
       unreadBadgesProvider.overrideWith(
-        (ref) async => UnreadCounts(chat: chat, coding: coding),
+        (ref) async => UnreadCounts(chat: chat, daily: daily, coding: coding),
       ),
       agentSessionsProvider(null).overrideWith(FakeSessions.new),
       projectsProvider.overrideWith(FakeProjects.new),
@@ -76,6 +77,17 @@ void main() {
 
     expect(find.text('2'), findsOneWidget);
     expect(find.text('1'), findsOneWidget);
+  });
+
+  testWidgets('badge do Chat soma conversas normais e conversas do dia',
+      (tester) async {
+    await tester.pumpWidget(
+      _app(const BmoNavBar(currentLocation: '/chat'), chat: 2, daily: 3, coding: 0),
+    );
+    await tester.pumpAndSettle();
+
+    // 2 + 3: o badge do Chat cobre as duas.
+    expect(find.text('5'), findsOneWidget);
   });
 
   testWidgets('nav bar sem não lidos não mostra badge', (tester) async {

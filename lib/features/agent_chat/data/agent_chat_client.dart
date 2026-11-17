@@ -118,10 +118,16 @@ class AgentChatClient {
   /// `GET /api/v2/sessions` (mais recentes primeiro).
   ///
   /// Sem [projectId] o servidor devolve só as sessões sem projeto (chat
-  /// principal); com ele, as do projeto.
-  Future<List<AgentSession>> listSessions({int? projectId}) async {
+  /// principal); com ele, as do projeto. [kind] `daily` lista as conversas
+  /// do dia (a do dia nunca tem projeto).
+  Future<List<AgentSession>> listSessions({
+    int? projectId,
+    String kind = 'chat',
+  }) async {
     final uri = Uri.parse('$_baseUrl/api/v2/sessions').replace(
-      queryParameters: projectId == null ? null : {'project_id': '$projectId'},
+      queryParameters: projectId == null
+          ? {'kind': kind}
+          : {'project_id': '$projectId'},
     );
     final response = await _client.get(uri);
     _ensureOk(response, 200);

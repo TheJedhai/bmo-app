@@ -76,6 +76,7 @@ class MeClient {
       user: UserProfile.fromJson(userJson),
       features: features,
       chatUnread: _count(unreadMap['chat']),
+      dailyUnread: _count(unreadMap['daily']),
       codingUnread: _count(unreadMap['coding']),
     );
   }
@@ -97,26 +98,32 @@ class MeResponse {
 
   /// Badges de não lidos por área (`/api/v1/me` → `unread`).
   final int chatUnread;
+  final int dailyUnread;
   final int codingUnread;
 
   const MeResponse({
     required this.user,
     required this.features,
     this.chatUnread = 0,
+    this.dailyUnread = 0,
     this.codingUnread = 0,
   });
 }
 
-/// Contadores de não lidos do `/api/v1/me` (`unread: {chat, coding}`).
+/// Contadores de não lidos do `/api/v1/me` (`unread: {chat, daily, coding}`).
 class UnreadCounts {
   final int chat;
+  final int daily;
   final int coding;
 
-  const UnreadCounts({this.chat = 0, this.coding = 0});
+  const UnreadCounts({this.chat = 0, this.daily = 0, this.coding = 0});
 
   static const none = UnreadCounts();
 
-  bool get isEmpty => chat == 0 && coding == 0;
+  /// O badge do Chat cobre conversas normais e conversas do dia.
+  int get chatAndDaily => chat + daily;
+
+  bool get isEmpty => chatAndDaily == 0 && coding == 0;
 }
 
 class MeException implements Exception {
@@ -168,7 +175,11 @@ Future<UnreadCounts> unreadBadges(UnreadBadgesRef ref) async {
   final userId = ref.watch(currentUserIdProvider);
   if (userId == null) return UnreadCounts.none;
   final me = await ref.read(meClientProvider).getMe(userId.toString());
-  return UnreadCounts(chat: me.chatUnread, coding: me.codingUnread);
+  return UnreadCounts(
+    chat: me.chatUnread,
+    daily: me.dailyUnread,
+    coding: me.codingUnread,
+  );
 }
 
 // ============================================================

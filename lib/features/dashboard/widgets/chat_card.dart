@@ -24,7 +24,7 @@ class ChatCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsync = ref.watch(agentSessionsProvider(null));
     final unread =
-        ref.watch(unreadBadgesProvider).valueOrNull?.chat ?? 0;
+        ref.watch(unreadBadgesProvider).valueOrNull?.chatAndDaily ?? 0;
 
     return sessionsAsync.when(
       loading: () => const _LoadingState(),

@@ -59,6 +59,34 @@ class SelectedAgentSession extends _$SelectedAgentSession {
 // Lista de sessões
 // ============================================================
 
+/// `session.turn_completed` traz `unread`; `session.read` zera.
+///
+/// Devolve a lista nova, ou `null` se nenhuma sessão mudou.
+List<AgentSession>? applyLiveUnread(
+  List<AgentSession> current,
+  Map<String, dynamic> event,
+) {
+  final type = event['type'];
+  final isCompleted = type == 'session.turn_completed';
+  if (!isCompleted && type != 'session.read') return null;
+
+  final sessionId = event['session_id'];
+  if (sessionId is! String) return null;
+
+  final unread = isCompleted && event['unread'] == true;
+  var changed = false;
+  final next = <AgentSession>[];
+  for (final session in current) {
+    if (session.id == sessionId && session.unread != unread) {
+      changed = true;
+      next.add(session.copyWith(unread: unread));
+    } else {
+      next.add(session);
+    }
+  }
+  return changed ? next : null;
+}
+
 @riverpod
 class AgentSessions extends _$AgentSessions {
   @override
@@ -73,7 +101,10 @@ class AgentSessions extends _$AgentSessions {
       next,
     ) {
       final event = next.valueOrNull;
-      if (event != null) _applyLiveUnread(event);
+      final current = state.valueOrNull;
+      if (event == null || current == null) return;
+      final updated = applyLiveUnread(current, event);
+      if (updated != null) state = AsyncData(updated);
     });
 
     final client = ref.watch(agentChatClientProvider);
@@ -84,32 +115,6 @@ class AgentSessions extends _$AgentSessions {
       return right.compareTo(left);
     });
     return sessions;
-  }
-
-  /// `session.turn_completed` traz `unread`; `session.read` zera.
-  void _applyLiveUnread(Map<String, dynamic> event) {
-    final type = event['type'];
-    final isCompleted = type == 'session.turn_completed';
-    if (!isCompleted && type != 'session.read') return;
-
-    final sessionId = event['session_id'];
-    if (sessionId is! String) return;
-
-    final current = state.valueOrNull;
-    if (current == null) return;
-
-    final unread = isCompleted && event['unread'] == true;
-    var changed = false;
-    final next = <AgentSession>[];
-    for (final session in current) {
-      if (session.id == sessionId && session.unread != unread) {
-        changed = true;
-        next.add(session.copyWith(unread: unread));
-      } else {
-        next.add(session);
-      }
-    }
-    if (changed) state = AsyncData(next);
   }
 
   Future<void> rename(String sessionId, String title) async {    final client = ref.read(agentChatClientProvider);
@@ -133,6 +138,37 @@ class AgentSessions extends _$AgentSessions {
       for (final session in current)
         if (session.id != sessionId) session,
     ]);
+  }
+}
+
+/// Conversas do dia (`GET /api/v2/sessions?kind=daily`), mais recente
+/// primeiro por data. O servidor cria a do dia sob demanda.
+@riverpod
+class DailyAgentSessions extends _$DailyAgentSessions {
+  @override
+  Future<List<AgentSession>> build() async {
+    final userId = ref.watch(currentUserIdProvider);
+    if (userId == null) return const [];
+
+    ref.listen<AsyncValue<Map<String, dynamic>>>(eventsStreamProvider, (
+      previous,
+      next,
+    ) {
+      final event = next.valueOrNull;
+      final current = state.valueOrNull;
+      if (event == null || current == null) return;
+      final updated = applyLiveUnread(current, event);
+      if (updated != null) state = AsyncData(updated);
+    });
+
+    final client = ref.watch(agentChatClientProvider);
+    final sessions = await client.listSessions(kind: 'daily');
+    sessions.sort((a, b) {
+      final left = a.day ?? DateTime(0);
+      final right = b.day ?? DateTime(0);
+      return right.compareTo(left);
+    });
+    return sessions;
   }
 }
 

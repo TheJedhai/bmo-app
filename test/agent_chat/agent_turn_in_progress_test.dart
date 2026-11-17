@@ -38,7 +38,7 @@ class BusyAgentChatClient extends AgentChatClient {
   }
 
   @override
-  Future<List<AgentSession>> listSessions({int? projectId}) async => const [];
+  Future<List<AgentSession>> listSessions({int? projectId, String kind = 'chat'}) async => const [];
 
   @override
   Future<List<AgentMessage>> fetchMessages(String sessionId) async {
