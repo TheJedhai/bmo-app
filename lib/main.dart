@@ -12,6 +12,7 @@ import 'core/platform/url_strategy.dart';
 import 'features/coding/presentation/widgets/bmo_rich_coding_run_card.dart';
 import 'features/coding/presentation/widgets/bmo_rich_coding_task_card.dart';
 import 'features/rich_blocks/data/bmo_rich_registry.dart';
+import 'features/rich_blocks/widgets/bmo_rich_briefing_card.dart';
 import 'features/rich_blocks/widgets/bmo_rich_image_card.dart';
 import 'features/rich_blocks/widgets/bmo_rich_memory_card.dart';
 import 'features/rich_blocks/widgets/bmo_rich_question_card.dart';
@@ -57,6 +58,10 @@ void main() async {
   BmoRichRegistry.register(
     'coding_task',
     (block) => BmoRichCodingTaskCard(block: block),
+  );
+  BmoRichRegistry.register(
+    'briefing',
+    (block) => BmoRichBriefingCard(block: block),
   );
   runApp(
     ProviderScope(
