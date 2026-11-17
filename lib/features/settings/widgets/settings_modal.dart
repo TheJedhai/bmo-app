@@ -6,6 +6,7 @@ import '../../../core/identity/identity_state.dart';
 import '../../../core/identity/user_profile.dart';
 import '../../../core/identity/widgets/profile_avatar.dart';
 import '../../../core/theme/bmo_theme.dart';
+import '../../routines/widgets/routines_settings_section.dart';
 import '../data/flux_model.dart';
 import '../providers/settings_provider.dart';
 import '../../../core/widgets/bmo_frame.dart';
@@ -80,6 +81,12 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
       title: 'Imagem',
       icon: Icons.image_outlined,
       builder: _buildImageSection,
+    ),
+    _SettingsSection(
+      id: 'routines',
+      title: 'Rotinas e avisos',
+      icon: Icons.alarm,
+      builder: _buildRoutinesSection,
     ),
   ];
 
@@ -204,6 +211,14 @@ class _SettingsModalState extends ConsumerState<_SettingsModal> {
         },
       ),
     );
+  }
+
+  static Widget _buildRoutinesSection(
+    BuildContext context,
+    WidgetRef ref,
+    Map<String, String> settings,
+  ) {
+    return const RoutinesSettingsSection();
   }
 
   // ==========================================================
