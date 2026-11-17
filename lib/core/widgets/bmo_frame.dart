@@ -44,7 +44,9 @@ class BmoFrame extends ConsumerWidget {
         math.max(14.0, vp.bottom),
       );
     } else {
-      borderPadding = const EdgeInsets.all(28);
+      // Margem direita mais larga: os controles (presença, sino, configurações)
+      // ficam numa coluna vertical nessa faixa, sem encostar no quadro.
+      borderPadding = const EdgeInsets.fromLTRB(28, 28, 60, 28);
     }
     final innerRadius = isMobile ? 26.0 : 18.0;
 
@@ -57,9 +59,8 @@ class BmoFrame extends ConsumerWidget {
     // A larger touch hitbox (≥40 px) wraps the circle via GestureDetector;
     // only the painted circle needs to look right.
     //
-    // Desktop (borderPadding=28): D=22, offset=8 — 8px outer breathing
-    //   room, inner edge overflows 2px into the dark screen (invisible
-    //   against screenBg background).
+    // Desktop (faixa direita de 60): D=28, offset=8, coluna vertical no topo —
+    //   8px de respiro externo e 24px até o quadro.
     // Mobile  (band >= 14): D=22, offset=-5 — overflow simétrico
     //   (band é fino demais; 5px para cada lado).
     final visualDiameter = 28.0;
@@ -108,54 +109,48 @@ class BmoFrame extends ConsumerWidget {
               ),
             ),
 
-            // ---- Presença + sino (top-right, à esquerda da engrenagem) ----
-            if (!isMobile) ...[
-              Positioned(
-                top: controlOffset,
-                right: controlOffset + 2 * (touchSize + 4),
-                child: _ControlHitbox(
-                  size: touchSize,
-                  alignment: Alignment.topRight,
-                  onTap: () => showPresenceDialog(context),
-                  child: PresenceButton(
-                    size: visualDiameter,
-                    iconSize: 16,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: controlOffset,
-                right: controlOffset + touchSize + 4,
-                child: _ControlHitbox(
-                  size: touchSize,
-                  alignment: Alignment.topRight,
-                  onTap: () => showNotificationsDialog(context),
-                  child: NotificationsBell(
-                    size: visualDiameter,
-                    iconSize: 16,
-                  ),
-                ),
-              ),
-            ],
-
-            // ---- Settings gear (top-right, on green band) ----
-            // Hidden on mobile — moves to the dashboard header.
+            // ---- Coluna de controles (topo da margem direita) ----
+            // Presença, sino e configurações, nessa ordem. No mobile esses
+            // controles ficam na BmoTopBar.
             if (!isMobile)
               Positioned(
                 top: controlOffset,
                 right: controlOffset,
-                child: _ControlHitbox(
-                  size: touchSize,
-                  alignment: Alignment.topRight,
-                  onTap: () => showSettingsModal(context),
-                  child: DarkCircle(
-                    diameter: visualDiameter,
-                    child: Icon(
-                      Icons.settings,
-                      size: gearIconSize,
-                      color: BmoColors.accentGreen,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ControlHitbox(
+                      size: touchSize,
+                      alignment: Alignment.topRight,
+                      onTap: () => showPresenceDialog(context),
+                      child: PresenceButton(
+                        size: visualDiameter,
+                        iconSize: 16,
+                      ),
                     ),
-                  ),
+                    _ControlHitbox(
+                      size: touchSize,
+                      alignment: Alignment.topRight,
+                      onTap: () => showNotificationsDialog(context),
+                      child: NotificationsBell(
+                        size: visualDiameter,
+                        iconSize: 16,
+                      ),
+                    ),
+                    _ControlHitbox(
+                      size: touchSize,
+                      alignment: Alignment.topRight,
+                      onTap: () => showSettingsModal(context),
+                      child: DarkCircle(
+                        diameter: visualDiameter,
+                        child: Icon(
+                          Icons.settings,
+                          size: gearIconSize,
+                          color: BmoColors.accentGreen,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
