@@ -139,6 +139,20 @@ class AgentChatClient {
         .toList();
   }
 
+  /// `POST /api/v2/sessions/daily` — conversa do dia do usuário, criada sob
+  /// demanda e idempotente (200/201).
+  Future<AgentSession> ensureDailySession() async {
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v2/sessions/daily'),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw _exception(response.statusCode, response.body);
+    }
+    return AgentSession.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
   /// `POST /api/v2/sessions`
   Future<AgentSession> createSession({String? title, int? projectId}) async {
     final response = await _client.post(

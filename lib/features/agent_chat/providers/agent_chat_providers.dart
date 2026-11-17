@@ -162,6 +162,13 @@ class DailyAgentSessions extends _$DailyAgentSessions {
     });
 
     final client = ref.watch(agentChatClientProvider);
+    // `POST /sessions/daily` é idempotente: garante a conversa do dia antes
+    // de listar (sem ele a lista fica sem a de hoje até uma saída automática).
+    try {
+      await client.ensureDailySession();
+    } catch (_) {
+      // Sem rede o que já existe na lista ainda serve.
+    }
     final sessions = await client.listSessions(kind: 'daily');
     sessions.sort((a, b) {
       final left = a.day ?? DateTime(0);

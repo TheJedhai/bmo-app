@@ -419,7 +419,7 @@ class _AgentSessionsProviderElement
 }
 
 String _$dailyAgentSessionsHash() =>
-    r'90f82dd4db4e9cea69a8e3e9fc298fb3309db322';
+    r'bb7a160b813c22cff5dab2bd287d97a2a8321cf3';
 
 /// Conversas do dia (`GET /api/v2/sessions?kind=daily`), mais recente
 /// primeiro por data. O servidor cria a do dia sob demanda.

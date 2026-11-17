@@ -24,14 +24,16 @@ import 'package:bmo_app/features/agent_chat/widgets/agent_chat_screen.dart';
 class FakeDailyClient extends AgentChatClient {
   FakeDailyClient() : super(client: http.Client(), baseUrl: 'http://fake');
 
+  /// A conversa do dia de hoje, devolvida pelo `POST /sessions/daily`.
+  final today = AgentSession.fromJson({
+    'id': 'TODAY',
+    'title': 'hoje',
+    'kind': 'daily',
+    'day': DateTime.now().toIso8601String().substring(0, 10),
+    'unread': true,
+  });
+
   final daily = [
-    AgentSession.fromJson({
-      'id': 'D2',
-      'title': '18/11/2026',
-      'kind': 'daily',
-      'day': '2026-11-18',
-      'unread': true,
-    }),
     AgentSession.fromJson({
       'id': 'D1',
       'title': '17/11/2026',
@@ -42,7 +44,14 @@ class FakeDailyClient extends AgentChatClient {
 
   final readCalls = <String>[];
   final listedKinds = <String>[];
+  int ensureCalls = 0;
   int? lastProjectId;
+
+  @override
+  Future<AgentSession> ensureDailySession() async {
+    ensureCalls++;
+    return today;
+  }
 
   @override
   Future<List<AgentSession>> listSessions({
@@ -51,7 +60,7 @@ class FakeDailyClient extends AgentChatClient {
   }) async {
     listedKinds.add(kind);
     lastProjectId = projectId;
-    if (kind == 'daily') return daily;
+    if (kind == 'daily') return [today, ...daily];
     return [
       AgentSession.fromJson({'id': 'C1', 'title': 'conversa normal'}),
     ];
@@ -109,20 +118,22 @@ void main() {
     container.read(currentUserIdProvider.notifier).state = 1;
   });
 
-  testWidgets('chat principal abre na conversa do dia mais recente', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_screen(container));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'chat principal abre na conversa do dia via POST /sessions/daily',
+    (tester) async {
+      await tester.pumpWidget(_screen(container));
+      await tester.pumpAndSettle();
 
-    expect(client.listedKinds, contains('daily'));
-    expect(
-      container.read(selectedAgentSessionProvider(null)),
-      'D2',
-      reason: 'a data mais recente vem primeiro',
-    );
-    expect(client.readCalls, contains('D2'));
-  });
+      expect(client.ensureCalls, 1);
+      expect(client.listedKinds, contains('daily'));
+      expect(
+        container.read(selectedAgentSessionProvider(null)),
+        'TODAY',
+        reason: 'a sessão devolvida pelo ensure é a de hoje',
+      );
+      expect(client.readCalls, contains('TODAY'));
+    },
+  );
 
   testWidgets('seção Dias lista as datas antes das conversas normais', (
     tester,
@@ -132,7 +143,7 @@ void main() {
 
     expect(find.text('Dias'), findsOneWidget);
     expect(find.text('Conversas'), findsOneWidget);
-    expect(find.text('18/11/2026'), findsOneWidget);
+    expect(find.text('hoje'), findsOneWidget);
     expect(find.text('17/11/2026'), findsOneWidget);
     expect(find.text('conversa normal'), findsOneWidget);
 
