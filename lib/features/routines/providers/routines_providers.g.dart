@@ -45,15 +45,12 @@ final presenceControllerProvider =
     );
 
 typedef _$PresenceController = AutoDisposeAsyncNotifier<Presence>;
-String _$notificationsHash() => r'3e282f0142fb9638b434476652a9c2b8d3d58072';
+String _$notificationsHash() => r'b28dfaf2c750f51f1e5b7f3e32cd424e402552f0';
 
 /// See also [Notifications].
 @ProviderFor(Notifications)
 final notificationsProvider =
-    AutoDisposeAsyncNotifierProvider<
-      Notifications,
-      List<AppNotification>
-    >.internal(
+    AutoDisposeAsyncNotifierProvider<Notifications, NotificationsPage>.internal(
       Notifications.new,
       name: r'notificationsProvider',
       debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -63,7 +60,7 @@ final notificationsProvider =
       allTransitiveDependencies: null,
     );
 
-typedef _$Notifications = AutoDisposeAsyncNotifier<List<AppNotification>>;
+typedef _$Notifications = AutoDisposeAsyncNotifier<NotificationsPage>;
 String _$routineConfigHash() => r'208f12d0259a3c20ef558acf6c7d6c9b100cfa5c';
 
 /// See also [RoutineConfig].

@@ -55,10 +55,10 @@ class PresenceController extends _$PresenceController {
 @riverpod
 class Notifications extends _$Notifications {
   @override
-  Future<List<AppNotification>> build() async {
+  Future<NotificationsPage> build() async {
     final userId = ref.watch(currentUserIdProvider);
     ref.watch(sseGenerationProvider);
-    if (userId == null) return const [];
+    if (userId == null) return const NotificationsPage();
     return ref.watch(routinesRepositoryProvider).listNotifications();
   }
 
@@ -67,6 +67,14 @@ class Notifications extends _$Notifications {
     state = await AsyncValue.guard(
       () => ref.read(routinesRepositoryProvider).listNotifications(),
     );
+  }
+
+  /// Marca como lidas as notificações exibidas e relê o badge.
+  Future<void> markRead(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final repo = ref.read(routinesRepositoryProvider);
+    await repo.markNotificationsRead(ids);
+    state = AsyncData(await repo.listNotifications());
   }
 }
 

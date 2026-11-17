@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/home_devices/providers/alarms_providers.dart';
 import '../../features/memories/providers/memories_provider.dart';
+import '../../features/routines/providers/routines_providers.dart';
 import '../../features/missions/data/missions_providers.dart';
 import '../../features/calendar/data/calendar_providers.dart';
 import '../../features/coding/data/coding_providers.dart';
@@ -179,6 +180,14 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
     case 'alarm.updated':
     case 'alarm.deleted':
       ref.invalidate(alarmsProvider);
+
+    // ---- Rotinas: presença e avisos ----
+    case 'presence.updated':
+      ref.invalidate(presenceControllerProvider);
+    case 'notification.created':
+    case 'notifications.delivered':
+    case 'notifications.read':
+      ref.invalidate(notificationsProvider);
 
     // ---- Chat / Coding: não lidos (`unread` do /me) ----
     case 'session.turn_completed':

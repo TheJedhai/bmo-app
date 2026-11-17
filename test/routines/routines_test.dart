@@ -26,7 +26,8 @@ class FakeRoutinesRepository extends RoutinesRepository {
   PresenceMode? lastMode;
   DateTime? lastUntil;
 
-  List<AppNotification> notifications = const [];
+  NotificationsPage page = const NotificationsPage();
+  List<int> markedIds = [];
 
   @override
   Future<Presence> getPresence() async => presence;
@@ -40,8 +41,13 @@ class FakeRoutinesRepository extends RoutinesRepository {
   }
 
   @override
-  Future<List<AppNotification>> listNotifications({int limit = 50}) async =>
-      notifications;
+  Future<NotificationsPage> listNotifications({int limit = 50}) async => page;
+
+  @override
+  Future<void> markNotificationsRead(List<int> ids) async {
+    markedIds = ids;
+    page = NotificationsPage(unread: 0, items: page.items);
+  }
 }
 
 AppNotification _notification({
@@ -108,29 +114,35 @@ void main() {
     );
   });
 
-  testWidgets('badge do sino conta só as seguradas não entregues', (
+  testWidgets('badge do sino usa o unread do servidor e abrir marca as lidas', (
     tester,
   ) async {
-    repo.notifications = [
-      _notification(id: 1, channel: 'segurada'),
-      _notification(id: 2, channel: 'segurada'),
-      _notification(
-        id: 3,
-        channel: 'segurada',
-        deliveredAt: '2026-11-17T10:05:00Z',
-      ),
-      _notification(id: 4),
-    ];
+    repo.page = NotificationsPage(
+      unread: 5,
+      items: [
+        _notification(id: 1, channel: 'segurada'),
+        _notification(id: 2, channel: 'segurada'),
+        _notification(
+          id: 3,
+          channel: 'segurada',
+          deliveredAt: '2026-11-17T10:05:00Z',
+        ),
+        _notification(id: 4),
+      ],
+    );
 
     await tester.pumpWidget(_app(container, const NotificationsBell()));
     await tester.pumpAndSettle();
 
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
 
     await tester.tap(find.byType(NotificationsBell));
     await tester.pumpAndSettle();
 
     expect(find.text('Seguradas'), findsOneWidget);
     expect(find.text('Recentes'), findsOneWidget);
+    // As exibidas (todas sem read_at) foram marcadas como lidas.
+    expect(repo.markedIds, [1, 2, 3, 4]);
+    expect(find.text('5'), findsNothing);
   });
 }

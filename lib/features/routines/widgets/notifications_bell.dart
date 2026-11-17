@@ -7,8 +7,8 @@ import '../../../core/widgets/dark_circle.dart';
 import '../data/routines_client.dart';
 import '../providers/routines_providers.dart';
 
-/// Sino de notificações no topo. Badge = seguradas ainda não entregues
-/// (o contrato não tem marcar-como-lida, então `read_at` não é badge).
+/// Sino de notificações no topo. Badge = `unread` do `GET /notifications`;
+/// as seguradas aparecem destacadas no diálogo.
 class NotificationsBell extends ConsumerWidget {
   final double size;
   final double iconSize;
@@ -17,12 +17,14 @@ class NotificationsBell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final items = ref.watch(notificationsProvider).valueOrNull ?? const [];
+    final page = ref.watch(notificationsProvider).valueOrNull;
+    final items = page?.items ?? const <AppNotification>[];
+    final unread = page?.unread ?? 0;
     final held = items.where((item) => item.held).length;
     final badgeScale = size / 48;
 
     return Tooltip(
-      message: held > 0 ? '$held avisos segurados' : 'avisos',
+      message: unread > 0 ? '$unread avisos' : 'avisos',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -38,12 +40,12 @@ class NotificationsBell extends ConsumerWidget {
                   child: Icon(
                     Icons.notifications_outlined,
                     size: iconSize,
-                    color: held > 0
+                    color: unread > 0 || held > 0
                         ? BmoColors.accentYellow
                         : BmoColors.accentGreen,
                   ),
                 ),
-                if (held > 0)
+                if (unread > 0)
                   Positioned(
                     top: -2 * badgeScale,
                     right: -2 * badgeScale,
@@ -57,7 +59,7 @@ class NotificationsBell extends ConsumerWidget {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        held > 99 ? '99+' : '$held',
+                        unread > 99 ? '99+' : '$unread',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 9 * badgeScale,
@@ -94,12 +96,28 @@ class _NotificationsDialog extends ConsumerStatefulWidget {
 }
 
 class _NotificationsDialogState extends ConsumerState<_NotificationsDialog> {
+  /// Marca as exibidas como lidas uma vez por abertura.
+  bool _marked = false;
+
   @override
   void initState() {
     super.initState();
     // Abrir é o "foco" da tela: relê do servidor.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) ref.read(notificationsProvider.notifier).refresh();
+    });
+  }
+
+  void _markDisplayed(List<AppNotification> items) {
+    if (_marked) return;
+    final ids = [
+      for (final item in items)
+        if (item.readAt == null) item.id,
+    ];
+    if (ids.isEmpty) return;
+    _marked = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(notificationsProvider.notifier).markRead(ids);
     });
   }
 
@@ -136,7 +154,9 @@ class _NotificationsDialogState extends ConsumerState<_NotificationsDialog> {
               ),
             ],
           ),
-          data: (items) {
+          data: (page) {
+            final items = page.items;
+            _markDisplayed(items);
             if (items.isEmpty) {
               return Text(
                 'nada por aqui',

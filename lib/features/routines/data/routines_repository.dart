@@ -11,8 +11,11 @@ class RoutinesRepository {
   Future<Presence> setPresence(PresenceMode mode, {DateTime? until}) =>
       _client.setPresence(mode, until: until);
 
-  Future<List<AppNotification>> listNotifications({int limit = 50}) =>
+  Future<NotificationsPage> listNotifications({int limit = 50}) =>
       _client.listNotifications(limit: limit);
+
+  Future<void> markNotificationsRead(List<int> ids) =>
+      _client.markNotificationsRead(ids);
 
   Future<RoutineSettings> getRoutineSettings() => _client.getRoutineSettings();
 

@@ -92,6 +92,39 @@ class AppNotification {
       );
 }
 
+/// `GET /api/v1/notifications`: itens + contagem de não lidas do servidor.
+class NotificationsPage {
+  final List<AppNotification> items;
+
+  /// Badge do sino (`unread` do contrato).
+  final int unread;
+
+  const NotificationsPage({this.items = const [], this.unread = 0});
+
+  static NotificationsPage fromJson(Object? json) {
+    final list = switch (json) {
+      List() => json,
+      Map() =>
+        ['items', 'notifications', 'recent']
+            .map((key) => json[key])
+            .firstWhere((value) => value is List, orElse: () => const []),
+      _ => const <Object?>[],
+    };
+    final items = list
+        .whereType<Map>()
+        .map(
+          (item) => AppNotification.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList();
+    final rawUnread = json is Map ? json['unread'] : null;
+    final unread = rawUnread is num
+        ? rawUnread.toInt()
+        // Sem contagem explícita (resposta em lista), vale read_at.
+        : items.where((item) => item.readAt == null).length;
+    return NotificationsPage(items: items, unread: unread);
+  }
+}
+
 /// `/api/v1/routines/config` — horários, tempo e seções do bom dia.
 class RoutineSettings {
   final String dayRoll;
@@ -211,18 +244,22 @@ class RoutinesClient {
 
   // ── notificações ─────────────────────────────────────────────────────────
 
-  Future<List<AppNotification>> listNotifications({int limit = 50}) async {
+  Future<NotificationsPage> listNotifications({int limit = 50}) async {
     final uri = Uri.parse(
       '$_baseUrl/api/v1/notifications',
     ).replace(queryParameters: {'limit': '$limit'});
-    final decoded = _decode(await _client.get(uri));
-    if (decoded is! List) return const [];
-    return decoded
-        .whereType<Map>()
-        .map(
-          (json) => AppNotification.fromJson(Map<String, dynamic>.from(json)),
-        )
-        .toList();
+    return NotificationsPage.fromJson(_decode(await _client.get(uri)));
+  }
+
+  /// `POST /api/v1/notifications/read` — marca as exibidas como lidas.
+  Future<void> markNotificationsRead(List<int> ids) async {
+    if (ids.isEmpty) return;
+    final response = await _client.post(
+      Uri.parse('$_baseUrl/api/v1/notifications/read'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'ids': ids}),
+    );
+    _decode(response);
   }
 
   // ── configuração das rotinas ─────────────────────────────────────────────
