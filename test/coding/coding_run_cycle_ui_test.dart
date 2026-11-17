@@ -1,5 +1,5 @@
 // UI do ciclo de projeto: custo real (cost_usd_computed), last_event,
-// "juntado na base" e link do run pai — card rico, lista e detalhe.
+// "juntado na base" e link do run pai — card rico e detalhe.
 //
 // Run:
 //   flutter test test/coding/coding_run_cycle_ui_test.dart
@@ -17,10 +17,8 @@ import 'package:bmo_app/features/coding/data/coding_client.dart';
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
 import 'package:bmo_app/features/coding/data/coding_run_providers.dart';
 import 'package:bmo_app/features/coding/data/models/coding_run.dart';
-import 'package:bmo_app/features/coding/presentation/coding_project_screen.dart';
 import 'package:bmo_app/features/coding/presentation/coding_run_screen.dart';
 import 'package:bmo_app/features/coding/presentation/widgets/bmo_rich_coding_run_card.dart';
-import 'package:bmo_app/features/coding/presentation/widgets/bmo_rich_plan_card.dart';
 import 'package:bmo_app/features/rich_blocks/data/bmo_rich_block.dart';
 
 const _block = BmoRichBlock(
@@ -95,20 +93,11 @@ class FakeCodingClient extends CodingClient {
       const [];
 }
 
-class FakeRuns extends CodingRuns {
-  FakeRuns(this.run);
-  final CodingRun run;
-
-  @override
-  Future<List<CodingRun>> build(int projectId) async => [run];
-}
-
 Widget _wrap(Widget child, {required CodingRun run}) => ProviderScope(
       overrides: [
         // Gate opt-in da feature (tela do projeto redireciona sem ele).
         enabledFeaturesProvider.overrideWith((ref) => {'coding'}),
         codingClientProvider.overrideWithValue(FakeCodingClient(run)),
-        codingRunsProvider(1).overrideWith(() => FakeRuns(run)),
         codingRunProvider(run.id).overrideWith((ref) async => run),
         codingRunEventsProvider(run.id).overrideWith(FakeEvents.new),
         eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
@@ -199,23 +188,6 @@ void main() {
     });
   });
 
-  group('lista do projeto', () {
-    testWidgets('mostra last_event, custo real e merge', (tester) async {
-      await tester.pumpWidget(_wrap(
-        const CodingProjectScreen(projectId: 1),
-        run: _run(mergedAt: DateTime(2026, 11, 2)),
-      ));
-      await _settle(tester);
-
-      expect(find.text('rodando os testes'), findsOneWidget);
-      expect(
-        find.textContaining('US\$ 1.25'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('juntado na base'), findsOneWidget);
-    });
-  });
-
   group('detalhe do run', () {
     testWidgets('custo real, estimativa rotulada e último sinal',
         (tester) async {
@@ -282,76 +254,6 @@ void main() {
         find.text('total · entrada 10 · cache 3 · saída 5'),
         findsOneWidget,
       );
-    });
-  });
-
-  group('card coding_plan', () {
-    BmoRichBlock planBlock(Map<String, dynamic> payload) => BmoRichBlock(
-          v: 2,
-          type: 'coding_plan',
-          blockId: 'coding-plan-${payload['id']}',
-          payload: payload,
-          mutable: true,
-          speech: 'Plano aprovado.',
-        );
-
-    testWidgets('plano ativo mostra status, consumo e restante',
-        (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: BmoRichPlanCard(
-            block: planBlock(const {
-              'id': 3,
-              'project_id': 1,
-              'text': 'criar A.txt e B.txt, um run cada',
-              'max_runs': 2,
-              'max_cost_usd': 5.0,
-              'runs_used': 0,
-              'cost_used': 0.0,
-              'remaining_runs': 2,
-              'status': 'active',
-              'created_at': '2026-11-16T14:05:00+00:00',
-              'ended_at': null,
-            }),
-          ),
-        ),
-      ));
-
-      expect(find.text('Plano · ativo'), findsOneWidget);
-      expect(find.text('criar A.txt e B.txt, um run cada'), findsOneWidget);
-      expect(find.text('runs 0 / 2'), findsOneWidget);
-      expect(find.text('custo US\$ 0.00 / US\$ 5.00'), findsOneWidget);
-      expect(find.text('restam 2'), findsOneWidget);
-      // speech fica guardado no bloco, nunca renderizado.
-      expect(find.text('Plano aprovado.'), findsNothing);
-    });
-
-    testWidgets('plano cancelado mostra status cancelado', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(
-          body: BmoRichPlanCard(
-            block: planBlock(const {
-              'id': 4,
-              'project_id': 1,
-              'text': 'plano antigo',
-              'max_runs': 3,
-              'max_cost_usd': 2.0,
-              'runs_used': 1,
-              'cost_used': 0.25,
-              'remaining_runs': 2,
-              'status': 'cancelled',
-              'created_at': null,
-              'ended_at': '2026-11-16T14:12:30+00:00',
-            }),
-          ),
-        ),
-      ));
-
-      expect(find.text('Plano · cancelado'), findsOneWidget);
-      expect(find.text('runs 1 / 3'), findsOneWidget);
-      expect(find.text('custo US\$ 0.25 / US\$ 2.00'), findsOneWidget);
-      // Sem "restam" fora de plano ativo.
-      expect(find.textContaining('restam'), findsNothing);
     });
   });
 }

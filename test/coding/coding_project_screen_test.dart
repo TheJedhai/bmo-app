@@ -1,5 +1,5 @@
-// Tela do projeto de coding: conversas do chat v2 do projeto + histórico de
-// runs. Providers falsos — nenhum teste toca a rede.
+// Tela do projeto de coding: conversas do chat v2 do projeto + tarefas.
+// Providers falsos — nenhum teste toca a rede.
 //
 // Run:
 //   flutter test test/coding/coding_project_screen_test.dart
@@ -14,9 +14,9 @@ import 'package:bmo_app/core/identity/identity_state.dart';
 import 'package:bmo_app/features/agent_chat/data/agent_session.dart';
 import 'package:bmo_app/features/agent_chat/providers/agent_chat_providers.dart';
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
-import 'package:bmo_app/features/coding/data/coding_run_providers.dart';
+import 'package:bmo_app/features/coding/data/coding_task_providers.dart';
 import 'package:bmo_app/features/coding/data/models/coding_project.dart';
-import 'package:bmo_app/features/coding/data/models/coding_run.dart';
+import 'package:bmo_app/features/coding/data/models/coding_task.dart';
 import 'package:bmo_app/features/coding/presentation/coding_project_screen.dart';
 
 class FakeAgentSessions extends AgentSessions {
@@ -43,23 +43,26 @@ class FakeProjects extends ProjectsNotifier {
       ];
 }
 
-final _run = CodingRun(
-  id: 42,
+final _task = CodingTask(
+  taskId: 9,
   projectId: 1,
-  prompt: 'adiciona testes do card',
-  status: CodingRunStatus.success,
-  filesChanged: const ['lib/a.dart', 'lib/b.dart'],
-  costUsdComputed: 0.42,
-  durationMs: 65000,
+  status: CodingTaskStatus.readyToJoin,
+  objective: 'adiciona testes do card',
+  currentStep: 2,
+  stepsTotal: 2,
+  stepsDone: 2,
+  costUsd: 0.42,
+  lastEvent: 'revisão aprovou o passo 2',
+  canJoin: true,
 );
 
-class FakeRuns extends CodingRuns {
+class FakeTasks extends CodingTasks {
   @override
-  Future<List<CodingRun>> build(int projectId) async => [_run];
+  Future<List<CodingTask>> build(int projectId) async => [_task];
 }
 
 void main() {
-  testWidgets('mostra conversas e runs do projeto e abre a conversa',
+  testWidgets('mostra conversas e tarefas do projeto e abre a conversa',
       (tester) async {
     final router = GoRouter(
       initialLocation: '/coding/1',
@@ -85,7 +88,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         agentSessionsProvider(1).overrideWith(FakeAgentSessions.new),
-        codingRunsProvider(1).overrideWith(FakeRuns.new),
+        codingTasksProvider(1).overrideWith(FakeTasks.new),
         projectsProvider.overrideWith(FakeProjects.new),
         eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
       ],
@@ -106,17 +109,62 @@ void main() {
     expect(find.text('BMO-APP'), findsOneWidget);
     expect(find.text('conversa do projeto'), findsOneWidget);
     expect(find.text('adiciona testes do card'), findsOneWidget);
-    // status, quando, duração e custo na linha do run
-    expect(
-      find.textContaining('sucesso'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('1min 05s'), findsOneWidget);
+    expect(find.text('revisão aprovou o passo 2'), findsOneWidget);
+    // status, passo, quando e custo na linha da tarefa
+    expect(find.textContaining('pronta para juntar'), findsOneWidget);
+    expect(find.textContaining('passo 2/2'), findsOneWidget);
     expect(find.textContaining('US\$ 0.42'), findsOneWidget);
 
     // "Nova" (ou tocar numa conversa) abre o chat v2 com o projectId.
     await tester.tap(find.text('Nova'));
     await tester.pumpAndSettle();
     expect(find.text('chat do projeto 1'), findsOneWidget);
+  });
+
+  testWidgets('tocar na tarefa abre /coding/tasks/9', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/coding/1',
+      routes: [
+        GoRoute(
+          path: '/coding/:projectId',
+          builder: (context, state) => CodingProjectScreen(
+            projectId: int.parse(state.pathParameters['projectId']!),
+          ),
+        ),
+        GoRoute(
+          path: '/coding/tasks/:taskId',
+          builder: (context, state) => Scaffold(
+            body: Text('tarefa ${state.pathParameters['taskId']}'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    final container = ProviderContainer(
+      overrides: [
+        agentSessionsProvider(1).overrideWith(FakeAgentSessions.new),
+        codingTasksProvider(1).overrideWith(FakeTasks.new),
+        projectsProvider.overrideWith(FakeProjects.new),
+        eventsStreamProvider.overrideWith((ref) => const Stream.empty()),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(currentUserIdProvider.notifier).state = 1;
+    container.read(enabledFeaturesProvider.notifier).state = {'coding'};
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('adiciona testes do card'));
+    await tester.pumpAndSettle();
+
+    expect(router.routeInformationProvider.value.uri.path, '/coding/tasks/9');
+    expect(find.text('tarefa 9'), findsOneWidget);
   });
 }

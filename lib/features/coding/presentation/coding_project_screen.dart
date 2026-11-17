@@ -8,17 +8,19 @@ import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
 import '../../../core/widgets/bmo_frame.dart';
 import '../data/coding_providers.dart';
-import '../data/coding_run_providers.dart';
+import '../data/coding_task_providers.dart';
 import '../data/models/coding_project.dart';
 import '../data/models/coding_run.dart';
+import '../data/models/coding_task.dart';
 import 'widgets/coding_run_look.dart';
+import 'widgets/coding_task_look.dart';
 
 const _kConversationsWidth = 320.0;
 
 /// Tela de um projeto de coding — `/coding/:projectId`.
 ///
 /// Conversas = sessões do chat v2 do projeto (abrem `/coding/N/chat`);
-/// execuções = histórico de runs autônomos (abrem `/coding/runs/N`).
+/// tarefas = lista ao vivo de `coding.task.*` (abrem `/coding/tasks/N`).
 class CodingProjectScreen extends ConsumerWidget {
   final int projectId;
 
@@ -61,7 +63,7 @@ class CodingProjectScreen extends ConsumerWidget {
                         thickness: 1,
                         color: BmoColors.textMuted.withValues(alpha: 0.2),
                       ),
-                      Expanded(child: _RunsPane(projectId: projectId)),
+                      Expanded(child: _TasksPane(projectId: projectId)),
                     ],
                   )
                 : Row(
@@ -75,7 +77,7 @@ class CodingProjectScreen extends ConsumerWidget {
                         thickness: 1,
                         color: BmoColors.textMuted.withValues(alpha: 0.2),
                       ),
-                      Expanded(child: _RunsPane(projectId: projectId)),
+                      Expanded(child: _TasksPane(projectId: projectId)),
                     ],
                   ),
           ),
@@ -147,14 +149,14 @@ class _Header extends ConsumerWidget {
   }
 }
 
-class _RunsPane extends ConsumerWidget {
+class _TasksPane extends ConsumerWidget {
   final int projectId;
 
-  const _RunsPane({required this.projectId});
+  const _TasksPane({required this.projectId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final runsAsync = ref.watch(codingRunsProvider(projectId));
+    final tasksAsync = ref.watch(codingTasksProvider(projectId));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,7 +166,7 @@ class _RunsPane extends ConsumerWidget {
           child: Row(
             children: [
               Text(
-                'EXECUÇÕES',
+                'TAREFAS',
                 style: TextStyle(
                   fontFamily: 'PressStart2P',
                   fontSize: 10,
@@ -176,14 +178,14 @@ class _RunsPane extends ConsumerWidget {
                 tooltip: 'atualizar',
                 iconSize: 16,
                 color: BmoColors.textMuted,
-                onPressed: () => ref.invalidate(codingRunsProvider(projectId)),
+                onPressed: () => ref.invalidate(codingTasksProvider(projectId)),
                 icon: const Icon(Icons.refresh),
               ),
             ],
           ),
         ),
         Expanded(
-          child: runsAsync.when(
+          child: tasksAsync.when(
             loading: () => const Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
@@ -192,7 +194,7 @@ class _RunsPane extends ConsumerWidget {
             ),
             error: (error, _) => Center(
               child: Text(
-                'falha ao carregar runs: $error',
+                'falha ao carregar tarefas: $error',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: 'Inter',
@@ -201,11 +203,11 @@ class _RunsPane extends ConsumerWidget {
                 ),
               ),
             ),
-            data: (runs) {
-              if (runs.isEmpty) {
+            data: (tasks) {
+              if (tasks.isEmpty) {
                 return const Center(
                   child: Text(
-                    'Nenhum run ainda',
+                    'Nenhuma tarefa ainda',
                     style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 13,
@@ -216,8 +218,8 @@ class _RunsPane extends ConsumerWidget {
               }
               return ListView.builder(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                itemCount: runs.length,
-                itemBuilder: (context, index) => _RunCard(run: runs[index]),
+                itemCount: tasks.length,
+                itemBuilder: (context, index) => _TaskCard(task: tasks[index]),
               );
             },
           ),
@@ -227,14 +229,14 @@ class _RunsPane extends ConsumerWidget {
   }
 }
 
-class _RunCard extends StatelessWidget {
-  final CodingRun run;
+class _TaskCard extends StatelessWidget {
+  final CodingTask task;
 
-  const _RunCard({required this.run});
+  const _TaskCard({required this.task});
 
   @override
   Widget build(BuildContext context) {
-    final look = codingRunLook(run.status);
+    final look = codingTaskLook(task.status);
     return Card(
       color: BmoColors.screenBgElevated,
       shape: RoundedRectangleBorder(
@@ -244,20 +246,20 @@ class _RunCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        // `go` (não `push`): a URL reflete o detalhe do run.
-        onTap: () => GoRouter.of(context).go('/coding/runs/${run.id}'),
+        // `go` (não `push`): a URL reflete o detalhe da tarefa.
+        onTap: () => GoRouter.of(context).go('/coding/tasks/${task.taskId}'),
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              CodingRunStatusIcon(status: run.status, size: 18),
+              CodingTaskStatusIcon(status: task.status, size: 18),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      run.prompt,
+                      task.objective,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -267,10 +269,9 @@ class _RunCard extends StatelessWidget {
                         color: BmoColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    if (run.lastEvent != null && run.lastEvent!.isNotEmpty)
+                    if (task.lastEvent != null && task.lastEvent!.isNotEmpty)
                       Text(
-                        run.lastEvent!,
+                        task.lastEvent!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -283,10 +284,10 @@ class _RunCard extends StatelessWidget {
                     Text(
                       [
                         look.label,
-                        formatRunTimestamp(run.startedAt ?? run.createdAt),
-                        'duração ${formatRunDuration(run.durationMs)}',
-                        formatComputedCost(run.costUsdComputed),
-                        if (run.isMerged) 'juntado na base',
+                        if (task.stepsTotal > 0)
+                          formatStepProgress(task.currentStep, task.stepsTotal),
+                        formatRunTimestamp(task.startedAt ?? task.createdAt),
+                        formatRunCost(task.costUsd),
                       ].where((part) => part.isNotEmpty).join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

@@ -12,6 +12,7 @@ import '../../features/calendar/presentation/calendars_screen.dart';
 import '../../features/coding/presentation/coding_project_screen.dart';
 import '../../features/coding/presentation/coding_project_settings_screen.dart';
 import '../../features/coding/presentation/coding_run_screen.dart';
+import '../../features/coding/presentation/coding_task_screen.dart';
 import '../../features/coding/presentation/coding_screen.dart';
 import '../../features/finances/presentation/finances_screen.dart';
 import '../../features/vault/presentation/vault_screen.dart';
@@ -168,6 +169,7 @@ String? redirectLegacyMemories(BuildContext context, GoRouterState state) {
 /// /financas              FinancesScreen
 /// /coding                CodingScreen
 /// /coding/runs/:runId    CodingRunScreen
+/// /coding/tasks/:taskId  CodingTaskScreen
 /// /coding/:projectId/chat  AgentChatScreen do projeto
 /// /coding/:projectId     CodingProjectScreen
 /// /coding/:projectId/settings  CodingProjectSettingsScreen
@@ -238,6 +240,18 @@ final List<RouteBase> appRoutes = [
       final runId = int.tryParse(state.pathParameters['runId'] ?? '');
       return _buildFeaturePage(
         runId == null ? const CodingScreen() : CodingRunScreen(runId: runId),
+        state,
+      );
+    },
+  ),
+  // Detalhe da tarefa: antes de `/coding/:projectId` para "tasks" nunca ser
+  // lido como id de projeto.
+  GoRoute(
+    path: '/coding/tasks/:taskId',
+    pageBuilder: (context, state) {
+      final taskId = int.tryParse(state.pathParameters['taskId'] ?? '');
+      return _buildFeaturePage(
+        taskId == null ? const CodingScreen() : CodingTaskScreen(taskId: taskId),
         state,
       );
     },

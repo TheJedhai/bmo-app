@@ -1,5 +1,5 @@
 // Navegação da área de Coding: conversa de projeto em `/coding/N/chat`, link
-// antigo `/chat?project=N` redirecionado e detalhe do run com rota real.
+// antigo `/chat?project=N` redirecionado e detalhe da tarefa com rota real.
 //
 // Usa a tabela de rotas de produção ([appRoutes]) num router enxuto, sem o
 // shell/identidade. Providers falsos — nenhum teste toca a rede.
@@ -18,8 +18,10 @@ import 'package:bmo_app/features/agent_chat/data/agent_session.dart';
 import 'package:bmo_app/features/agent_chat/providers/agent_chat_providers.dart';
 import 'package:bmo_app/features/coding/data/coding_providers.dart';
 import 'package:bmo_app/features/coding/data/coding_run_providers.dart';
+import 'package:bmo_app/features/coding/data/coding_task_providers.dart';
 import 'package:bmo_app/features/coding/data/models/coding_project.dart';
 import 'package:bmo_app/features/coding/data/models/coding_run.dart';
+import 'package:bmo_app/features/coding/data/models/coding_task.dart';
 
 class FakeProjects extends ProjectsNotifier {
   @override
@@ -63,6 +65,15 @@ const _run = CodingRun(
   status: CodingRunStatus.success,
 );
 
+const _task = CodingTask(
+  taskId: 9,
+  projectId: 4,
+  status: CodingTaskStatus.readyToJoin,
+  objective: 'adiciona testes do card',
+  currentStep: 1,
+  stepsTotal: 2,
+);
+
 GoRouter _router(String initialLocation) => GoRouter(
       initialLocation: initialLocation,
       redirect: redirectLegacyProjectChat,
@@ -75,7 +86,8 @@ ProviderContainer _container() {
       projectsProvider.overrideWith(FakeProjects.new),
       agentSessionsProvider(4).overrideWith(FakeSessions.new),
       agentConversationProvider(4).overrideWith(FakeConversation.new),
-      codingRunsProvider(4).overrideWith(FakeRuns.new),
+      codingTasksProvider(4).overrideWith(FakeTasks.new),
+      codingTaskProvider(9).overrideWith((ref) async => _task),
       codingRunProvider(42).overrideWith((ref) async => _run),
       codingRunEventsProvider(42).overrideWith(FakeRunEvents.new),
     ],
@@ -98,9 +110,9 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-class FakeRuns extends CodingRuns {
+class FakeTasks extends CodingTasks {
   @override
-  Future<List<CodingRun>> build(int projectId) async => [_run];
+  Future<List<CodingTask>> build(int projectId) async => [_task];
 }
 
 void main() {
@@ -144,7 +156,7 @@ void main() {
     expect(find.text('scratch-run'), findsOneWidget);
   });
 
-  testWidgets('run do projeto abre em /coding/runs/42', (tester) async {
+  testWidgets('tarefa do projeto abre em /coding/tasks/9', (tester) async {
     final router = _router('/coding/4');
     addTearDown(router.dispose);
     final container = _container();
@@ -155,7 +167,7 @@ void main() {
     await tester.tap(find.text('adiciona testes do card'));
     await tester.pumpAndSettle();
 
-    expect(router.routeInformationProvider.value.uri.path, '/coding/runs/42');
-    expect(find.text('RUN #42'), findsOneWidget);
+    expect(router.routeInformationProvider.value.uri.path, '/coding/tasks/9');
+    expect(find.text('TAREFA #9'), findsOneWidget);
   });
 }
