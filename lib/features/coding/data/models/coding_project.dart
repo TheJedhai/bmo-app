@@ -1,76 +1,3 @@
-/// Plano de execução ativo do projeto (`plan` do `GET /coding/projects`).
-class CodingPlan {
-  final int id;
-  final int projectId;
-  final String text;
-  final int? maxRuns;
-  final int runsUsed;
-  final double? maxCostUsd;
-  final double costUsed;
-
-  /// `remaining_runs` do servidor (`null` = campo ausente).
-  final int? remainingRuns;
-
-  /// `active` | `exhausted` | `cancelled`.
-  final String status;
-
-  final DateTime? createdAt;
-  final DateTime? endedAt;
-
-  const CodingPlan({
-    this.id = 0,
-    this.projectId = 0,
-    required this.text,
-    this.maxRuns,
-    this.runsUsed = 0,
-    this.maxCostUsd,
-    this.costUsed = 0,
-    this.remainingRuns,
-    this.status = '',
-    this.createdAt,
-    this.endedAt,
-  });
-
-  factory CodingPlan.fromJson(Map<String, dynamic> json) => CodingPlan(
-        id: _int(json['id']),
-        projectId: _int(json['project_id']),
-        text: json['text']?.toString() ?? '',
-        maxRuns: json['max_runs'] == null ? null : _int(json['max_runs']),
-        runsUsed: _int(json['runs_used']),
-        maxCostUsd: _double(json['max_cost_usd']),
-        costUsed: _double(json['cost_used']) ?? 0,
-        remainingRuns: json['remaining_runs'] == null
-            ? null
-            : _int(json['remaining_runs']),
-        status: json['status']?.toString() ?? '',
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? ''),
-        endedAt: DateTime.tryParse(json['ended_at']?.toString() ?? ''),
-      );
-
-  /// Plano ainda aceita runs.
-  bool get isActive => status == 'active';
-
-  /// Runs que ainda cabem no plano (`null` = sem limite).
-  int? get runsLeft => remainingRuns ??
-      (maxRuns == null ? null : (maxRuns! - runsUsed).clamp(0, maxRuns!));
-
-  /// Orçamento que ainda cabe no plano (`null` = sem limite).
-  double? get costLeft => maxCostUsd == null
-      ? null
-      : (maxCostUsd! - costUsed).clamp(0, maxCostUsd!);
-
-  static int _int(dynamic value) {
-    if (value is num) return value.toInt();
-    return int.tryParse('$value') ?? 0;
-  }
-
-  static double? _double(dynamic value) {
-    if (value == null) return null;
-    if (value is num) return value.toDouble();
-    return double.tryParse('$value');
-  }
-}
-
 class CodingProject {
   final int id;
   final String name;
@@ -83,12 +10,6 @@ class CodingProject {
 
   /// Branch base do projeto (só leitura no app).
   final String? baseBranch;
-
-  /// `each_run` (aprova cada run) ou `plan` (aprova o plano).
-  final String approvalMode;
-
-  /// Plano ativo, quando houver.
-  final CodingPlan? plan;
 
   final String createdAt;
   final String updatedAt;
@@ -103,8 +24,6 @@ class CodingProject {
     required this.denyRules,
     this.knowledge,
     this.baseBranch,
-    this.approvalMode = 'each_run',
-    this.plan,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -129,10 +48,6 @@ class CodingProject {
           const [],
       knowledge: json['knowledge'] as String?,
       baseBranch: json['base_branch'] as String?,
-      approvalMode: json['approval_mode'] as String? ?? 'each_run',
-      plan: json['plan'] is Map
-          ? CodingPlan.fromJson(Map<String, dynamic>.from(json['plan'] as Map))
-          : null,
       createdAt: json['created_at'] as String? ?? '',
       updatedAt: json['updated_at'] as String? ?? '',
     );
@@ -160,8 +75,6 @@ class CodingProject {
     List<String>? denyRules,
     String? knowledge,
     String? baseBranch,
-    String? approvalMode,
-    CodingPlan? plan,
     String? createdAt,
     String? updatedAt,
   }) {
@@ -175,29 +88,8 @@ class CodingProject {
       denyRules: denyRules ?? this.denyRules,
       knowledge: knowledge ?? this.knowledge,
       baseBranch: baseBranch ?? this.baseBranch,
-      approvalMode: approvalMode ?? this.approvalMode,
-      plan: plan ?? this.plan,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-}
-
-extension CodingProjectPlan on CodingProject {
-  /// Troca o plano ativo; `null` limpa (`copyWith` não consegue soltar).
-  CodingProject copyWithPlan(CodingPlan? plan) => CodingProject(
-        id: id,
-        name: name,
-        primaryPath: primaryPath,
-        extraPaths: extraPaths,
-        permissionMode: permissionMode,
-        allowRules: allowRules,
-        denyRules: denyRules,
-        knowledge: knowledge,
-        baseBranch: baseBranch,
-        approvalMode: approvalMode,
-        plan: plan,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-      );
 }

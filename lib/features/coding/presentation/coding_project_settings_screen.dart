@@ -4,18 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/identity/identity_state.dart';
 import '../../../core/theme/bmo_theme.dart';
-import '../data/coding_client.dart';
 import '../data/coding_providers.dart';
 import '../data/models/coding_project.dart';
-import 'widgets/coding_plan_look.dart';
 import 'widgets/permission_modes.dart';
 
 /// Configurações do projeto — `/coding/:projectId/settings`.
 ///
-/// Edita `permission_mode`, as regras allow/deny e o `approval_mode`.
-/// `base_branch` é só leitura (o servidor decide). O plano ativo aparece com
-/// o consumo (runs e US$); não há botão de cancelar porque o servidor ainda
-/// não expõe rota para isso.
+/// Edita `permission_mode` e as regras allow/deny. `base_branch` é só leitura
+/// (o servidor decide).
 class CodingProjectSettingsScreen extends ConsumerStatefulWidget {
   final int projectId;
 
@@ -32,7 +28,6 @@ class _CodingProjectSettingsScreenState
   final _denyController = TextEditingController();
 
   String? _permissionMode;
-  String? _approvalMode;
   List<String> _allowRules = const [];
   List<String> _denyRules = const [];
   bool _saving = false;
@@ -60,7 +55,6 @@ class _CodingProjectSettingsScreenState
     if (_hydrated) return;
     _hydrated = true;
     _permissionMode = project.permissionMode;
-    _approvalMode = project.approvalMode;
     _allowRules = project.allowRules;
     _denyRules = project.denyRules;
   }
@@ -75,7 +69,6 @@ class _CodingProjectSettingsScreenState
         widget.projectId,
         {
           'permission_mode': _permissionMode,
-          'approval_mode': _approvalMode,
           'allow_rules': _allowRules,
           'deny_rules': _denyRules,
         },
@@ -104,49 +97,6 @@ class _CodingProjectSettingsScreenState
         _denyController.clear();
       }
     });
-  }
-
-  Future<void> _cancelPlan() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: BmoColors.screenBgElevated,
-        title: const Text('Cancelar plano?'),
-        content: const Text(
-          'O plano ativo é encerrado e os runs que faltam não rodam.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Voltar'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: BmoColors.accentRed),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Cancelar plano'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    try {
-      await ref.read(codingClientProvider).cancelPlan(widget.projectId);
-      if (!mounted) return;
-      // Limpa já; o `coding.plan.updated` do servidor confirma.
-      ref.read(projectsProvider.notifier).applyPlan(widget.projectId, null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('plano cancelado')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      // 409 = sem plano ativo: não é falha do usuário.
-      final message = e is CodingApiException && e.statusCode == 409
-          ? 'não há plano ativo'
-          : 'falha ao cancelar o plano: $e';
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
-    }
   }
 
   void _removeRule({required bool allow, required int index}) {
@@ -216,51 +166,6 @@ class _CodingProjectSettingsScreenState
           ),
         ),
         _Section(
-          title: 'APROVAÇÃO',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _approvalMode ?? project.approvalMode,
-                isExpanded: true,
-                dropdownColor: BmoColors.screenBgElevated,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: BmoColors.textPrimary),
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: BmoColors.screenBg,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(
-                    value: 'each_run',
-                    child: Text('Aprovar cada run'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'plan',
-                    child: Text('Aprovar o plano'),
-                  ),
-                ],
-                onChanged: (next) {
-                  if (next != null) setState(() => _approvalMode = next);
-                },
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _approvalMode == 'plan'
-                    ? 'O BMO propõe um plano e espera aprovação uma vez.'
-                    : 'Cada execução pede aprovação antes de rodar.',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: BmoColors.textMuted),
-              ),
-            ],
-          ),
-        ),
-        _Section(
           title: 'REGRAS ALLOW',
           child: _RuleList(
             rules: _allowRules,
@@ -290,13 +195,6 @@ class _CodingProjectSettingsScreenState
                 'definida no próximo run (branch atual do repositório)',
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: BmoColors.textSecondary),
-          ),
-        ),
-        _Section(
-          title: project.plan?.isActive == true ? 'PLANO ATIVO' : 'PLANO',
-          child: _PlanCard(
-            plan: project.plan,
-            onCancel: project.plan?.isActive == true ? _cancelPlan : null,
           ),
         ),
         if (_error != null) ...[
@@ -528,98 +426,3 @@ class _RuleListState extends State<_RuleList> {
     );
   }
 }
-
-class _PlanCard extends StatelessWidget {
-  final CodingPlan? plan;
-  final VoidCallback? onCancel;
-
-  const _PlanCard({required this.plan, this.onCancel});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final plan = this.plan;
-    if (plan == null) {
-      return Text(
-        'sem plano ativo',
-        style: theme.textTheme.bodySmall?.copyWith(color: BmoColors.textMuted),
-      );
-    }
-
-    final statusLook =
-        plan.status.isEmpty ? null : planStatusLook(plan.status);
-    final header = plan.isActive
-        ? null
-        : 'último plano: ${statusLook?.label ?? plan.status}';
-
-    String budget(int used, int? max) =>
-        max == null ? '$used (sem limite)' : '$used / $max';
-    String money(double used, double? max) =>
-        max == null ? formatMoney(used) : '${formatMoney(used)} / ${formatMoney(max)}';
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: BmoColors.screenBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: BmoColors.accentYellow.withValues(alpha: 0.3),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (header != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                header,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: statusLook?.color ?? BmoColors.textMuted,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          if (plan.text.isNotEmpty)
-            Text(
-              plan.text,
-              style: theme.textTheme.bodyMedium
-                  ?.copyWith(color: BmoColors.textPrimary),
-            ),
-          const SizedBox(height: 8),
-          Text(
-            'runs: ${budget(plan.runsUsed, plan.maxRuns)}',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: BmoColors.textSecondary),
-          ),
-          Text(
-            'custo: ${money(plan.costUsed, plan.maxCostUsd)}',
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: BmoColors.textSecondary),
-          ),
-          if (statusLook != null && plan.isActive)
-            Text(
-              'status: ${statusLook.label}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: statusLook.color),
-            ),
-          if (onCancel != null) ...[
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: onCancel,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: BmoColors.accentRed,
-                side: BorderSide(
-                  color: BmoColors.accentRed.withValues(alpha: 0.6),
-                ),
-                visualDensity: VisualDensity.compact,
-              ),
-              child: const Text('Cancelar plano'),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-

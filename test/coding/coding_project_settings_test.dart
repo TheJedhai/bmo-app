@@ -1,5 +1,5 @@
 // Configurações do projeto: permission_mode com explicação, regras
-// allow/deny editáveis, base_branch só leitura, approval_mode e plano ativo.
+// allow/deny editáveis e base_branch só leitura.
 //
 // Run:
 //   flutter test test/coding/coding_project_settings_test.dart
@@ -19,12 +19,7 @@ import 'package:bmo_app/features/coding/presentation/coding_project_settings_scr
 import 'package:bmo_app/features/coding/presentation/widgets/permission_modes.dart';
 import 'package:http/http.dart' as http;
 
-CodingProject _project({
-  String permissionMode = 'manual',
-  String approvalMode = 'each_run',
-  CodingPlan? plan,
-}) =>
-    CodingProject(
+CodingProject _project({String permissionMode = 'manual'}) => CodingProject(
       id: 1,
       name: 'BMO-APP',
       primaryPath: '/tmp/bmo-app',
@@ -33,8 +28,6 @@ CodingProject _project({
       allowRules: const ['ext: .py'],
       denyRules: const ['path: secrets/'],
       baseBranch: 'main',
-      approvalMode: approvalMode,
-      plan: plan,
       createdAt: '',
       updatedAt: '',
     );
@@ -45,16 +38,6 @@ class FakeCodingClient extends CodingClient {
 
   final CodingProject project;
   Map<String, dynamic>? lastPatch;
-  int cancelCalls = 0;
-  int cancelStatus = 204;
-
-  @override
-  Future<void> cancelPlan(int projectId) async {
-    cancelCalls++;
-    if (cancelStatus != 204) {
-      throw CodingApiException(statusCode: cancelStatus, message: 'sem plano');
-    }
-  }
 
   @override
   Future<List<CodingProject>> listProjects() async => [project];
@@ -92,8 +75,7 @@ Widget _app(FakeCodingClient client) => ProviderScope(
     );
 
 void main() {
-  testWidgets('mostra modo com descrição, regras, base e aprovação',
-      (tester) async {
+  testWidgets('mostra modo com descrição, regras e base', (tester) async {
     await _pump(tester, FakeCodingClient(_project()));
 
     expect(find.text('Manual'), findsOneWidget);
@@ -104,8 +86,7 @@ void main() {
     expect(find.text('ext: .py'), findsOneWidget);
     expect(find.text('path: secrets/'), findsOneWidget);
     expect(find.text('main'), findsOneWidget);
-    expect(find.text('Aprovar cada run'), findsOneWidget);
-    expect(find.text('sem plano ativo'), findsOneWidget);
+    expect(find.text('APROVAÇÃO'), findsNothing);
   });
 
   testWidgets('troca o modo e salva o patch', (tester) async {
@@ -129,8 +110,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(client.lastPatch?['permission_mode'], 'acceptEdits');
-    expect(client.lastPatch?['approval_mode'], 'each_run');
     expect(client.lastPatch?['allow_rules'], ['ext: .py']);
+    // approval_mode saiu do contrato: não vai mais no patch.
+    expect(client.lastPatch?.containsKey('approval_mode'), isFalse);
   });
 
   testWidgets('adiciona e remove regra', (tester) async {
@@ -165,29 +147,6 @@ void main() {
     expect(client.lastPatch?['allow_rules'], ['ext: .ts']);
   });
 
-  testWidgets('plano ativo mostra consumo de runs e custo', (tester) async {
-    await _pump(
-      tester,
-      FakeCodingClient(_project(
-        plan: const CodingPlan(
-          text: 'migrar o grid',
-          maxRuns: 5,
-          runsUsed: 2,
-          maxCostUsd: 10,
-          costUsed: 3.5,
-          status: 'active',
-        ),
-      )),
-    );
-
-    expect(find.text('migrar o grid'), findsOneWidget);
-    expect(find.text('runs: 2 / 5'), findsOneWidget);
-    expect(find.text('custo: US\$ 3.50 / US\$ 10.00'), findsOneWidget);
-    expect(find.text('status: ativo'), findsOneWidget);
-    // Rota POST /coding/projects/{id}/plan/cancel: botão disponível.
-    expect(find.text('Cancelar plano'), findsOneWidget);
-  });
-
   testWidgets('modo legado aparece marcado como legado', (tester) async {
     await _pump(tester, FakeCodingClient(_project(permissionMode: 'allow_all')));
 
@@ -202,94 +161,6 @@ void main() {
         if (route is GoRoute) route.path,
     ];
     expect(paths, contains('/coding/:projectId/settings'));
-  });
-
-  testWidgets('plano esgotado vira "último plano", sem botão de cancelar',
-      (tester) async {
-    await _pump(
-      tester,
-      FakeCodingClient(_project(
-        plan: const CodingPlan(
-          text: 'x',
-          maxRuns: 1,
-          runsUsed: 1,
-          status: 'exhausted',
-        ),
-      )),
-    );
-
-    expect(find.text('último plano: orçamento esgotado'), findsOneWidget);
-    expect(find.text('Cancelar plano'), findsNothing);
-  });
-
-  testWidgets('plano cancelado mostra consumo congelado', (tester) async {
-    await _pump(
-      tester,
-      FakeCodingClient(_project(
-        plan: const CodingPlan(
-          text: 'plano antigo',
-          maxRuns: 2,
-          runsUsed: 1,
-          maxCostUsd: 5,
-          costUsed: 0.0421,
-          status: 'cancelled',
-          endedAt: null,
-        ),
-      )),
-    );
-
-    expect(find.text('último plano: cancelado'), findsOneWidget);
-    expect(find.text('runs: 1 / 2'), findsOneWidget);
-    expect(find.text('custo: US\$ 0.04 / US\$ 5.00'), findsOneWidget);
-    expect(find.text('Cancelar plano'), findsNothing);
-  });
-
-  testWidgets('status desconhecido aparece cru', (tester) async {
-    await _pump(
-      tester,
-      FakeCodingClient(_project(
-        plan: const CodingPlan(text: 'y', status: 'paused'),
-      )),
-    );
-
-    expect(find.text('último plano: paused'), findsOneWidget);
-  });
-
-  testWidgets('cancelar plano pede confirmação, chama o POST e limpa o plano',
-      (tester) async {
-    final client = FakeCodingClient(_project(
-      plan: const CodingPlan(text: 'migrar o grid', maxRuns: 5, status: 'active'),
-    ));
-    await _pump(tester, client);
-
-    // O botão fica dentro do cartão do plano; abre confirmação.
-    await tester.tap(find.text('Cancelar plano'));
-    await tester.pumpAndSettle();
-    expect(find.text('Cancelar plano?'), findsOneWidget);
-
-    await tester.tap(find.widgetWithText(FilledButton, 'Cancelar plano'));
-    await tester.pumpAndSettle();
-
-    expect(client.cancelCalls, 1);
-    expect(find.text('sem plano ativo'), findsOneWidget);
-    expect(find.text('migrar o grid'), findsNothing);
-  });
-
-  testWidgets('cancelar sem plano ativo mostra 409 amigável', (tester) async {
-    final client = FakeCodingClient(_project(
-      plan: const CodingPlan(text: 'migrar', status: 'active'),
-    ))
-      ..cancelStatus = 409;
-    await _pump(tester, client);
-
-    await tester.tap(find.text('Cancelar plano'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'Cancelar plano'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('não há plano ativo'), findsOneWidget);
-    // O plano continua na tela (o servidor não confirmou o cancelamento).
-    expect(find.text('migrar'), findsOneWidget);
   });
 
   testWidgets('Enter no campo também adiciona', (tester) async {

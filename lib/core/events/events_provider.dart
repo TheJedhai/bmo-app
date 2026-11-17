@@ -209,18 +209,6 @@ void _handleEvent(Ref ref, Map<String, dynamic> event) {
       invalidateAllFamilyInstances(ref.container,eventsProvider);
 
     // ---- Coding ----
-    case 'coding.plan.updated':
-      final projectId = event['project_id'];
-      final plan = event['plan'];
-      if (projectId is num) {
-        final applied = ref.read(projectsProvider.notifier).applyPlan(
-              projectId.toInt(),
-              plan is Map ? Map<String, dynamic>.from(plan) : null,
-            );
-        // Projeto não carregado (ou lista ainda vazia): busca em vez de
-        // descartar o evento.
-        if (!applied) ref.invalidate(projectsProvider);
-      }
     case 'coding.project.created':
     case 'coding.project.updated':
     case 'coding.project.deleted':

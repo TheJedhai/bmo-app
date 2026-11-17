@@ -1,6 +1,6 @@
 // Modelos do ciclo de projeto: campos novos do run (custo real, last_event,
-// parent, merge) e do projeto (base_branch, approval_mode, plano), incluindo
-// o merge de `coding.run.updated`.
+// parent, merge) e do projeto (base_branch), incluindo o objeto do evento
+// `coding.run.updated`.
 //
 // Run:
 //   flutter test test/coding/coding_project_cycle_models_test.dart
@@ -108,7 +108,7 @@ void main() {
   });
 
   group('CodingProject', () {
-    test('lê base_branch, approval_mode e plano', () {
+    test('lê base_branch e ignora campos removidos do contrato', () {
       final project = CodingProject.fromJson({
         'id': 1,
         'name': 'BMO-APP',
@@ -117,35 +117,17 @@ void main() {
         'allow_rules': ['ext: .py'],
         'deny_rules': ['path: secrets/'],
         'base_branch': 'main',
-        'approval_mode': 'plan',
-        'plan': {
-          'id': 3,
-          'project_id': 1,
-          'text': 'migrar o grid',
-          'max_runs': 5,
-          'runs_used': 2,
-          'remaining_runs': 3,
-          'max_cost_usd': 10.0,
-          'cost_used': 3.5,
-          'status': 'active',
-          'created_at': '2026-11-01T00:00:00Z',
-          'ended_at': null,
-        },
         'created_at': '2026-11-01T00:00:00Z',
         'updated_at': '2026-11-01T00:00:00Z',
       });
 
       expect(project.baseBranch, 'main');
-      expect(project.approvalMode, 'plan');
-      final plan = project.plan!;
-      expect(plan.text, 'migrar o grid');
-      expect(plan.runsLeft, 3);
-      expect(plan.costLeft, closeTo(6.5, 1e-9));
-      expect(plan.status, 'active');
-      expect(plan.isActive, isTrue);
+      expect(project.permissionMode, 'acceptEdits');
+      expect(project.allowRules, ['ext: .py']);
+      expect(project.denyRules, ['path: secrets/']);
     });
 
-    test('projeto sem plano/defaults', () {
+    test('projeto sem base_branch', () {
       final project = CodingProject.fromJson({
         'id': 2,
         'name': 'x',
@@ -156,12 +138,10 @@ void main() {
         'created_at': '',
         'updated_at': '',
       });
-      expect(project.plan, isNull);
-      expect(project.approvalMode, 'each_run');
       expect(project.baseBranch, isNull);
     });
 
-    test('copyWith troca plano e approval_mode', () {
+    test('copyWith troca campos e mantém o resto', () {
       final project = CodingProject.fromJson({
         'id': 1,
         'name': 'x',
@@ -173,34 +153,12 @@ void main() {
         'updated_at': '',
       });
       final updated = project.copyWith(
-        approvalMode: 'plan',
-        plan: const CodingPlan(text: 'novo', maxRuns: 1, status: 'active'),
+        permissionMode: 'acceptEdits',
+        baseBranch: 'main',
       );
-      expect(updated.approvalMode, 'plan');
-      expect(updated.plan?.text, 'novo');
+      expect(updated.permissionMode, 'acceptEdits');
+      expect(updated.baseBranch, 'main');
       expect(updated.name, 'x');
     });
-  });
-
-  test('plano cancelado: status e consumo congelado', () {
-    final plan = CodingPlan.fromJson({
-      'id': 3,
-      'project_id': 1,
-      'text': 'plano antigo',
-      'max_runs': 2,
-      'runs_used': 1,
-      'remaining_runs': 1,
-      'max_cost_usd': 5.0,
-      'cost_used': 0.0421,
-      'status': 'cancelled',
-      'created_at': '2026-11-16T14:05:00+00:00',
-      'ended_at': '2026-11-16T14:12:30+00:00',
-    });
-
-    expect(plan.isActive, isFalse);
-    expect(plan.status, 'cancelled');
-    expect(plan.runsLeft, 1);
-    expect(plan.endedAt?.minute, 12);
-    expect(plan.createdAt?.year, 2026);
   });
 }
