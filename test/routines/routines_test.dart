@@ -145,4 +145,16 @@ void main() {
     expect(repo.markedIds, [1, 2, 3, 4]);
     expect(find.text('5'), findsNothing);
   });
+
+  testWidgets('badge do sino acima de 99 vira "99+"', (tester) async {
+    repo.page = NotificationsPage(
+      unread: 150,
+      items: [_notification(id: 1)],
+    );
+
+    await tester.pumpWidget(_app(container, const NotificationsBell()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('99+'), findsOneWidget);
+  });
 }

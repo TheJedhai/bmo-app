@@ -21,7 +21,6 @@ class NotificationsBell extends ConsumerWidget {
     final items = page?.items ?? const <AppNotification>[];
     final unread = page?.unread ?? 0;
     final held = items.where((item) => item.held).length;
-    final badgeScale = size / 48;
 
     return Tooltip(
       message: unread > 0 ? '$unread avisos' : 'avisos',
@@ -45,14 +44,16 @@ class NotificationsBell extends ConsumerWidget {
                         : BmoColors.accentGreen,
                   ),
                 ),
+                // Mesmo badge da nav bar (o "99+" do RSS): 15px de altura,
+                // Inter 9 w700 em accentRed, para ler sobre o círculo escuro.
                 if (unread > 0)
                   Positioned(
-                    top: -2 * badgeScale,
-                    right: -2 * badgeScale,
+                    top: -3,
+                    right: -4,
                     child: Container(
-                      constraints: BoxConstraints(minWidth: 15 * badgeScale),
-                      height: 15 * badgeScale,
-                      padding: EdgeInsets.symmetric(horizontal: 3 * badgeScale),
+                      constraints: const BoxConstraints(minWidth: 15),
+                      height: 15,
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
                         color: BmoColors.accentRed,
                         borderRadius: BorderRadius.circular(999),
@@ -60,9 +61,9 @@ class NotificationsBell extends ConsumerWidget {
                       alignment: Alignment.center,
                       child: Text(
                         unread > 99 ? '99+' : '$unread',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'Inter',
-                          fontSize: 9 * badgeScale,
+                          fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: BmoColors.textPrimary,
                           height: 1,

@@ -44,9 +44,7 @@ class BmoFrame extends ConsumerWidget {
         math.max(14.0, vp.bottom),
       );
     } else {
-      // Margem direita mais larga: os controles (presença, sino, configurações)
-      // ficam numa coluna vertical nessa faixa, sem encostar no quadro.
-      borderPadding = const EdgeInsets.fromLTRB(28, 28, 60, 28);
+      borderPadding = const EdgeInsets.all(28);
     }
     final innerRadius = isMobile ? 26.0 : 18.0;
 
@@ -59,15 +57,20 @@ class BmoFrame extends ConsumerWidget {
     // A larger touch hitbox (≥40 px) wraps the circle via GestureDetector;
     // only the painted circle needs to look right.
     //
-    // Desktop (faixa direita de 60): D=28, offset=8, coluna vertical no topo —
-    //   8px de respiro externo e 24px até o quadro.
+    // Desktop (faixa de 28): D=20, offset=4 — coluna vertical no topo, com
+    //   4px de respiro da borda externa e 4px até o quadro.
     // Mobile  (band >= 14): D=22, offset=-5 — overflow simétrico
     //   (band é fino demais; 5px para cada lado).
     final visualDiameter = 28.0;
     final controlOffset = isMobile ? -5.0 : 8.0;
     final touchSize = isMobile ? 40.0 : 44.0;
-    final gearIconSize = 20.0;
     final avatarInnerRadius = isMobile ? 7.0 : 20.0;
+
+    // Coluna de controles do desktop: cabe nos 28px da faixa (4px de respiro
+    // dos dois lados) e fica próxima da borda externa.
+    const bandDiameter = 20.0;
+    const bandOffset = 4.0;
+    const bandPitch = 26.0;
 
     final userAsync = ref.watch(currentUserProvider);
 
@@ -110,42 +113,36 @@ class BmoFrame extends ConsumerWidget {
             ),
 
             // ---- Coluna de controles (topo da margem direita) ----
-            // Presença, sino e configurações, nessa ordem. No mobile esses
-            // controles ficam na BmoTopBar.
+            // Presença, sino e configurações, nessa ordem, menores para
+            // caber na faixa de 28px. No mobile ficam na BmoTopBar.
             if (!isMobile)
               Positioned(
-                top: controlOffset,
-                right: controlOffset,
+                top: bandOffset,
+                right: bandOffset,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _ControlHitbox(
-                      size: touchSize,
-                      alignment: Alignment.topRight,
+                    _BandControl(
+                      pitch: bandPitch,
                       onTap: () => showPresenceDialog(context),
-                      child: PresenceButton(
-                        size: visualDiameter,
-                        iconSize: 16,
-                      ),
+                      child: PresenceButton(size: bandDiameter, iconSize: 12),
                     ),
-                    _ControlHitbox(
-                      size: touchSize,
-                      alignment: Alignment.topRight,
+                    _BandControl(
+                      pitch: bandPitch,
                       onTap: () => showNotificationsDialog(context),
                       child: NotificationsBell(
-                        size: visualDiameter,
-                        iconSize: 16,
+                        size: bandDiameter,
+                        iconSize: 12,
                       ),
                     ),
-                    _ControlHitbox(
-                      size: touchSize,
-                      alignment: Alignment.topRight,
+                    _BandControl(
+                      pitch: bandPitch,
                       onTap: () => showSettingsModal(context),
                       child: DarkCircle(
-                        diameter: visualDiameter,
-                        child: Icon(
+                        diameter: bandDiameter,
+                        child: const Icon(
                           Icons.settings,
-                          size: gearIconSize,
+                          size: 13,
                           color: BmoColors.accentGreen,
                         ),
                       ),
@@ -190,6 +187,33 @@ class BmoFrame extends ConsumerWidget {
 // ============================================================================
 // Private helpers
 // ============================================================================
+
+/// Uma célula da coluna de controles da faixa: círculo de [bandDiameter]
+/// alinhado à borda direita, com área de toque maior que o desenho.
+class _BandControl extends StatelessWidget {
+  final double pitch;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _BandControl({
+    required this.pitch,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 44,
+        height: pitch,
+        child: Align(alignment: Alignment.topRight, child: child),
+      ),
+    );
+  }
+}
 
 /// Hitbox invisível que garante área de toque ≥ [size]×[size] mesmo quando
 /// o círculo visual é menor (importante no mobile onde a faixa verde é fina).
